@@ -1,4 +1,4 @@
-"""Built-in Light and Dark themes: the Fusion style plus an explicit palette.
+"""``BuiltinThemes``: switches the application between the built-in Light and Dark themes (Fusion plus an explicit palette).
 
 Qt's own colour-scheme switch (``QStyleHints.setColorScheme``) does nothing on the offscreen platform and its effect depends
 on the platform style, so it cannot be the basis of a theme. Each built-in theme instead sets the Fusion style and a complete
@@ -12,106 +12,15 @@ visible effect on those widgets while such a style sheet is set.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPalette, QStyleHints
+from PySide6.QtGui import QPalette, QStyleHints
 from PySide6.QtWidgets import QApplication
 
-_ROLE = QPalette.ColorRole
+from pyside6_storybook.themes.dark_theme import DARK_THEME
+from pyside6_storybook.themes.light_theme import LIGHT_THEME
 
-_LIGHT: Mapping[QPalette.ColorRole, str] = {
-    _ROLE.Window: "#F0F0F0",
-    _ROLE.WindowText: "#1B1B1B",
-    _ROLE.Base: "#FFFFFF",
-    _ROLE.AlternateBase: "#F5F5F5",
-    _ROLE.ToolTipBase: "#FFFFE1",
-    _ROLE.ToolTipText: "#1B1B1B",
-    _ROLE.PlaceholderText: "#6B6B6B",
-    _ROLE.Text: "#1B1B1B",
-    _ROLE.Button: "#E6E6E6",
-    _ROLE.ButtonText: "#1B1B1B",
-    _ROLE.BrightText: "#FFFFFF",
-    _ROLE.Light: "#FFFFFF",
-    _ROLE.Midlight: "#EDEDED",
-    _ROLE.Dark: "#A0A0A0",
-    _ROLE.Mid: "#B8B8B8",
-    _ROLE.Shadow: "#000000",
-    _ROLE.Highlight: "#2A6FDB",
-    _ROLE.HighlightedText: "#FFFFFF",
-    _ROLE.Link: "#0B57D0",
-    _ROLE.LinkVisited: "#6B3FA0",
-    _ROLE.Accent: "#2A6FDB",
-}
-
-_LIGHT_DISABLED: Mapping[QPalette.ColorRole, str] = {
-    _ROLE.WindowText: "#8A8A8A",
-    _ROLE.Text: "#8A8A8A",
-    _ROLE.ButtonText: "#8A8A8A",
-    _ROLE.PlaceholderText: "#A8A8A8",
-    _ROLE.BrightText: "#E0E0E0",
-    _ROLE.Highlight: "#B0B0B0",
-    _ROLE.HighlightedText: "#F0F0F0",
-    _ROLE.Accent: "#B0B0B0",
-}
-
-_DARK: Mapping[QPalette.ColorRole, str] = {
-    _ROLE.Window: "#2B2B2B",
-    _ROLE.WindowText: "#E6E6E6",
-    _ROLE.Base: "#1E1E1E",
-    _ROLE.AlternateBase: "#262626",
-    _ROLE.ToolTipBase: "#3A3A3A",
-    _ROLE.ToolTipText: "#E6E6E6",
-    _ROLE.PlaceholderText: "#A0A0A0",
-    _ROLE.Text: "#E6E6E6",
-    _ROLE.Button: "#3A3A3A",
-    _ROLE.ButtonText: "#E6E6E6",
-    _ROLE.BrightText: "#FFFFFF",
-    _ROLE.Light: "#6A6A6A",
-    _ROLE.Midlight: "#505050",
-    _ROLE.Dark: "#151515",
-    _ROLE.Mid: "#4A4A4A",
-    _ROLE.Shadow: "#000000",
-    _ROLE.Highlight: "#2F6FD0",
-    _ROLE.HighlightedText: "#FFFFFF",
-    _ROLE.Link: "#6CA6FF",
-    _ROLE.LinkVisited: "#B08CFF",
-    _ROLE.Accent: "#2F6FD0",
-}
-
-_DARK_DISABLED: Mapping[QPalette.ColorRole, str] = {
-    _ROLE.WindowText: "#7A7A7A",
-    _ROLE.Text: "#7A7A7A",
-    _ROLE.ButtonText: "#7A7A7A",
-    _ROLE.PlaceholderText: "#6A6A6A",
-    _ROLE.BrightText: "#9A9A9A",
-    _ROLE.Highlight: "#555555",
-    _ROLE.HighlightedText: "#9A9A9A",
-    _ROLE.Accent: "#555555",
-}
-
-
-def _build_palette(active: Mapping[QPalette.ColorRole, str], disabled: Mapping[QPalette.ColorRole, str]) -> QPalette:
-    """Build a palette that sets ``active`` for every colour group and then overrides ``disabled`` in the Disabled group."""
-    palette = QPalette()
-    for role, color in active.items():
-        palette.setColor(role, QColor(color))
-    for role, color in disabled.items():
-        palette.setColor(QPalette.ColorGroup.Disabled, role, QColor(color))
-    return palette
-
-
-def light_palette() -> QPalette:
-    """Return the built-in light palette."""
-    return _build_palette(_LIGHT, _LIGHT_DISABLED)
-
-
-def dark_palette() -> QPalette:
-    """Return the built-in dark palette."""
-    return _build_palette(_DARK, _DARK_DISABLED)
-
-
-_THEME_PALETTES = {"Light": (light_palette, Qt.ColorScheme.Light), "Dark": (dark_palette, Qt.ColorScheme.Dark)}
+_THEMES = {theme.name: theme for theme in (LIGHT_THEME, DARK_THEME)}
 _FUSION = "Fusion"
 
 
@@ -134,7 +43,7 @@ class BuiltinThemes:
     @property
     def names(self) -> tuple[str, ...]:
         """The names of the available themes."""
-        return tuple(_THEME_PALETTES)
+        return tuple(_THEMES)
 
     @property
     def current(self) -> str:
@@ -168,7 +77,7 @@ class BuiltinThemes:
         Raises:
             ValueError: If ``name`` is not a built-in theme.
         """
-        if name not in _THEME_PALETTES:
+        if name not in _THEMES:
             raise ValueError(f"Unknown theme {name!r}; expected one of {self.names}")
         self._current = name
         if self._app is not None:
@@ -195,11 +104,11 @@ class BuiltinThemes:
         app = self._app
         if app is None:
             return
-        make_palette, scheme = _THEME_PALETTES[name]
-        self._set_color_scheme(app, scheme)
+        theme = _THEMES[name]
+        self._set_color_scheme(app, theme.color_scheme)
         if app.style().name().lower() != _FUSION.lower():
             app.setStyle(_FUSION)
-        app.setPalette(make_palette())
+        app.setPalette(theme.palette())
 
     @staticmethod
     def _underlying_style_name(app: QApplication) -> str:
@@ -252,4 +161,4 @@ class BuiltinThemes:
             self._logger.debug("Restoring the colour scheme is not supported", exc_info=True)
 
 
-__all__ = ["BuiltinThemes", "dark_palette", "light_palette"]
+__all__ = ["BuiltinThemes"]

@@ -4,7 +4,7 @@ from PySide6.QtGui import QImage, QPalette
 from PySide6.QtWidgets import QApplication, QPushButton, QStyleFactory
 
 from pyside6_storybook.contrast import contrast_ratio
-from pyside6_storybook.themes import BuiltinThemes, dark_palette, light_palette
+from pyside6_storybook.themes import DARK_THEME, LIGHT_THEME, BuiltinThemes, ThemeDefinition, dark_palette, light_palette
 
 _ACTIVE = QPalette.ColorGroup.Active
 _DISABLED = QPalette.ColorGroup.Disabled
@@ -246,3 +246,22 @@ def test_deactivate_lets_an_application_that_followed_the_system_keep_following_
 
     assert hints.override is None
     assert hints.colorScheme() == Qt.ColorScheme.Light
+
+
+def test_theme_definition_stores_read_only_copies_of_its_colours() -> None:
+    colors = {_ROLE.Window: "#101010"}
+    theme = ThemeDefinition(name="Test", color_scheme=Qt.ColorScheme.Dark, colors=colors, disabled_colors={_ROLE.Text: "#202020"})
+    colors[_ROLE.Window] = "#ffffff"
+
+    assert theme.colors[_ROLE.Window] == "#101010"
+    with pytest.raises(TypeError):
+        theme.colors[_ROLE.Window] = "#ffffff"  # type: ignore[index]
+    palette = theme.palette()
+    assert _hex(palette, _ACTIVE, _ROLE.Window) == "#101010"
+    assert _hex(palette, _DISABLED, _ROLE.Text) == "#202020"
+
+
+@pytest.mark.parametrize(("theme", "make_palette"), [(LIGHT_THEME, light_palette), (DARK_THEME, dark_palette)])
+def test_built_in_theme_definitions_build_the_published_palettes(theme: ThemeDefinition, make_palette) -> None:
+    assert theme.palette() == make_palette()
+    assert theme.name in BuiltinThemes().names

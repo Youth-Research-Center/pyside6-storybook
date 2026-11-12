@@ -60,7 +60,9 @@ uv run ruff check --select W291,W292,W293 <files you changed>
     the `@story` decorator
   - `controls_panel.py` - `ControlsPanel`, the editors for a story's controls
   - `window.py` - `GalleryWindow`
-  - `themes.py` - the built-in Light and Dark themes (`BuiltinThemes`); `contrast.py` - WCAG contrast helpers
+  - `themes/` - the built-in themes: `theme_definition.py` (`ThemeDefinition`: name, colour scheme and palette colours), one module
+    per theme (`light_theme.py`, `dark_theme.py`) and `builtin_themes.py` (`BuiltinThemes`, which applies them)
+  - `contrast.py` - WCAG contrast helpers
   - `app.py` - `run()`, which creates the `QApplication` and opens the window
   - `py.typed` - marks the package as typed
 - `tests/` - pytest suite (`pytest-qt`), one test module per source module
