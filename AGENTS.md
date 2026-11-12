@@ -52,7 +52,9 @@ uv run ruff check --select W291,W292,W293 <files you changed>
 - `src/pyside6_storybook/` - the package
   - `__init__.py` - the public API (`__all__`) and `__version__`
   - `__main__.py` - `python -m pyside6_storybook`
-  - `controls.py` - control dataclasses (`TextControl`, `BoolControl`, `ChoiceControl`, `IntControl`, `FloatControl`)
+  - `controls/` - control dataclasses, one module per type (`text_control.py`, `bool_control.py`, `choice_control.py`,
+    `int_control.py`, `float_control.py`); `__init__.py` re-exports them and defines the `Control` union, and `_range.py` holds
+    the range check shared by the int and float controls
   - `registry.py` - `Story`, `StoryContext`, `StoryRegistry`, `default_registry` and the `@story` decorator
   - `controls_panel.py` - `ControlsPanel`, the editors for a story's controls
   - `window.py` - `GalleryWindow`
