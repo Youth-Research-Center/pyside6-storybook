@@ -64,6 +64,8 @@ in the same pull request as the bump.
   - `registry/` - the story model, one module per type: `story_context.py` (`StoryContext`, `StoryFunction`), `story_definition.py`
     (`Story`, `StoryOrigin`) and `story_registry.py` (`StoryRegistry`); `__init__.py` re-exports them and holds `default_registry` and
     the `@story` decorator
+  - `discovery/` - story discovery: `loader.py` (`load_stories`, which imports story modules from folders, files and dotted module
+    names) and `load_result.py` (`LoadResult`, `LoadError`)
   - `controls_panel.py` - `ControlsPanel`, the editors for a story's controls
   - `window.py` - `GalleryWindow`
   - `themes/` - the built-in themes: `theme_definition.py` (`ThemeDefinition`: name, colour scheme and palette colours), one module
@@ -125,6 +127,8 @@ in the same pull request as the bump.
 - Every bug fix comes with a regression test that fails without the fix. Assert behaviour (values, objects, call counts), not a marker.
 - Tests build their own `StoryRegistry`; none may register a story in `default_registry`, and a test that must touch it restores it
   (`monkeypatch`, or `try/finally`). Stories in tests are made of stock Qt widgets.
+- A test that imports story modules (anything calling `load_stories`) isolates `sys.path`, `sys.modules` and `default_registry`, as the
+  `stories` fixture in `tests/test_discovery.py` does, and writes its story files under `tmp_path`.
 - A test that changes the application palette, style or style sheet restores them in a fixture with `try/finally`
   (`restore_application_look` and `themes` in `tests/conftest.py`).
 - Drive widgets the way a user does: `qtbot.keyClicks`, `qtbot.mouseClick`, or the editor's own setters. Assert which values were emitted, not

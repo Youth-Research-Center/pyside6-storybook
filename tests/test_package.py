@@ -15,12 +15,15 @@ def test_public_api_is_exported() -> None:
         "Control",
         "FloatControl",
         "IntControl",
+        "LoadError",
+        "LoadResult",
         "Story",
         "StoryContext",
         "StoryRegistry",
         "TextControl",
         "__version__",
         "default_registry",
+        "load_stories",
         "story",
     }
     assert set(pyside6_storybook.__all__) == expected

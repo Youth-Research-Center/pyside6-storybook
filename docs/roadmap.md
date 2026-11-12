@@ -109,9 +109,10 @@ def button(ctx: StoryContext) -> QWidget:
   replaces the earlier story (a module that is imported twice, or reloaded, must not
   fail); registering it from a different place raises `ValueError`. A `StoryRegistry`
   can also be created directly, which the library's own tests do.
-- **`load_stories(targets) -> StoryRegistry`** is the one entry point used by the CLI,
+- **`load_stories(targets) -> LoadResult`** is the one entry point used by the CLI,
   the tests and later the pytest plugin: it imports the targets and returns the
-  registry holding their stories.
+  registry holding their stories, the modules it loaded, and a `LoadError` for each
+  source that failed (a failure never stops the other targets from loading).
 - **`StoryContext`** is a frozen, keyword-only dataclass. In milestone 1 it has `args`
   (a read-only mapping of the current control values) and `theme` (the active theme
   name). Later fields (`tokens`, action logging) are added with defaults, so existing
