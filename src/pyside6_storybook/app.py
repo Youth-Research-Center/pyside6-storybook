@@ -1,0 +1,46 @@
+"""Entry point that opens the gallery window."""
+
+from __future__ import annotations
+
+import sys
+from collections.abc import Sequence
+
+from PySide6.QtWidgets import QApplication
+
+from pyside6_storybook.registry import StoryRegistry, default_registry
+from pyside6_storybook.themes import BuiltinThemes
+from pyside6_storybook.window import GalleryWindow
+
+_WINDOW_SIZE = (1100, 700)
+
+
+def run(registry: StoryRegistry | None = None, argv: Sequence[str] | None = None) -> int:
+    """Open the gallery window and run the event loop until it closes.
+
+    Creates the ``QApplication`` (an existing one is reused), activates the built-in themes for the duration of the run and
+    restores the application's style and palette afterwards.
+
+    Args:
+        registry: The stories to show. Defaults to ``default_registry``.
+        argv: Command-line arguments for ``QApplication``. Defaults to ``sys.argv``.
+
+    Returns:
+        The exit code of the event loop.
+    """
+    existing = QApplication.instance()
+    app = existing if isinstance(existing, QApplication) else QApplication(list(sys.argv if argv is None else argv))
+    themes = BuiltinThemes()
+    themes.activate(app)
+    try:
+        window = GalleryWindow(default_registry if registry is None else registry, themes)
+        window.resize(*_WINDOW_SIZE)
+        window.show()
+        exit_code = app.exec()
+        window.close()
+        window.deleteLater()
+    finally:
+        themes.deactivate()
+    return exit_code
+
+
+__all__ = ["run"]
