@@ -1,4 +1,5 @@
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage, QPalette
 from PySide6.QtWidgets import QApplication, QPushButton, QStyleFactory
 
@@ -177,3 +178,71 @@ def test_a_disabled_button_looks_different_from_an_enabled_one(qtbot, themes: Bu
 
     assert enabled_image.size() == disabled_image.size()
     assert enabled_image != disabled_image
+
+
+def test_deactivate_restores_a_non_fusion_style_under_an_application_style_sheet(qapp: QApplication, restore_application_look: None) -> None:
+    available_styles = QStyleFactory.keys()
+    if "Windows" not in available_styles:
+        pytest.skip("the Windows style is not available on this platform")
+    style_sheet = "QLabel { margin: 1px; }"
+    qapp.setStyle("Windows")
+    qapp.setStyleSheet(style_sheet)
+    builtin_themes = BuiltinThemes()
+
+    builtin_themes.activate(qapp)
+    builtin_themes.deactivate()
+
+    assert qapp.styleSheet() == style_sheet
+    qapp.setStyleSheet("")
+    assert qapp.style().name() == "windows"
+
+
+class _FakeStyleHints:
+    """Mimics QStyleHints on a platform that has a system colour scheme and honours overrides."""
+
+    def __init__(self, system: Qt.ColorScheme, *, override: Qt.ColorScheme | None = None) -> None:
+        self.system = system
+        self.override = override
+
+    def colorScheme(self) -> Qt.ColorScheme:
+        return self.override if self.override is not None else self.system
+
+    def setColorScheme(self, scheme: Qt.ColorScheme) -> None:
+        self.override = None if scheme == Qt.ColorScheme.Unknown else scheme
+
+    def unsetColorScheme(self) -> None:
+        self.override = None
+
+
+def _themes_with_hints(monkeypatch: pytest.MonkeyPatch, hints: _FakeStyleHints) -> BuiltinThemes:
+    builtin_themes = BuiltinThemes()
+    monkeypatch.setattr(builtin_themes, "_style_hints", lambda app: hints)
+    return builtin_themes
+
+
+def test_deactivate_restores_a_colour_scheme_the_application_had_forced(
+    qapp: QApplication, restore_application_look: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    hints = _FakeStyleHints(Qt.ColorScheme.Light, override=Qt.ColorScheme.Dark)
+    builtin_themes = _themes_with_hints(monkeypatch, hints)
+
+    builtin_themes.activate(qapp)
+    assert hints.colorScheme() == Qt.ColorScheme.Light
+    builtin_themes.deactivate()
+
+    assert hints.colorScheme() == Qt.ColorScheme.Dark
+
+
+def test_deactivate_lets_an_application_that_followed_the_system_keep_following_it(
+    qapp: QApplication, restore_application_look: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    hints = _FakeStyleHints(Qt.ColorScheme.Light)
+    builtin_themes = _themes_with_hints(monkeypatch, hints)
+
+    builtin_themes.activate(qapp)
+    builtin_themes.set_theme("Dark")
+    assert hints.colorScheme() == Qt.ColorScheme.Dark
+    builtin_themes.deactivate()
+
+    assert hints.override is None
+    assert hints.colorScheme() == Qt.ColorScheme.Light

@@ -15,7 +15,7 @@ import logging
 from collections.abc import Mapping
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtGui import QColor, QPalette, QStyleHints
 from PySide6.QtWidgets import QApplication
 
 _ROLE = QPalette.ColorRole
@@ -129,6 +129,7 @@ class BuiltinThemes:
         self._original_style_name = ""
         self._original_palette = QPalette()
         self._original_style_sheet = ""
+        self._original_color_scheme = Qt.ColorScheme.Unknown
 
     @property
     def names(self) -> tuple[str, ...]:
@@ -141,7 +142,7 @@ class BuiltinThemes:
         return self._current
 
     def activate(self, app: QApplication) -> None:
-        """Remember the application's style, palette and style sheet and apply the current theme.
+        """Remember the application's style, palette, style sheet and colour scheme and apply the current theme.
 
         Args:
             app: The application to theme.
@@ -151,9 +152,10 @@ class BuiltinThemes:
         """
         if self._app is not None:
             raise RuntimeError("BuiltinThemes is already active")
-        self._original_style_name = app.style().objectName()
+        self._original_style_name = self._underlying_style_name(app)
         self._original_palette = QPalette(app.palette())
         self._original_style_sheet = app.styleSheet()
+        self._original_color_scheme = self._color_scheme(app)
         self._app = app
         self._apply(self._current)
 
@@ -173,7 +175,7 @@ class BuiltinThemes:
             self._apply(name)
 
     def deactivate(self) -> None:
-        """Restore the style, palette and style sheet found by ``activate``. Does nothing if not active.
+        """Restore the style, palette, style sheet and colour scheme found by ``activate``. Does nothing if not active.
 
         The style is restored by name. A style that was installed as a ``QStyle`` instance with no name Qt can create again
         cannot be restored this way, and Fusion stays in place.
@@ -182,12 +184,12 @@ class BuiltinThemes:
         if app is None:
             return
         self._app = None
-        if app.style().objectName() != self._original_style_name:
+        if self._original_style_name and app.style().name() != self._original_style_name:
             app.setStyle(self._original_style_name)
         app.setPalette(self._original_palette)
         if app.styleSheet() != self._original_style_sheet:
             app.setStyleSheet(self._original_style_sheet)
-        self._reset_color_scheme(app)
+        self._restore_color_scheme(app)
 
     def _apply(self, name: str) -> None:
         app = self._app
@@ -195,22 +197,59 @@ class BuiltinThemes:
             return
         make_palette, scheme = _THEME_PALETTES[name]
         self._set_color_scheme(app, scheme)
-        if app.style().objectName().lower() != _FUSION.lower():
+        if app.style().name().lower() != _FUSION.lower():
             app.setStyle(_FUSION)
         app.setPalette(make_palette())
+
+    @staticmethod
+    def _underlying_style_name(app: QApplication) -> str:
+        """Return the name of the application's style, also while an application style sheet is set.
+
+        With a style sheet, ``app.style()`` is Qt's style sheet style, whose name is empty; the style sheet is cleared for a
+        moment to read the name of the style underneath it.
+        """
+        name = app.style().name()
+        style_sheet = app.styleSheet()
+        if name or not style_sheet:
+            return name
+        app.setStyleSheet("")
+        try:
+            return app.style().name()
+        finally:
+            app.setStyleSheet(style_sheet)
+
+    def _style_hints(self, app: QApplication) -> QStyleHints:
+        return app.styleHints()
+
+    def _color_scheme(self, app: QApplication) -> Qt.ColorScheme:
+        try:
+            return self._style_hints(app).colorScheme()
+        except (AttributeError, RuntimeError):
+            self._logger.debug("QStyleHints.colorScheme is not available", exc_info=True)
+            return Qt.ColorScheme.Unknown
 
     def _set_color_scheme(self, app: QApplication, scheme: Qt.ColorScheme) -> None:
         """Ask Qt to use a colour scheme for platform-drawn parts; a no-op where unsupported."""
         try:
-            app.styleHints().setColorScheme(scheme)
+            self._style_hints(app).setColorScheme(scheme)
         except (AttributeError, RuntimeError):
             self._logger.debug("QStyleHints.setColorScheme is not available", exc_info=True)
 
-    def _reset_color_scheme(self, app: QApplication) -> None:
+    def _restore_color_scheme(self, app: QApplication) -> None:
+        """Put back the colour scheme the application had before ``activate``.
+
+        Qt cannot tell whether that scheme was forced by the application or followed the system. The override set by the themes
+        is dropped first, which restores a scheme that followed the system; only when the result still differs from the
+        original is the original forced again.
+        """
         try:
-            app.styleHints().unsetColorScheme()
+            hints = self._style_hints(app)
+            hints.unsetColorScheme()
+            original = self._original_color_scheme
+            if original != Qt.ColorScheme.Unknown and hints.colorScheme() != original:
+                hints.setColorScheme(original)
         except (AttributeError, RuntimeError):
-            self._logger.debug("QStyleHints.unsetColorScheme is not available", exc_info=True)
+            self._logger.debug("Restoring the colour scheme is not supported", exc_info=True)
 
 
 __all__ = ["BuiltinThemes", "dark_palette", "light_palette"]
