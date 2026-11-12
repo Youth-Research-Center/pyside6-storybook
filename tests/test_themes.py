@@ -255,7 +255,7 @@ def test_theme_definition_stores_read_only_copies_of_its_colours() -> None:
 
     assert theme.colors[_ROLE.Window] == "#101010"
     with pytest.raises(TypeError):
-        theme.colors[_ROLE.Window] = "#ffffff"  # type: ignore[index]
+        theme.colors[_ROLE.Window] = "#ffffff"  # ty: ignore[invalid-assignment]
     palette = theme.palette()
     assert _hex(palette, _ACTIVE, _ROLE.Window) == "#101010"
     assert _hex(palette, _DISABLED, _ROLE.Text) == "#202020"

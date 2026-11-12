@@ -27,6 +27,7 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
       - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync ty check
 
   test:
     name: test (${{ matrix.os }}, Python ${{ matrix.python-version }})

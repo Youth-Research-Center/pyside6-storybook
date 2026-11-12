@@ -12,12 +12,12 @@ from pyside6_storybook import BoolControl, ChoiceControl, FloatControl, IntContr
 def test_controls_are_frozen_and_slotted(control: object) -> None:
     assert not hasattr(control, "__dict__")
     with pytest.raises(dataclasses.FrozenInstanceError):
-        control.name = "b"  # type: ignore[attr-defined]
+        control.name = "b"  # ty: ignore[invalid-assignment]
 
 
 def test_choice_control_stores_any_sequence_as_a_tuple() -> None:
-    from_list = ChoiceControl("role", "a", ["a", "b"])  # type: ignore[arg-type]
-    from_generator = ChoiceControl("role", "a", (option for option in "ab"))  # type: ignore[arg-type]
+    from_list = ChoiceControl("role", "a", ["a", "b"])
+    from_generator = ChoiceControl("role", "a", (option for option in "ab"))  # ty: ignore[invalid-argument-type]
     assert from_list.options == ("a", "b")
     assert from_generator.options == ("a", "b")
     assert hash(from_list) == hash(ChoiceControl("role", "a", ("a", "b")))

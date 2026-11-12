@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 
@@ -12,7 +13,7 @@ class ChoiceControl:
     Attributes:
         name: Argument name, the key in ``StoryContext.args``.
         default: Initial value; must be one of ``options``.
-        options: The allowed values. Any sequence of strings is accepted and stored as a tuple.
+        options: The allowed values. Any sequence of strings is accepted; it is stored as a tuple.
 
     Raises:
         TypeError: If ``options`` is a bare string instead of a sequence of strings.
@@ -21,7 +22,7 @@ class ChoiceControl:
 
     name: str
     default: str
-    options: tuple[str, ...]
+    options: Sequence[str]
 
     def __post_init__(self) -> None:
         if isinstance(self.options, str):

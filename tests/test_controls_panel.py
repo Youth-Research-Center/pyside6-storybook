@@ -1,10 +1,20 @@
+from typing import TypeVar
+
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QLabel, QLineEdit, QSpinBox
+from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QLabel, QLineEdit, QSpinBox, QWidget
 
 from pyside6_storybook import BoolControl, ChoiceControl, FloatControl, IntControl, TextControl
 from pyside6_storybook.controls_panel import NO_CONTROLS_MESSAGE, ControlsPanel
+
+_EditorT = TypeVar("_EditorT", bound=QWidget)
+
+
+def _editor(panel: ControlsPanel, editor_type: type[_EditorT]) -> _EditorT:
+    editor = panel.findChild(editor_type)
+    assert editor is not None, editor_type.__name__
+    return editor
 
 
 def _emitted(panel: ControlsPanel) -> list[dict]:
@@ -130,11 +140,11 @@ def test_each_editor_drives_only_its_own_value(qtbot) -> None:
         ]
     )
     qtbot.addWidget(panel)
-    panel.findChild(QLineEdit).setText("b")
-    panel.findChild(QCheckBox).setChecked(True)
-    panel.findChild(QComboBox).setCurrentIndex(1)
-    panel.findChild(QSpinBox).setValue(7)
-    panel.findChild(QDoubleSpinBox).setValue(0.75)
+    _editor(panel, QLineEdit).setText("b")
+    _editor(panel, QCheckBox).setChecked(True)
+    _editor(panel, QComboBox).setCurrentIndex(1)
+    _editor(panel, QSpinBox).setValue(7)
+    _editor(panel, QDoubleSpinBox).setValue(0.75)
 
     assert panel.values() == {"text": "b", "flag": True, "choice": "y", "count": 7, "ratio": 0.75}
 

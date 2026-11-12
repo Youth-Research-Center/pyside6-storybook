@@ -39,14 +39,20 @@ QT_QPA_PLATFORM=offscreen uv run --isolated --python 3.11 --resolution lowest-di
 `pytest-timeout` aborts any test that runs longer than 120 seconds (set in `pyproject.toml`), so a hung Qt test cannot hold a job.
 
 ## Code quality
-`ruff check` (rules `E`, `F`, `B`, `Q`, `I`, `FBT`, 150-character lines) is the only lint gate; there is no `ruff format` step. Run it and the
-tests for the code you touched before every push. `W` rules are not selected, so check whitespace on the files you changed:
+Two gates run in CI: `ruff check` (rules `E`, `F`, `B`, `Q`, `I`, `FBT`, 150-character lines; there is no `ruff format` step) and the
+[`ty`](https://github.com/astral-sh/ty) type checker, which must report no diagnostics in `src/` or `tests/`. Run both and the tests for
+the code you touched before every push. `W` rules are not selected, so check whitespace on the files you changed:
 
 ```bash
 uv run ruff check .
 uv run ruff check --fix .                                  # auto-fix, including import order
 uv run ruff check --select W291,W292,W293 <files you changed>
+uv run ty check
 ```
+
+Silence a `ty` diagnostic only where a test misuses the API on purpose (assigning to a frozen field, passing a non-control), with
+`# ty: ignore[<rule>]` naming the rule. Fix every other diagnostic. `ty` is pre-1.0, so a version bump can bring new diagnostics; fix them
+in the same pull request as the bump.
 
 ## Project structure
 - `src/pyside6_storybook/` - the package
@@ -131,6 +137,6 @@ uv run ruff check --select W291,W292,W293 <files you changed>
 - Keep a pull request to one concern and make its description match what it does; update it when scope changes.
 - Use `Closes #N` only when the pull request fully satisfies the issue; use `Refs #N` for a partial step.
 - File each known gap or follow-up as an issue and link it.
-- Before pushing: `uv run ruff check .` and `QT_QPA_PLATFORM=offscreen uv run pytest`.
+- Before pushing: `uv run ruff check .`, `uv run ty check` and `QT_QPA_PLATFORM=offscreen uv run pytest`.
 - CI workflows (`.github/workflows/`): never interpolate `${{ inputs.* }}` or `${{ github.event.* }}` into shell source; pass them through
   `env:` and quote the variable.

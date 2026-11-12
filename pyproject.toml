@@ -15,6 +15,7 @@ dev = [
     "pytest-qt>=4.4",
     "pytest-timeout>=2.3",
     "ruff>=0.8",
+    "ty>=0.0.101",
 ]
 
 [build-system]

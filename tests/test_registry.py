@@ -1,4 +1,5 @@
 import dataclasses
+import functools
 
 import pytest
 from PySide6.QtWidgets import QLabel, QPushButton, QWidget
@@ -21,8 +22,8 @@ def test_the_documented_example_registers_and_builds(qtbot) -> None:
     )
     def button(ctx: StoryContext) -> QWidget:
         """A push button."""
-        widget = QPushButton(ctx.args["text"])
-        widget.setEnabled(ctx.args["enabled"])
+        widget = QPushButton(str(ctx.args["text"]))
+        widget.setEnabled(bool(ctx.args["enabled"]))
         return widget
 
     assert isinstance(button, Story)
@@ -85,7 +86,7 @@ def test_duplicate_control_names_are_rejected() -> None:
 
 def test_a_non_control_is_rejected() -> None:
     with pytest.raises(TypeError, match="not a control"):
-        Story("S", _widget, controls=["text"])  # type: ignore[list-item]
+        Story("S", _widget, controls=["text"])  # ty: ignore[invalid-argument-type]
 
 
 def test_story_context_args_are_read_only_and_copied() -> None:
@@ -94,16 +95,16 @@ def test_story_context_args_are_read_only_and_copied() -> None:
     source["a"] = 2
     assert ctx.args["a"] == 1
     with pytest.raises(TypeError):
-        ctx.args["a"] = 3  # type: ignore[index]
+        ctx.args["a"] = 3  # ty: ignore[invalid-assignment]
     with pytest.raises(dataclasses.FrozenInstanceError):
-        ctx.theme = "Dark"  # type: ignore[misc]
+        ctx.theme = "Dark"  # ty: ignore[invalid-assignment]
 
 
 def test_story_context_is_keyword_only_with_a_default_theme() -> None:
     assert StoryContext(args={}).theme == "Light"
     assert StoryContext(args={}, theme="Dark").theme == "Dark"
     with pytest.raises(TypeError):
-        StoryContext({})  # type: ignore[misc]
+        StoryContext({})  # ty: ignore[missing-argument, too-many-positional-arguments]
 
 
 def test_registry_keeps_registration_order_and_supports_lookup() -> None:
@@ -170,3 +171,17 @@ def test_module_level_story_registers_in_the_default_registry(monkeypatch: pytes
 
     assert isolated.get("Tests/default registry story") is registered
     assert "Tests/default registry story" not in default_registry
+
+
+def test_a_callable_without_a_qualified_name_can_be_a_story() -> None:
+    def labelled(ctx: StoryContext, *, text: str) -> QWidget:
+        return QLabel(text)
+
+    stories = StoryRegistry()
+    partial_story = stories.story("Display/Partial")(functools.partial(labelled, text="hi"))
+
+    assert partial_story.origin == StoryOrigin("functools", "partial")
+    widget = partial_story(StoryContext(args={}))
+    assert isinstance(widget, QLabel)
+    assert widget.text() == "hi"
+    widget.deleteLater()

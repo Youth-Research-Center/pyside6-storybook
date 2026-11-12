@@ -34,7 +34,8 @@ class Story:
         controls: The story's controls, in order.
         doc: The function's docstring, or an empty string.
         module: Module the function was defined in.
-        qualname: Qualified name of the function.
+        qualname: Qualified name of the function. For a callable without one (a ``functools.partial`` or a callable object), the
+            module and qualified name of its type.
     """
 
     __slots__ = ("_function", "controls", "doc", "groups", "id", "module", "name", "qualname")
@@ -67,8 +68,8 @@ class Story:
         self.groups = tuple(segments[:-1])
         self.controls = controls
         self.doc = inspect.getdoc(function) or ""
-        self.module = function.__module__
-        self.qualname = function.__qualname__
+        self.module = getattr(function, "__module__", None) or type(function).__module__
+        self.qualname = getattr(function, "__qualname__", None) or type(function).__qualname__
         self._function = function
 
     @property

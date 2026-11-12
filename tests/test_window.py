@@ -207,7 +207,7 @@ def test_the_empty_state_is_hidden_when_there_are_stories(qtbot, registry: Story
 def test_a_story_that_returns_a_non_widget_raises_type_error_naming_the_story(qtbot, themes: BuiltinThemes) -> None:
     stories = StoryRegistry()
     stories.story("Good/One")(lambda ctx: QLabel("one"))
-    stories.story("Broken/Story")(lambda ctx: None)  # type: ignore[arg-type, return-value]
+    stories.story("Broken/Story")(lambda ctx: None)  # ty: ignore[invalid-argument-type]
     window = _make_window(qtbot, stories, themes)
 
     with qtbot.capture_exceptions() as exceptions:
