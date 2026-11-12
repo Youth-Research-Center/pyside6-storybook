@@ -58,3 +58,14 @@ def test_float_control_rejects_non_finite_values(bad: float) -> None:
         FloatControl("n", bad, 0.0, 1.0)
     with pytest.raises(ValueError, match="finite"):
         FloatControl("n", 0.5, 0.0, bad)
+
+
+def test_int_control_accepts_the_qspinbox_limits() -> None:
+    control = IntControl("n", 0, -(2**31), 2**31 - 1)
+    assert (control.minimum, control.maximum) == (-(2**31), 2**31 - 1)
+
+
+@pytest.mark.parametrize(("minimum", "maximum"), [(0, 2**31), (-(2**31) - 1, 0)])
+def test_int_control_rejects_bounds_outside_the_qspinbox_range(minimum: int, maximum: int) -> None:
+    with pytest.raises(ValueError, match="32-bit"):
+        IntControl("n", 0, minimum, maximum)

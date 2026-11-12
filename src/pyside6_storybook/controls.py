@@ -5,6 +5,9 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+_INT32_MIN = -(2**31)
+_INT32_MAX = 2**31 - 1
+
 
 @dataclass(frozen=True, slots=True)
 class TextControl:
@@ -70,7 +73,8 @@ class IntControl:
         maximum: Largest allowed value.
 
     Raises:
-        ValueError: If ``minimum > maximum`` or ``default`` is outside the range.
+        ValueError: If a bound is outside the signed 32-bit range the editor (``QSpinBox``) supports, ``minimum > maximum`` or
+            ``default`` is outside the range.
     """
 
     name: str
@@ -79,6 +83,8 @@ class IntControl:
     maximum: int
 
     def __post_init__(self) -> None:
+        if self.minimum < _INT32_MIN or self.maximum > _INT32_MAX:
+            raise ValueError(f"bounds of control {self.name!r} must fit in a signed 32-bit integer ({_INT32_MIN}..{_INT32_MAX})")
         _validate_range(self.name, self.default, self.minimum, self.maximum)
 
 

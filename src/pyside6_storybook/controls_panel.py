@@ -33,6 +33,7 @@ NO_CONTROLS_MESSAGE = "No configurable properties for this component."
 
 _FLOAT_STEPS_PER_RANGE = 100
 _MIN_FLOAT_DECIMALS = 2
+_MAX_FLOAT_DECIMALS = 10
 
 
 class ControlsPanel(QWidget):
@@ -128,12 +129,28 @@ class ControlsPanel(QWidget):
 
 
 def _float_step_and_decimals(control: FloatControl) -> tuple[float, int]:
-    """Derive a spin box step (a power of ten near 1% of the range) and the decimals needed to show it."""
+    """Derive a spin box step (a power of ten near 1% of the range) and the decimals the editor shows.
+
+    The decimals cover the step, the default and both bounds, so the editor shows the exact default and cannot round a bound
+    (``QDoubleSpinBox`` rounds its range and value to its decimals). Values that need more than ``_MAX_FLOAT_DECIMALS`` decimals
+    are shown rounded.
+    """
     span = control.maximum - control.minimum
     if span <= 0:
-        return 1.0, _MIN_FLOAT_DECIMALS
-    exponent = round(math.log10(span / _FLOAT_STEPS_PER_RANGE))
-    return 10.0**exponent, max(_MIN_FLOAT_DECIMALS, -exponent)
+        step, step_decimals = 1.0, _MIN_FLOAT_DECIMALS
+    else:
+        exponent = round(math.log10(span / _FLOAT_STEPS_PER_RANGE))
+        step, step_decimals = 10.0**exponent, -exponent
+    value_decimals = max(_decimals_needed(value) for value in (control.default, control.minimum, control.maximum))
+    return step, max(_MIN_FLOAT_DECIMALS, step_decimals, value_decimals)
+
+
+def _decimals_needed(value: float) -> int:
+    """Return the fewest decimals (up to ``_MAX_FLOAT_DECIMALS``) that represent ``value`` without changing it."""
+    for decimals in range(_MAX_FLOAT_DECIMALS + 1):
+        if math.isclose(round(value, decimals), value, rel_tol=1e-12, abs_tol=1e-15):
+            return decimals
+    return _MAX_FLOAT_DECIMALS
 
 
 __all__ = ["NO_CONTROLS_MESSAGE", "ControlsPanel"]

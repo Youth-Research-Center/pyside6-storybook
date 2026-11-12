@@ -184,3 +184,34 @@ def test_panel_has_no_empty_state_when_there_are_controls(qtbot) -> None:
     panel = ControlsPanel([TextControl("a", "")])
     qtbot.addWidget(panel)
     assert panel.findChild(QLabel, "controlsEmptyState") is None
+
+
+def test_int_editor_handles_the_full_supported_range(qtbot) -> None:
+    panel = ControlsPanel([IntControl("n", 0, -(2**31), 2**31 - 1)])
+    qtbot.addWidget(panel)
+    spin_box = panel.findChild(QSpinBox)
+    assert spin_box is not None
+    assert (spin_box.minimum(), spin_box.maximum()) == (-(2**31), 2**31 - 1)
+
+
+@pytest.mark.parametrize(
+    ("default", "minimum", "maximum"),
+    [(0.1234, 0.001, 1.001), (0.5, 0.0, 1.0), (12.75, -0.125, 100.0), (1e-6, 0.0, 0.001)],
+)
+def test_float_editor_shows_the_exact_default_and_range(qtbot, default: float, minimum: float, maximum: float) -> None:
+    panel = ControlsPanel([FloatControl("x", default, minimum, maximum)])
+    qtbot.addWidget(panel)
+    spin_box = panel.findChild(QDoubleSpinBox)
+    assert spin_box is not None
+    assert spin_box.value() == panel.values()["x"] == default
+    assert (spin_box.minimum(), spin_box.maximum()) == (minimum, maximum)
+
+
+def test_float_editor_cannot_go_below_the_declared_minimum(qtbot) -> None:
+    panel = ControlsPanel([FloatControl("x", 0.1234, 0.001, 1.001)])
+    qtbot.addWidget(panel)
+    spin_box = panel.findChild(QDoubleSpinBox)
+    assert spin_box is not None
+    spin_box.setValue(0.0)
+    assert spin_box.value() == 0.001
+    assert panel.values()["x"] == 0.001
