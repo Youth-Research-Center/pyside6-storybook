@@ -33,7 +33,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns:
         0 on success; 1 when no stories were found, a target does not exist, or (with ``--list``) any story module failed to load;
         otherwise the gallery's exit code. Story modules that fail to load are reported on standard error, and the gallery still
-        opens with the stories that did load.
+        opens with the stories that did load and lists the failures under "Load errors".
     """
     arguments = _parser().parse_args(argv)
     targets: list[str] = arguments.targets
@@ -52,7 +52,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         for story_id in result.registry.ids():
             print(story_id)
         return 1 if result.errors else 0
-    return run(result.registry, theme=arguments.theme)
+    return run(result.registry, theme=arguments.theme, load_errors=result.errors)
 
 
 def _parser() -> argparse.ArgumentParser:

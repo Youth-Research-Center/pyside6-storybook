@@ -1,8 +1,8 @@
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QListWidget
 
-from pyside6_storybook import StoryRegistry
+from pyside6_storybook import LoadError, StoryRegistry
 from pyside6_storybook.app import run
 from pyside6_storybook.window import GalleryWindow
 
@@ -38,3 +38,20 @@ def test_run_shows_the_window_themes_the_app_and_restores_it(qapp: QApplication,
 def test_run_with_an_empty_registry_opens_the_empty_gallery(qapp: QApplication, restore_application_look: None) -> None:
     QTimer.singleShot(0, qapp.quit)
     assert run(StoryRegistry(), argv=[]) == 0
+
+
+def test_run_lists_load_errors_in_the_gallery(qapp: QApplication, restore_application_look: None, registry: StoryRegistry) -> None:
+    seen: dict[str, object] = {}
+
+    def inspect_and_quit() -> None:
+        (window,) = [widget for widget in qapp.topLevelWidgets() if isinstance(widget, GalleryWindow)]
+        sidebar = window.findChild(QListWidget, "storySidebar")
+        assert sidebar is not None
+        seen["entries"] = [sidebar.item(row).text() for row in range(sidebar.count())]
+        qapp.quit()
+
+    QTimer.singleShot(0, inspect_and_quit)
+    errors = (LoadError("stories/broken_story.py", "Importing stories/broken_story.py failed: boom"),)
+
+    assert run(registry, argv=["pyside6-storybook"], load_errors=errors) == 0
+    assert seen["entries"] == ["Inputs/Button", "Display/Label", "Display/Plain", "Load errors (1)"]

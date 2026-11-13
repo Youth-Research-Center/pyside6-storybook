@@ -1,10 +1,15 @@
+import logging
+from pathlib import Path
+
 import pytest
 import shiboken6
 from PySide6.QtCore import QEvent
-from PySide6.QtWidgets import QApplication, QComboBox, QFrame, QLabel, QLineEdit, QListWidget, QPushButton, QWidget
+from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QFrame, QLabel, QLineEdit, QListWidget, QPushButton, QWidget
+from story_files import story_source, write
 
-from pyside6_storybook import IntControl, StoryContext, StoryRegistry
+from pyside6_storybook import BoolControl, IntControl, LoadError, StoryContext, StoryRegistry, load_stories
 from pyside6_storybook.controls_panel import NO_CONTROLS_MESSAGE, ControlsPanel
+from pyside6_storybook.error_panel import ErrorPanel
 from pyside6_storybook.themes import BuiltinThemes
 from pyside6_storybook.window import NO_STORIES_MESSAGE, GalleryWindow
 
@@ -204,22 +209,6 @@ def test_the_empty_state_is_hidden_when_there_are_stories(qtbot, registry: Story
     assert not empty_label.isVisible()
 
 
-def test_a_story_that_returns_a_non_widget_raises_type_error_naming_the_story(qtbot, themes: BuiltinThemes) -> None:
-    stories = StoryRegistry()
-    stories.story("Good/One")(lambda ctx: QLabel("one"))
-    stories.story("Broken/Story")(lambda ctx: None)  # ty: ignore[invalid-argument-type]
-    window = _make_window(qtbot, stories, themes)
-
-    with qtbot.capture_exceptions() as exceptions:
-        _sidebar(window).setCurrentRow(1)
-
-    assert len(exceptions) == 1
-    exception_type, exception, _traceback = exceptions[0]
-    assert exception_type is TypeError
-    assert "Broken/Story" in str(exception)
-    assert window.current_preview_widget() is None
-
-
 def test_the_chrome_uses_no_fixed_colors(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
     window = _make_window(qtbot, registry, themes)
     window.show()
@@ -241,3 +230,192 @@ def test_the_story_list_and_theme_switch_have_accessible_names(qtbot, registry: 
     assert switch is not None
     assert _sidebar(window).accessibleName() == "Stories"
     assert switch.accessibleName() == "Theme"
+
+
+def _error_panel(window: GalleryWindow) -> ErrorPanel | None:
+    panels = [panel for panel in window.findChildren(ErrorPanel) if panel.isVisibleTo(window)]
+    assert len(panels) <= 1
+    return panels[0] if panels else None
+
+
+def _raising(ctx: StoryContext) -> QWidget:
+    raise RuntimeError("boom while rendering")
+
+
+def test_a_story_that_raises_shows_an_error_panel_and_logs_it(qtbot, themes: BuiltinThemes, caplog: pytest.LogCaptureFixture) -> None:
+    stories = StoryRegistry()
+    stories.story("Good/One")(lambda ctx: QLabel("one"))
+    stories.story("Broken/Raises")(_raising)
+    window = _make_window(qtbot, stories, themes)
+    caplog.set_level(logging.ERROR)
+
+    with qtbot.capture_exceptions() as exceptions:
+        _sidebar(window).setCurrentRow(1)
+
+    assert exceptions == []
+    panel = _error_panel(window)
+    assert panel is not None
+    assert panel.title() == "Broken/Raises raised RuntimeError: boom while rendering"
+    assert "Traceback" in panel.details()
+    assert "boom while rendering" in panel.details()
+    assert window.current_preview_widget() is None
+    assert any("Broken/Raises" in record.getMessage() and record.exc_info for record in caplog.records)
+
+
+def test_a_story_that_returns_a_non_widget_shows_an_error_panel(qtbot, themes: BuiltinThemes) -> None:
+    stories = StoryRegistry()
+    stories.story("Good/One")(lambda ctx: QLabel("one"))
+    stories.story("Broken/None")(lambda ctx: None)  # ty: ignore[invalid-argument-type]
+    window = _make_window(qtbot, stories, themes)
+
+    with qtbot.capture_exceptions() as exceptions:
+        _sidebar(window).setCurrentRow(1)
+
+    assert exceptions == []
+    panel = _error_panel(window)
+    assert panel is not None
+    assert panel.title() == "Broken/None returned None, expected a QWidget"
+    assert window.current_preview_widget() is None
+
+
+def test_the_next_story_renders_after_an_error(qtbot, themes: BuiltinThemes) -> None:
+    stories = StoryRegistry()
+    stories.story("Broken/Raises")(_raising)
+    stories.story("Good/One")(lambda ctx: QLabel("one"))
+    window = _make_window(qtbot, stories, themes)
+    assert _error_panel(window) is not None
+
+    _sidebar(window).setCurrentRow(1)
+
+    assert _error_panel(window) is None
+    preview = window.current_preview_widget()
+    assert isinstance(preview, QLabel)
+    assert preview.text() == "one"
+
+
+def test_the_error_panel_is_replaced_when_the_story_renders_again(qtbot, themes: BuiltinThemes, qapp: QApplication) -> None:
+    stories = StoryRegistry()
+
+    @stories.story("Flaky", controls=[BoolControl("fail", default=True)])
+    def flaky(ctx: StoryContext) -> QWidget:
+        if ctx.args["fail"]:
+            raise ValueError("asked to fail")
+        return QLabel("rendered")
+
+    window = _make_window(qtbot, stories, themes)
+    window.show()
+    first_panel = _error_panel(window)
+    assert first_panel is not None
+
+    check_box = next(box for box in window.findChildren(QCheckBox) if box.isVisibleTo(window))
+    check_box.setChecked(False)
+    qapp.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    assert _error_panel(window) is None
+    assert not shiboken6.isValid(first_panel)
+    preview = window.current_preview_widget()
+    assert isinstance(preview, QLabel)
+    assert preview.text() == "rendered"
+
+
+def test_switching_theme_on_a_broken_story_keeps_the_window_usable(qtbot, themes: BuiltinThemes) -> None:
+    stories = StoryRegistry()
+    stories.story("Broken/Raises")(_raising)
+    window = _make_window(qtbot, stories, themes)
+
+    with qtbot.capture_exceptions() as exceptions:
+        window.set_theme("Dark")
+
+    assert exceptions == []
+    assert _error_panel(window) is not None
+
+
+def _load_errors() -> list[LoadError]:
+    return [
+        LoadError("stories/broken_story.py", "Importing stories/broken_story.py failed: invalid syntax", "Traceback ...\nSyntaxError: invalid syntax"),
+        LoadError("stories/raising_story.py", "Importing stories/raising_story.py failed: boom", "Traceback ...\nRuntimeError: boom"),
+    ]
+
+
+def test_load_errors_get_a_sidebar_entry_after_the_stories(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+    window = GalleryWindow(registry, themes, load_errors=_load_errors())
+    qtbot.addWidget(window)
+
+    assert _sidebar_ids(window) == ["Inputs/Button", "Display/Label", "Display/Plain", "Load errors (2)"]
+    assert window.current_story_id() == "Inputs/Button"
+
+
+def test_selecting_the_load_errors_entry_shows_every_error(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+    window = GalleryWindow(registry, themes, load_errors=_load_errors())
+    qtbot.addWidget(window)
+
+    _sidebar(window).setCurrentRow(3)
+
+    heading = window.findChild(QLabel, "previewHeading")
+    assert heading is not None
+    assert heading.text() == "Load errors"
+    assert window.current_story_id() is None
+    assert window.current_preview_widget() is None
+    panel = _error_panel(window)
+    assert panel is not None
+    assert panel.title() == "2 story sources failed to load"
+    for expected in ("stories/broken_story.py", "SyntaxError: invalid syntax", "stories/raising_story.py", "RuntimeError: boom"):
+        assert expected in panel.details()
+    assert [p for p in window.findChildren(ControlsPanel) if p.isVisibleTo(window)] == []
+
+    _sidebar(window).setCurrentRow(0)
+    assert _error_panel(window) is None
+    assert isinstance(window.current_preview_widget(), QPushButton)
+
+
+def test_with_only_load_errors_the_errors_are_shown_on_start(qtbot, themes: BuiltinThemes) -> None:
+    window = GalleryWindow(StoryRegistry(), themes, load_errors=_load_errors()[:1])
+    qtbot.addWidget(window)
+    window.show()
+
+    assert _sidebar_ids(window) == ["Load errors (1)"]
+    panel = _error_panel(window)
+    assert panel is not None
+    assert panel.title() == "1 story source failed to load"
+    empty_label = window.findChild(QLabel, "previewEmptyState")
+    assert empty_label is not None
+    assert not empty_label.isVisible()
+
+
+def test_one_broken_and_two_working_story_modules(qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemes) -> None:
+    """The acceptance case of #8, from real files: the gallery opens, lists the failure, and renders both working stories."""
+    write(tmp_path, "stories/a_story.py", story_source("Working/A", "'a'"))
+    write(tmp_path, "stories/b_story.py", story_source("Working/B", "'b'"))
+    write(tmp_path, "stories/broken_story.py", "def oops(:\n")
+    result = load_stories(["stories"], cwd=tmp_path)
+
+    with qtbot.capture_exceptions() as exceptions:
+        window = GalleryWindow(result.registry, themes, load_errors=result.errors)
+        qtbot.addWidget(window)
+        rendered = []
+        for row in range(2):
+            _sidebar(window).setCurrentRow(row)
+            preview = window.current_preview_widget()
+            assert isinstance(preview, QLabel)
+            rendered.append(preview.text())
+        _sidebar(window).setCurrentRow(2)
+
+    assert exceptions == []
+    assert rendered == ["a", "b"]
+    assert _sidebar_ids(window) == ["Working/A", "Working/B", "Load errors (1)"]
+    panel = _error_panel(window)
+    assert panel is not None
+    assert "SyntaxError" in panel.details()
+
+
+def test_the_traceback_starts_at_the_story_not_in_the_library(qtbot, themes: BuiltinThemes) -> None:
+    stories = StoryRegistry()
+    stories.story("Broken/Raises")(_raising)
+    window = _make_window(qtbot, stories, themes)
+
+    panel = _error_panel(window)
+    assert panel is not None
+    details = panel.details()
+    assert "test_window.py" in details
+    assert "_raising" in details
+    assert "pyside6_storybook" not in details
