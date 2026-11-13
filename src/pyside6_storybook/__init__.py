@@ -3,6 +3,7 @@
 from importlib.metadata import PackageNotFoundError, version
 
 from pyside6_storybook.controls import BoolControl, ChoiceControl, Control, FloatControl, IntControl, TextControl
+from pyside6_storybook.discovery import LoadError, LoadResult, load_stories
 from pyside6_storybook.registry import Story, StoryContext, StoryRegistry, default_registry, story
 
 try:
@@ -16,11 +17,14 @@ __all__ = [
     "Control",
     "FloatControl",
     "IntControl",
+    "LoadError",
+    "LoadResult",
     "Story",
     "StoryContext",
     "StoryRegistry",
     "TextControl",
     "__version__",
     "default_registry",
+    "load_stories",
     "story",
 ]
