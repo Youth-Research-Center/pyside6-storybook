@@ -9,6 +9,9 @@ dependencies = [
     "PySide6-Essentials>=6.8",
 ]
 
+[project.scripts]
+pyside6-storybook = "pyside6_storybook.cli:main"
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",

@@ -21,6 +21,9 @@ from pyside6_storybook.themes.dark_theme import DARK_THEME
 from pyside6_storybook.themes.light_theme import LIGHT_THEME
 
 _THEMES = {theme.name: theme for theme in (LIGHT_THEME, DARK_THEME)}
+
+BUILTIN_THEME_NAMES = tuple(_THEMES)
+"""The names of the built-in themes, in the order the theme switch lists them. The first one is the default."""
 _FUSION = "Fusion"
 
 
@@ -43,7 +46,7 @@ class BuiltinThemes:
     @property
     def names(self) -> tuple[str, ...]:
         """The names of the available themes."""
-        return tuple(_THEMES)
+        return BUILTIN_THEME_NAMES
 
     @property
     def current(self) -> str:
@@ -161,4 +164,4 @@ class BuiltinThemes:
             self._logger.debug("Restoring the colour scheme is not supported", exc_info=True)
 
 
-__all__ = ["BuiltinThemes"]
+__all__ = ["BUILTIN_THEME_NAMES", "BuiltinThemes"]

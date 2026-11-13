@@ -1,46 +1,11 @@
 import sys
-import textwrap
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from story_files import story_source as _story_source
+from story_files import write as _write
 
 from pyside6_storybook import StoryRegistry, load_stories
-from pyside6_storybook import registry as registry_module
-
-
-@pytest.fixture
-def stories(monkeypatch: pytest.MonkeyPatch) -> Iterator[StoryRegistry]:
-    """A fresh default registry, with ``sys.path`` and ``sys.modules`` restored after the test."""
-    isolated = StoryRegistry()
-    monkeypatch.setattr(registry_module, "default_registry", isolated)
-    monkeypatch.setattr(sys, "path", list(sys.path))
-    modules_before = set(sys.modules)
-    try:
-        yield isolated
-    finally:
-        for name in set(sys.modules) - modules_before:
-            del sys.modules[name]
-
-
-def _write(root: Path, relative: str, source: str = "") -> Path:
-    path = root / relative
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(textwrap.dedent(source), encoding="utf-8")
-    return path
-
-
-def _story_source(story_id: str, text: str = "x", *, imports: str = "") -> str:
-    return f"""
-from PySide6.QtWidgets import QLabel
-
-from pyside6_storybook import story
-{imports}
-
-@story({story_id!r})
-def build(ctx):
-    return QLabel({text})
-"""
 
 
 def test_a_folder_loads_every_story_file_below_it(tmp_path: Path, stories: StoryRegistry) -> None:
@@ -176,6 +141,7 @@ def test_a_missing_target_is_reported_and_the_others_still_load(tmp_path: Path, 
     assert stories.ids() == ["A"]
     assert [error.source for error in result.errors] == ["no/such/folder", "no_such_module"]
     assert all("no such file, folder or module" in error.message for error in result.errors)
+    assert all(error.target_error for error in result.errors)
 
 
 def test_import_errors_are_collected_with_tracebacks(tmp_path: Path, stories: StoryRegistry) -> None:
@@ -189,6 +155,7 @@ def test_import_errors_are_collected_with_tracebacks(tmp_path: Path, stories: St
     assert [error.source for error in result.errors] == [str(broken.resolve()), str(raising.resolve())]
     assert "SyntaxError" in result.errors[0].details
     assert "RuntimeError: boom at import" in result.errors[1].details
+    assert not any(error.target_error for error in result.errors)
     assert len(result.modules) == 1
     assert not any("broken_story" in name or "raising_story" in name for name in sys.modules)
 
@@ -224,6 +191,7 @@ def test_a_file_that_is_not_python_is_reported(tmp_path: Path, stories: StoryReg
 
     assert [error.source for error in result.errors] == ["notes.txt"]
     assert "not a Python file" in result.errors[0].message
+    assert result.errors[0].target_error
 
 
 def test_the_working_directory_is_put_on_sys_path_once(tmp_path: Path, stories: StoryRegistry) -> None:
