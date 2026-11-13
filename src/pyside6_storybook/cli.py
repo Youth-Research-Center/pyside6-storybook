@@ -16,10 +16,14 @@ from pyside6_storybook.discovery import LoadError, load_stories
 from pyside6_storybook.themes import BUILTIN_THEME_NAMES
 
 PROGRAM_NAME = "pyside6-storybook"
+EXAMPLES_MODULE = "pyside6_storybook.examples"
+"""The package of built-in example stories that ``--examples`` loads."""
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Load the stories named on the command line and open the gallery, or list them with ``--list``.
+
+    ``--examples`` adds the built-in example stories to the targets.
 
     The ``QApplication`` is created before any story module is imported, so a module that creates a widget at import time works.
     With ``--list`` no window is opened, and the offscreen platform is used unless ``QT_QPA_PLATFORM`` says otherwise, so listing
@@ -36,9 +40,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         opens with the stories that did load and lists the failures under "Load errors".
     """
     arguments = _parser().parse_args(argv)
-    targets: list[str] = arguments.targets
+    targets: list[str] = list(arguments.targets)
+    if arguments.examples:
+        targets.append(EXAMPLES_MODULE)
     if not targets:
-        _print_error(f"no stories to show: pass the folders, files or modules that contain them, for example `{PROGRAM_NAME} path/to/stories`")
+        _print_error(
+            "no stories to show: pass the folders, files or modules that contain them, for example "
+            f"`{PROGRAM_NAME} path/to/stories`, or try the built-in examples with `{PROGRAM_NAME} --examples`"
+        )
         return 1
     _application = _ensure_application(offscreen=arguments.list)  # kept alive until main returns
     result = load_stories(targets)
@@ -66,6 +75,7 @@ def _parser() -> argparse.ArgumentParser:
         metavar="TARGET",
         help="a folder (every *_story.py and *_stories.py file below it is loaded), a .py file, or a dotted module or package name",
     )
+    parser.add_argument("--examples", action="store_true", help="also load the built-in example stories, built from stock Qt widgets")
     parser.add_argument("--list", action="store_true", help="print the ids of the stories found, one per line, and exit without opening a window")
     parser.add_argument("--theme", choices=BUILTIN_THEME_NAMES, help=f"the theme to start in (default: {BUILTIN_THEME_NAMES[0]})")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -93,4 +103,4 @@ def _print_error(message: str) -> None:
     print(f"error: {message}", file=sys.stderr)
 
 
-__all__ = ["PROGRAM_NAME", "main"]
+__all__ = ["EXAMPLES_MODULE", "PROGRAM_NAME", "main"]

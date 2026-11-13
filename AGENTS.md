@@ -23,10 +23,11 @@ Supported Python: 3.11 and newer. Commit `uv.lock` together with any change to d
 ## Running the gallery
 ```bash
 uv run pyside6-storybook path/to/stories            # a folder, a .py file or a dotted module name; several are allowed
+uv run pyside6-storybook --examples                 # the built-in example stories (can be combined with targets)
 uv run pyside6-storybook --list path/to/stories     # print the story ids and exit, without a window or a display
 uv run python -m pyside6_storybook path/to/stories  # the same command line
 ```
-Without a target the command exits with a hint; default story sources come with #11 and the built-in examples with #12.
+Without a target or `--examples` the command exits with a hint; default story sources come with #11.
 
 ## Tests
 There is no display in CI or in agent sandboxes: set `QT_QPA_PLATFORM=offscreen` for every test run. `tests/conftest.py` also sets it as a
@@ -73,6 +74,9 @@ in the same pull request as the bump.
   - `gui/` - the gallery's widgets, one module per widget: `window.py` (`GalleryWindow`), `controls_panel.py` (`ControlsPanel`, the
     editors for a story's controls) and `error_panel.py` (`ErrorPanel`, which the window shows in the preview for a story that fails and
     for the load errors). New gallery widgets go here, not at the package root.
+  - `examples/` - the example stories `--examples` shows, built from stock Qt widgets, in `*_stories.py` modules loaded by discovery
+    like any project's stories. They import only PySide6 and this package, every story has a docstring, and together they use every
+    control type; `tests/test_examples.py` checks all three. They are copied as first stories, so keep them idiomatic.
   - `themes/` - the built-in themes: `theme_definition.py` (`ThemeDefinition`: name, colour scheme and palette colours), one module
     per theme (`light_theme.py`, `dark_theme.py`) and `builtin_themes.py` (`BuiltinThemes`, which applies them)
   - `contrast.py` - WCAG contrast helpers
