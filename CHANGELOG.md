@@ -19,3 +19,5 @@ All notable changes to this project are documented in this file.
   given folders, files or modules; `--list` prints the story ids without opening a window, also without a display; `--theme` picks the
   starting theme. Story modules that fail to import are reported and the gallery opens with the rest; a target that does not exist, or no
   stories at all, exits with code 1.
+- Example stories built from stock Qt widgets (buttons, inputs, display widgets, the active palette and a small form), shown by
+  `pyside6-storybook --examples`.

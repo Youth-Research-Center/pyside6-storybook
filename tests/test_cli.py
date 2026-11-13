@@ -138,7 +138,31 @@ def test_no_stories_found_exits_non_zero(tmp_path: Path, monkeypatch: pytest.Mon
 def test_no_targets_explains_how_to_pass_them(stories: StoryRegistry, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main([]) == 1
 
-    assert "pyside6-storybook path/to/stories" in capsys.readouterr().err
+    error_output = capsys.readouterr().err
+    assert "pyside6-storybook path/to/stories" in error_output
+    assert "pyside6-storybook --examples" in error_output
+    assert gallery.calls == []
+
+
+def test_examples_open_the_gallery_with_the_example_stories(stories: StoryRegistry, gallery: _RecordingRun) -> None:
+    assert cli.main(["--examples"]) == 0
+    ((ids, _theme),) = gallery.calls
+    assert "Buttons/Push Button" in ids
+    assert all(story_id.split("/")[0] in {"Buttons", "Display", "Forms", "Inputs"} for story_id in ids)
+
+
+def test_examples_combine_with_targets(project: Path, gallery: _RecordingRun) -> None:
+    assert cli.main(["stories", "--examples"]) == 0
+    ((ids, _theme),) = gallery.calls
+    assert ids[:2] == ["Inputs/A", "Inputs/B"]
+    assert "Buttons/Push Button" in ids
+
+
+def test_list_examples_prints_the_example_ids(stories: StoryRegistry, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]) -> None:
+    assert cli.main(["--list", "--examples"]) == 0
+    listed = capsys.readouterr().out.splitlines()
+    assert listed[0] == "Buttons/Push Button"
+    assert "Inputs/Slider" in listed
     assert gallery.calls == []
 
 
@@ -170,6 +194,21 @@ def test_the_installed_script_lists_stories_without_a_display(tmp_path: Path) ->
 
     assert completed.returncode == 0, completed.stderr
     assert completed.stdout.splitlines() == ["Script/A", "Script/B"]
+
+
+def test_the_installed_script_lists_the_examples_without_a_display(tmp_path: Path) -> None:
+    completed = subprocess.run(
+        [_installed_script(), "--list", "--examples"],
+        cwd=tmp_path,
+        env=_without_platform_override(),
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "Forms/Sign-in Form" in completed.stdout.splitlines()
 
 
 def test_python_dash_m_runs_the_same_command(tmp_path: Path) -> None:
