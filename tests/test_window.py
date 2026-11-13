@@ -8,10 +8,10 @@ from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QFrame, QLabel
 from story_files import story_source, write
 
 from pyside6_storybook import BoolControl, IntControl, LoadError, StoryContext, StoryRegistry, load_stories
-from pyside6_storybook.controls_panel import NO_CONTROLS_MESSAGE, ControlsPanel
-from pyside6_storybook.error_panel import ErrorPanel
+from pyside6_storybook.gui.controls_panel import NO_CONTROLS_MESSAGE, ControlsPanel
+from pyside6_storybook.gui.error_panel import ErrorPanel
+from pyside6_storybook.gui.window import NO_STORIES_MESSAGE, GalleryWindow
 from pyside6_storybook.themes import BuiltinThemes
-from pyside6_storybook.window import NO_STORIES_MESSAGE, GalleryWindow
 
 
 def _make_window(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> GalleryWindow:

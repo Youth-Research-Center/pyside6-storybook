@@ -70,9 +70,9 @@ in the same pull request as the bump.
   - `discovery/` - story discovery: `loader.py` (`load_stories`, which imports story modules from folders, files and dotted module
     names, and collects errors), `file_search.py` (which files are stories), `module_import.py` (importing one file under the module
     name that keeps it a single module), `load_result.py` (`LoadResult`, `LoadError`) and `constants.py` (file-name patterns and messages)
-  - `controls_panel.py` - `ControlsPanel`, the editors for a story's controls
-  - `error_panel.py` - `ErrorPanel`, which the window shows in the preview for a story that fails and for the load errors
-  - `window.py` - `GalleryWindow`
+  - `gui/` - the gallery's widgets, one module per widget: `window.py` (`GalleryWindow`), `controls_panel.py` (`ControlsPanel`, the
+    editors for a story's controls) and `error_panel.py` (`ErrorPanel`, which the window shows in the preview for a story that fails and
+    for the load errors). New gallery widgets go here, not at the package root.
   - `themes/` - the built-in themes: `theme_definition.py` (`ThemeDefinition`: name, colour scheme and palette colours), one module
     per theme (`light_theme.py`, `dark_theme.py`) and `builtin_themes.py` (`BuiltinThemes`, which applies them)
   - `contrast.py` - WCAG contrast helpers

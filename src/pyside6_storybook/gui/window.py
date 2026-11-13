@@ -22,16 +22,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pyside6_storybook.controls_panel import ControlsPanel
 from pyside6_storybook.discovery import LoadError
-from pyside6_storybook.error_panel import ErrorPanel
+from pyside6_storybook.gui.controls_panel import ControlsPanel
+from pyside6_storybook.gui.error_panel import ErrorPanel
 from pyside6_storybook.registry import Story, StoryContext, StoryRegistry
 from pyside6_storybook.themes import BuiltinThemes
 
 NO_STORIES_MESSAGE = "No stories are registered."
 LOAD_ERRORS_HEADING = "Load errors"
 
-_PACKAGE_FOLDER = Path(__file__).resolve().parent
+_PACKAGE_FOLDER = Path(__file__).resolve().parents[1]
+"""The ``pyside6_storybook`` package folder: frames from files below it are library code, trimmed from story tracebacks."""
 _ENTRY_KIND_ROLE = Qt.ItemDataRole.UserRole + 1
 _LOAD_ERRORS_ENTRY = "load-errors"
 

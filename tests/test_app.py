@@ -5,8 +5,8 @@ from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QListWidget
 
 from pyside6_storybook import LoadError, StoryRegistry
 from pyside6_storybook.app import run
+from pyside6_storybook.gui.window import GalleryWindow
 from pyside6_storybook.themes import DARK_THEME
-from pyside6_storybook.window import GalleryWindow
 
 
 def test_run_shows_the_window_themes_the_app_and_restores_it(qapp: QApplication, restore_application_look: None, registry: StoryRegistry) -> None:

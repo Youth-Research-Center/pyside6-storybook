@@ -8,9 +8,9 @@ from collections.abc import Sequence
 from PySide6.QtWidgets import QApplication
 
 from pyside6_storybook.discovery import LoadError
+from pyside6_storybook.gui.window import GalleryWindow
 from pyside6_storybook.registry import StoryRegistry, default_registry
 from pyside6_storybook.themes import BuiltinThemes
-from pyside6_storybook.window import GalleryWindow
 
 _WINDOW_SIZE = (1100, 700)
 

@@ -1,7 +1,7 @@
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtWidgets import QLabel, QPlainTextEdit
 
-from pyside6_storybook.error_panel import ErrorPanel
+from pyside6_storybook.gui.error_panel import ErrorPanel
 
 
 def test_shows_the_title_and_the_details(qtbot) -> None:

@@ -6,7 +6,7 @@ from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QLabel, QLineEdit, QSpinBox, QWidget
 
 from pyside6_storybook import BoolControl, ChoiceControl, FloatControl, IntControl, TextControl
-from pyside6_storybook.controls_panel import NO_CONTROLS_MESSAGE, ControlsPanel
+from pyside6_storybook.gui.controls_panel import NO_CONTROLS_MESSAGE, ControlsPanel
 
 _EditorT = TypeVar("_EditorT", bound=QWidget)
 
