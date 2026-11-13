@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from story_files import story_source, write
 
-from pyside6_storybook import StoryRegistry, __version__, cli
+from pyside6_storybook import LoadError, StoryRegistry, __version__, cli
 
 
 class _RecordingRun:
@@ -16,9 +16,18 @@ class _RecordingRun:
     def __init__(self, exit_code: int = 0) -> None:
         self.exit_code = exit_code
         self.calls: list[tuple[list[str], str | None]] = []
+        self.load_errors: list[tuple[LoadError, ...]] = []
 
-    def __call__(self, registry: StoryRegistry, argv: list[str] | None = None, *, theme: str | None = None) -> int:
+    def __call__(
+        self,
+        registry: StoryRegistry,
+        argv: list[str] | None = None,
+        *,
+        theme: str | None = None,
+        load_errors: tuple[LoadError, ...] = (),
+    ) -> int:
         self.calls.append((registry.ids(), theme))
+        self.load_errors.append(load_errors)
         return self.exit_code
 
 
@@ -104,6 +113,9 @@ def test_a_story_that_fails_to_import_does_not_stop_the_gallery(project: Path, g
 
     assert gallery.calls == [(["Inputs/A", "Inputs/B"], None)]
     assert "RuntimeError: boom at import" in capsys.readouterr().err
+    (passed_errors,) = gallery.load_errors
+    assert [Path(error.source).name for error in passed_errors] == ["c_story.py"]
+    assert "RuntimeError: boom at import" in passed_errors[0].details
 
 
 def test_a_missing_target_exits_non_zero_without_opening_the_gallery(project: Path, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]) -> None:
