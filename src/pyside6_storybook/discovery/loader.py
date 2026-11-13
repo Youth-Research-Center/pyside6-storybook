@@ -80,7 +80,7 @@ class _Loader:
                 self._load_file(file)
         elif path.is_file():
             if path.suffix != ".py":
-                self.errors.append(LoadError(text, f"{text} is not a Python file or a folder"))
+                self.errors.append(LoadError(text, f"{text} is not a Python file or a folder", target_error=True))
                 return
             self._load_file(path)
         else:
@@ -101,21 +101,21 @@ class _Loader:
 
     def _load_dotted_name(self, name: str) -> None:
         if not all(part.isidentifier() for part in name.split(".")):
-            self.errors.append(LoadError(name, f"{name}: {NOT_FOUND_MESSAGE}"))
+            self.errors.append(LoadError(name, f"{name}: {NOT_FOUND_MESSAGE}", target_error=True))
             return
         errors_before = len(self.errors)
         try:
             spec = self._guarded_import(name, name, partial(importlib.util.find_spec, name), reraise_missing=True)
             if spec is None:
                 if len(self.errors) == errors_before:
-                    self.errors.append(LoadError(name, f"{name}: {NOT_FOUND_MESSAGE}"))
+                    self.errors.append(LoadError(name, f"{name}: {NOT_FOUND_MESSAGE}", target_error=True))
                 return
             file = spec_file(spec)
             if file is not None and file in self._seen_files:
                 return
             module = self._guarded_import(name, name, partial(importlib.import_module, name), reraise_missing=True)
         except ModuleNotFoundError:
-            self.errors.append(LoadError(name, f"{name}: {NOT_FOUND_MESSAGE}"))
+            self.errors.append(LoadError(name, f"{name}: {NOT_FOUND_MESSAGE}", target_error=True))
             return
         if module is None:
             return

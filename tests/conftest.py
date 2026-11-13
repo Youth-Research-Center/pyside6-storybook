@@ -2,6 +2,7 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import sys
 from collections.abc import Iterator
 
 import pytest
@@ -9,6 +10,7 @@ from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 
 from pyside6_storybook import BoolControl, IntControl, StoryContext, StoryRegistry, TextControl
+from pyside6_storybook import registry as registry_module
 from pyside6_storybook.themes import BuiltinThemes
 
 
@@ -58,3 +60,17 @@ def registry() -> StoryRegistry:
         return QLabel("plain")
 
     return stories
+
+
+@pytest.fixture
+def stories(monkeypatch: pytest.MonkeyPatch) -> Iterator[StoryRegistry]:
+    """A fresh default registry for tests that load story modules, with ``sys.path`` and ``sys.modules`` restored afterwards."""
+    isolated = StoryRegistry()
+    monkeypatch.setattr(registry_module, "default_registry", isolated)
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    modules_before = set(sys.modules)
+    try:
+        yield isolated
+    finally:
+        for name in set(sys.modules) - modules_before:
+            del sys.modules[name]

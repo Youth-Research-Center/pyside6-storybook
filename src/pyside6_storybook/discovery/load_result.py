@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pyside6_storybook.registry import StoryRegistry
 
@@ -15,11 +15,14 @@ class LoadError:
         source: The target as given, or the path of the story file, that failed.
         message: A one-line description of the problem.
         details: The formatted traceback when an exception was raised while importing, otherwise an empty string.
+        target_error: ``True`` when the target itself is wrong (no file, folder or module has that name, or it is a file that is
+            not Python), as opposed to a story module that failed while importing.
     """
 
     source: str
     message: str
     details: str = ""
+    target_error: bool = field(default=False, kw_only=True)
 
 
 @dataclass(frozen=True, slots=True)

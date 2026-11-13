@@ -7,7 +7,12 @@ All notable changes to this project are documented in this file.
 ### Added
 - Story model: `story` decorator, `Story`, `StoryContext`, `StoryRegistry`, `default_registry` and the `TextControl`, `BoolControl`,
   `ChoiceControl`, `IntControl` and `FloatControl` controls.
-- Gallery window with a story list, a preview, a theme switch and a controls panel, opened with `python -m pyside6_storybook`.
+- Gallery window with a story list, a preview, a theme switch and a controls panel.
 - Built-in Light and Dark themes.
 - `load_stories` imports story modules from folders (`*_story.py` and `*_stories.py` files), single files and dotted module names, and
-  returns a `LoadResult` with the registry, the loaded modules and a `LoadError` for each source that failed.
+  returns a `LoadResult` with the registry, the loaded modules and a `LoadError` for each source that failed. `LoadError.target_error` tells
+  a target that does not exist apart from a story module that failed to import.
+- `pyside6-storybook` command (also `python -m pyside6_storybook`): `pyside6-storybook TARGET...` opens the gallery with the stories in the
+  given folders, files or modules; `--list` prints the story ids without opening a window, also without a display; `--theme` picks the
+  starting theme. Story modules that fail to import are reported and the gallery opens with the rest; a target that does not exist, or no
+  stories at all, exits with code 1.

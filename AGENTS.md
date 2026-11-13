@@ -22,9 +22,11 @@ Supported Python: 3.11 and newer. Commit `uv.lock` together with any change to d
 
 ## Running the gallery
 ```bash
-uv run python -m pyside6_storybook
+uv run pyside6-storybook path/to/stories            # a folder, a .py file or a dotted module name; several are allowed
+uv run pyside6-storybook --list path/to/stories     # print the story ids and exit, without a window or a display
+uv run python -m pyside6_storybook path/to/stories  # the same command line
 ```
-Stories are registered by importing the module that defines them. Until story discovery exists the window shows its empty state.
+Without a target the command exits with a hint; default story sources come with #11 and the built-in examples with #12.
 
 ## Tests
 There is no display in CI or in agent sandboxes: set `QT_QPA_PLATFORM=offscreen` for every test run. `tests/conftest.py` also sets it as a
@@ -57,7 +59,8 @@ in the same pull request as the bump.
 ## Project structure
 - `src/pyside6_storybook/` - the package
   - `__init__.py` - the public API (`__all__`) and `__version__`
-  - `__main__.py` - `python -m pyside6_storybook`
+  - `__main__.py` - `python -m pyside6_storybook`, which runs `cli.main`
+  - `cli.py` - the `pyside6-storybook` command line (`main`): loads the targets and opens the gallery, or lists the stories
   - `controls/` - control dataclasses, one module per type (`text_control.py`, `bool_control.py`, `choice_control.py`,
     `int_control.py`, `float_control.py`); `__init__.py` re-exports them and defines the `Control` union, and `_range.py` holds
     the range check shared by the int and float controls
@@ -74,7 +77,8 @@ in the same pull request as the bump.
   - `contrast.py` - WCAG contrast helpers
   - `app.py` - `run()`, which creates the `QApplication` and opens the window
   - `py.typed` - marks the package as typed
-- `tests/` - pytest suite (`pytest-qt`), one test module per source module
+- `tests/` - pytest suite (`pytest-qt`), one test module per source module; `conftest.py` holds the shared fixtures and `story_files.py` the
+  helpers that write story modules for discovery and CLI tests
 - `docs/` - the roadmap
 - `.github/` - CI workflow and Dependabot configuration
 
@@ -92,7 +96,8 @@ in the same pull request as the bump.
 - **Frozen dataclasses** hold no mutable containers: use tuples, `frozenset` or a read-only mapping, and convert in `__post_init__`
   (`object.__setattr__`) when the caller may pass a list. Validate invariants in `__post_init__`.
 - **Naming:** `PascalCase` classes, `snake_case` functions and variables, `_leading_underscore` for private members.
-- **Logging:** class-level loggers (`self._logger = logging.getLogger(self.__class__.__name__)`); no `print()`.
+- **Logging:** class-level loggers (`self._logger = logging.getLogger(self.__class__.__name__)`); no `print()`, except for the command line's
+  own output in `cli.py`.
 - No commented-out code, no `TODO` comments that express uncertainty (link an issue instead), no bare `except`; do not swallow an exception
   without logging it. Keep imports sorted (stdlib, third party, local) and free of duplicates.
 - Keep changes small and focused; do not add abstractions a task does not need.
@@ -128,8 +133,9 @@ in the same pull request as the bump.
 - Every bug fix comes with a regression test that fails without the fix. Assert behaviour (values, objects, call counts), not a marker.
 - Tests build their own `StoryRegistry`; none may register a story in `default_registry`, and a test that must touch it restores it
   (`monkeypatch`, or `try/finally`). Stories in tests are made of stock Qt widgets.
-- A test that imports story modules (anything calling `load_stories`) isolates `sys.path`, `sys.modules` and `default_registry`, as the
-  `stories` fixture in `tests/test_discovery.py` does, and writes its story files under `tmp_path`.
+- A test that imports story modules (anything calling `load_stories`, or the CLI) uses the `stories` fixture in `tests/conftest.py`,
+  which isolates `sys.path`, `sys.modules` and `default_registry`, and writes its story files under `tmp_path` with the helpers in
+  `tests/story_files.py`.
 - A test that changes the application palette, style or style sheet restores them in a fixture with `try/finally`
   (`restore_application_look` and `themes` in `tests/conftest.py`).
 - Drive widgets the way a user does: `qtbot.keyClicks`, `qtbot.mouseClick`, or the editor's own setters. Assert which values were emitted, not
