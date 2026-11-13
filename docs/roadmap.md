@@ -130,7 +130,7 @@ def button(ctx: StoryContext) -> QWidget:
 `pyside6-storybook [TARGET ...]` accepts, for each target:
 
 - **a path to a folder:** every `*_story.py` and `*_stories.py` file below it is
-  loaded;
+  loaded, except `test_*` files (pytest modules such as `test_button_story.py`);
 - **a path to a `.py` file:** that file is loaded;
 - **a dotted module or package name** (`myapp.stories`): imported; for a package, its
   submodules named `*_story` or `*_stories` are imported too. `__main__`, tests and
@@ -142,10 +142,14 @@ A file is always imported under its canonical module name: the loader walks up f
 the file while the folder contains `__init__.py`, puts the parent of the topmost
 package on `sys.path`, and imports the dotted name. That makes relative imports work
 and guarantees that a file reached through a path and through a package import is the
-same module, so its stories are registered once. Only a file that is not inside a
-package gets a synthetic module name. Duplicate targets are ignored. The current
-working directory is put on `sys.path`, as `python -m` does, so stories can import
-the application under development.
+same module, so its stories are registered once. Before a file runs, the loader checks
+that this name resolves to that very file, so a clash with an already imported package
+of the same name is reported without executing the other package's file. A file that is
+not inside a package is imported under its own name with its folder on `sys.path`, so a
+sibling story that imports it shares the module; it gets a synthetic module name only
+when its own name is already taken by a different file. Duplicate targets are ignored.
+The current working directory is put on `sys.path`, as `python -m` does, so stories can
+import the application under development.
 
 With no targets on the command line, the default sources are used, in this order:
 

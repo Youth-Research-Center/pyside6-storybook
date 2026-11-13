@@ -2,24 +2,21 @@
 
 from __future__ import annotations
 
-import hashlib
 import importlib
 import importlib.util
 import os
-import sys
 import traceback
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable
 from functools import partial
 from pathlib import Path
-from types import ModuleType
 from typing import TypeVar
 
 from pyside6_storybook import registry as registry_module
+from pyside6_storybook.discovery.constants import NOT_FOUND_MESSAGE
+from pyside6_storybook.discovery.file_search import story_files_below, story_modules_in_package
 from pyside6_storybook.discovery.load_result import LoadError, LoadResult
+from pyside6_storybook.discovery.module_import import ModuleNameTakenError, import_file, prepend_to_sys_path, spec_file
 
-_STORY_SUFFIXES = ("_story", "_stories")
-_SYNTHETIC_PREFIX = "_pyside6_storybook_"
-_NOT_FOUND = "no such file, folder or module"
 _T = TypeVar("_T")
 
 
@@ -28,16 +25,18 @@ def load_stories(targets: Iterable[str | os.PathLike[str]], *, cwd: str | os.Pat
 
     Each target is, in this order of precedence:
 
-    - an existing folder: every ``*_story.py`` and ``*_stories.py`` file below it is loaded, skipping hidden folders,
-      ``__pycache__`` and virtual environments;
+    - an existing folder: every ``*_story.py`` and ``*_stories.py`` file below it is loaded, skipping ``test_*`` files, hidden
+      folders, ``__pycache__`` and virtual environments;
     - an existing ``.py`` file: that file is loaded;
     - a dotted module name: the module is imported, and for a package also its submodules named ``*_story`` or ``*_stories``
-      in it and in its regular subpackages.
+      in it and in its regular subpackages (again skipping ``test_*`` files).
 
     A file inside a package (its folder has ``__init__.py``) is imported under its full dotted name, with the folder above the
     topmost package on ``sys.path``, so relative imports work and a file reached by path and by module name is one module. A
-    file outside any package gets a synthetic module name derived from its path, and its folder is put on ``sys.path`` so it can
-    import its siblings. ``cwd`` is put on ``sys.path`` too, as ``python -m`` does, so stories can import the application.
+    file outside any package is imported under its own name with its folder on ``sys.path``, so siblings can import it and share
+    the module; it gets a synthetic name derived from its path only when its own name is taken by another file. A file whose
+    module name refers to a different file is reported without being executed. ``cwd`` is put on ``sys.path`` too, as
+    ``python -m`` does, so stories can import the application.
 
     Importing runs the code in those modules, exactly as running a test suite does.
 
@@ -50,7 +49,7 @@ def load_stories(targets: Iterable[str | os.PathLike[str]], *, cwd: str | os.Pat
         the remaining targets from loading.
     """
     working_directory = Path.cwd() if cwd is None else Path(cwd)
-    _prepend_to_sys_path(working_directory.resolve())
+    prepend_to_sys_path(working_directory.resolve())
     importlib.invalidate_caches()
     loader = _Loader(working_directory)
     for target in targets:
@@ -77,7 +76,7 @@ class _Loader:
         if not path.is_absolute():
             path = self._working_directory / path
         if path.is_dir():
-            for file in _story_files_below(path):
+            for file in story_files_below(path):
                 self._load_file(file)
         elif path.is_file():
             if path.suffix != ".py":
@@ -93,8 +92,8 @@ class _Loader:
             return
         self._seen_files.add(path)
         try:
-            module_name = self._guarded_import(str(path), str(path), partial(_import_file, path))
-        except _ModuleNameTakenError as error:
+            module_name = self._guarded_import(str(path), str(path), partial(import_file, path))
+        except ModuleNameTakenError as error:
             self.errors.append(LoadError(str(path), str(error)))
             return
         if module_name is not None:
@@ -102,21 +101,21 @@ class _Loader:
 
     def _load_dotted_name(self, name: str) -> None:
         if not all(part.isidentifier() for part in name.split(".")):
-            self.errors.append(LoadError(name, f"{name}: {_NOT_FOUND}"))
+            self.errors.append(LoadError(name, f"{name}: {NOT_FOUND_MESSAGE}"))
             return
         errors_before = len(self.errors)
         try:
             spec = self._guarded_import(name, name, partial(importlib.util.find_spec, name), reraise_missing=True)
             if spec is None:
                 if len(self.errors) == errors_before:
-                    self.errors.append(LoadError(name, f"{name}: {_NOT_FOUND}"))
+                    self.errors.append(LoadError(name, f"{name}: {NOT_FOUND_MESSAGE}"))
                 return
-            file = Path(spec.origin).resolve() if spec.has_location and spec.origin else None
+            file = spec_file(spec)
             if file is not None and file in self._seen_files:
                 return
             module = self._guarded_import(name, name, partial(importlib.import_module, name), reraise_missing=True)
         except ModuleNotFoundError:
-            self.errors.append(LoadError(name, f"{name}: {_NOT_FOUND}"))
+            self.errors.append(LoadError(name, f"{name}: {NOT_FOUND_MESSAGE}"))
             return
         if module is None:
             return
@@ -126,7 +125,7 @@ class _Loader:
             self._record_module(name)
             return
         for location in module.__path__:
-            for story_file, submodule_name in _story_modules_in_package(Path(location), name):
+            for story_file, submodule_name in story_modules_in_package(Path(location), name):
                 story_path = story_file.resolve()
                 if story_path in self._seen_files:
                     continue
@@ -137,12 +136,12 @@ class _Loader:
     def _guarded_import(self, source: str, label: str, action: Callable[[], _T], *, reraise_missing: bool = False) -> _T | None:
         """Run an import, turning any exception raised by the imported code into a ``LoadError`` for ``source``.
 
-        ``_ModuleNameTakenError`` always propagates, and with ``reraise_missing`` so does a ``ModuleNotFoundError`` saying that
+        ``ModuleNameTakenError`` always propagates, and with ``reraise_missing`` so does a ``ModuleNotFoundError`` saying that
         ``label`` itself does not exist, so callers can report those in their own words. Returns ``None`` after recording a failure.
         """
         try:
             return action()
-        except _ModuleNameTakenError:
+        except ModuleNameTakenError:
             raise
         except ModuleNotFoundError as error:
             if reraise_missing and _is_missing(label, error):
@@ -164,97 +163,6 @@ def _is_missing(name: str, error: ModuleNotFoundError) -> bool:
 
 def _failure(source: str, label: str, error: BaseException) -> LoadError:
     return LoadError(source, f"Importing {label} failed: {error}", "".join(traceback.format_exception(error)))
-
-
-class _ModuleNameTakenError(Exception):
-    """A story file's module name is already used by a different file."""
-
-
-def _import_file(path: Path) -> str:
-    """Import a story file under its canonical module name and return that name."""
-    canonical = _canonical_module_name(path)
-    if canonical is None:
-        return _import_file_outside_package(path)
-    name, sys_path_entry = canonical
-    existing = sys.modules.get(name)
-    if existing is not None and _module_file(existing) not in (None, path):
-        raise _ModuleNameTakenError(f"Cannot import {path} as {name}: that module name already refers to {_module_file(existing)}")
-    _prepend_to_sys_path(sys_path_entry)
-    module = importlib.import_module(name)
-    if _module_file(module) not in (None, path):
-        raise _ModuleNameTakenError(f"Cannot import {path} as {name}: that module name refers to {_module_file(module)}")
-    return name
-
-
-def _canonical_module_name(path: Path) -> tuple[str, Path] | None:
-    """Return the dotted name of a file inside a package and the folder to put on ``sys.path``, or ``None`` outside a package."""
-    parts = [] if path.name == "__init__.py" else [path.stem]
-    folder = path.parent
-    while (folder / "__init__.py").is_file():
-        parts.insert(0, folder.name)
-        folder = folder.parent
-    if folder == path.parent or not all(part.isidentifier() for part in parts):
-        return None
-    return ".".join(parts), folder
-
-
-def _import_file_outside_package(path: Path) -> str:
-    digest = hashlib.sha1(str(path).encode("utf-8"), usedforsecurity=False).hexdigest()[:10]
-    stem = "".join(character if character.isalnum() or character == "_" else "_" for character in path.stem)
-    name = f"{_SYNTHETIC_PREFIX}{stem}_{digest}"
-    if name in sys.modules:
-        return name
-    spec = importlib.util.spec_from_file_location(name, path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Cannot create an import spec for {path}")
-    _prepend_to_sys_path(path.parent)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    try:
-        spec.loader.exec_module(module)
-    except BaseException:
-        del sys.modules[name]
-        raise
-    return name
-
-
-def _story_files_below(folder: Path) -> Iterator[Path]:
-    """Yield every story file below ``folder`` in a stable order, skipping hidden folders, caches and virtual environments."""
-    for directory, subdirectories, files in os.walk(folder):
-        here = Path(directory)
-        subdirectories[:] = sorted(
-            name
-            for name in subdirectories
-            if not name.startswith(".") and name != "__pycache__" and not (here / name / "pyvenv.cfg").exists()
-        )
-        for name in sorted(files):
-            if _is_story_file_name(name):
-                yield here / name
-
-
-def _story_modules_in_package(folder: Path, package: str) -> Iterator[tuple[Path, str]]:
-    """Yield the story files of a package folder and its regular subpackages, with their dotted module names."""
-    for entry in sorted(folder.iterdir()):
-        if entry.is_dir():
-            if entry.name.isidentifier() and (entry / "__init__.py").is_file():
-                yield from _story_modules_in_package(entry, f"{package}.{entry.name}")
-        elif _is_story_file_name(entry.name) and entry.stem.isidentifier():
-            yield entry, f"{package}.{entry.stem}"
-
-
-def _is_story_file_name(name: str) -> bool:
-    return name.endswith(".py") and name[:-3].endswith(_STORY_SUFFIXES)
-
-
-def _module_file(module: ModuleType) -> Path | None:
-    file = getattr(module, "__file__", None)
-    return Path(file).resolve() if file else None
-
-
-def _prepend_to_sys_path(folder: Path) -> None:
-    entry = str(folder)
-    if entry not in sys.path:
-        sys.path.insert(0, entry)
 
 
 __all__ = ["load_stories"]

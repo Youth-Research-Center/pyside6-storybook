@@ -131,7 +131,7 @@ def test_a_dotted_module_is_loaded_whatever_its_name(tmp_path: Path, stories: St
     assert stories.ids() == ["Module"]
 
 
-def test_a_file_outside_any_package_gets_a_stable_synthetic_name_and_can_import_siblings(tmp_path: Path, stories: StoryRegistry) -> None:
+def test_a_file_outside_any_package_is_imported_under_its_own_name_and_can_import_siblings(tmp_path: Path, stories: StoryRegistry) -> None:
     _write(tmp_path, "loose/helper.py", "TEXT = 'sibling'\n")
     story_file = _write(tmp_path, "loose/x_story.py", _story_source("Loose", "TEXT", imports="from helper import TEXT"))
 
@@ -140,9 +140,8 @@ def test_a_file_outside_any_package_gets_a_stable_synthetic_name_and_can_import_
 
     assert first.errors == () and second.errors == ()
     assert stories.ids() == ["Loose"]
-    assert first.modules == second.modules
-    (module_name,) = first.modules
-    assert module_name.startswith("_pyside6_storybook_x_story_")
+    assert first.modules == second.modules == ("x_story",)
+    assert stories.get("Loose").module == "x_story"
 
 
 def test_files_with_the_same_name_in_different_folders_do_not_collide(tmp_path: Path, stories: StoryRegistry) -> None:
@@ -150,10 +149,14 @@ def test_files_with_the_same_name_in_different_folders_do_not_collide(tmp_path: 
     _write(tmp_path, "two/button_story.py", _story_source("Two/Button"))
 
     result = load_stories(["one", "two"], cwd=tmp_path)
+    again = load_stories(["two"], cwd=tmp_path)
 
-    assert result.errors == ()
+    assert result.errors == () and again.errors == ()
     assert stories.ids() == ["One/Button", "Two/Button"]
-    assert len(set(result.modules)) == 2
+    first_name, second_name = result.modules
+    assert first_name == "button_story"
+    assert second_name.startswith("_pyside6_storybook_button_story_")
+    assert again.modules == (second_name,)
 
 
 def test_an_existing_path_wins_over_a_module_of_the_same_name(tmp_path: Path, stories: StoryRegistry) -> None:
@@ -264,3 +267,56 @@ def test_a_story_file_importing_a_missing_module_is_reported_as_an_import_failur
     assert [error.source for error in by_name.errors] == ["kit.a_story"]
     for error in (*by_path.errors, *by_name.errors):
         assert "missing_dependency_for_story" in error.details
+
+
+def test_a_clash_with_a_cached_package_is_rejected_before_the_other_file_runs(tmp_path: Path, stories: StoryRegistry) -> None:
+    _write(tmp_path, "first/kit/__init__.py")
+    _write(tmp_path, "first/kit/a_story.py", _story_source("First/A"))
+    _write(tmp_path, "first/kit/b_story.py", "raise RuntimeError('first/kit/b_story.py must not run')\n")
+    _write(tmp_path, "second/kit/__init__.py")
+    clash = _write(tmp_path, "second/kit/b_story.py", _story_source("Second/B"))
+
+    load_stories(["first/kit/a_story.py"], cwd=tmp_path)
+    result = load_stories([clash], cwd=tmp_path)
+
+    assert stories.ids() == ["First/A"]
+    assert [error.source for error in result.errors] == [str(clash.resolve())]
+    assert "kit.b_story" in result.errors[0].message
+    assert result.errors[0].details == ""
+    assert "kit.b_story" not in sys.modules
+
+
+@pytest.mark.parametrize("importer", ["a_story.py", "z_story.py"])
+def test_a_loose_story_that_imports_a_sibling_story_runs_it_once(tmp_path: Path, stories: StoryRegistry, importer: str) -> None:
+    """Whichever of the two files is loaded first, the sibling import and the folder scan share one module."""
+    _write(tmp_path, "loose/b_story.py", _story_source("Loose/B"))
+    _write(tmp_path, f"loose/{importer}", _story_source("Loose/Importer", imports="import b_story  # noqa: F401"))
+
+    result = load_stories(["loose"], cwd=tmp_path)
+
+    assert result.errors == ()
+    assert sorted(stories.ids()) == ["Loose/B", "Loose/Importer"]
+    assert stories.get("Loose/B").module == "b_story"
+
+
+@pytest.mark.parametrize("name", ["test_button_story.py", "test_input_stories.py"])
+def test_pytest_files_that_end_in_a_story_suffix_are_not_discovered(tmp_path: Path, stories: StoryRegistry, name: str) -> None:
+    _write(tmp_path, "stories/a_story.py", _story_source("A"))
+    _write(tmp_path, f"stories/{name}", "raise RuntimeError('test modules are not stories')\n")
+    _write(tmp_path, "kit/__init__.py")
+    _write(tmp_path, f"kit/{name}", "raise RuntimeError('test modules are not stories')\n")
+
+    by_folder = load_stories(["stories"], cwd=tmp_path)
+    by_package = load_stories(["kit"], cwd=tmp_path)
+
+    assert by_folder.errors == () and by_package.errors == ()
+    assert stories.ids() == ["A"]
+
+
+def test_an_explicit_file_target_is_loaded_whatever_its_name(tmp_path: Path, stories: StoryRegistry) -> None:
+    test_named = _write(tmp_path, "stories/test_button_story.py", _story_source("Explicit"))
+
+    result = load_stories([test_named], cwd=tmp_path)
+
+    assert result.errors == ()
+    assert stories.ids() == ["Explicit"]

@@ -65,7 +65,8 @@ in the same pull request as the bump.
     (`Story`, `StoryOrigin`) and `story_registry.py` (`StoryRegistry`); `__init__.py` re-exports them and holds `default_registry` and
     the `@story` decorator
   - `discovery/` - story discovery: `loader.py` (`load_stories`, which imports story modules from folders, files and dotted module
-    names) and `load_result.py` (`LoadResult`, `LoadError`)
+    names, and collects errors), `file_search.py` (which files are stories), `module_import.py` (importing one file under the module
+    name that keeps it a single module), `load_result.py` (`LoadResult`, `LoadError`) and `constants.py` (file-name patterns and messages)
   - `controls_panel.py` - `ControlsPanel`, the editors for a story's controls
   - `window.py` - `GalleryWindow`
   - `themes/` - the built-in themes: `theme_definition.py` (`ThemeDefinition`: name, colour scheme and palette colours), one module
