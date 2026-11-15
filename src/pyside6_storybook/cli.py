@@ -11,22 +11,22 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
-import pyside6_storybook.examples
 from pyside6_storybook import __version__
 from pyside6_storybook.app import run
 from pyside6_storybook.discovery import LoadError, load_stories
+from pyside6_storybook.discovery.constants import EXAMPLES_MODULE
+from pyside6_storybook.discovery.sources import StorySourcesError, put_on_sys_path, resolve_story_sources
 from pyside6_storybook.themes import BUILTIN_THEME_NAMES
 
 PROGRAM_NAME = "pyside6-storybook"
-EXAMPLES_MODULE = "pyside6_storybook.examples"
-"""The package of built-in example stories that ``--examples`` loads."""
-_EXAMPLES_FOLDER = Path(pyside6_storybook.examples.__file__).resolve().parent
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Load the stories named on the command line and open the gallery, or list them with ``--list``.
 
-    ``--examples`` adds the built-in example stories to the targets.
+    Without targets the default sources are used: ``[tool.pyside6-storybook]`` in ``pyproject.toml``, then the
+    ``pyside6_storybook.stories`` entry points, then the built-in examples (see ``discovery.sources``). ``--examples`` adds the
+    built-in example stories to the targets. With ``--list``, standard error says where the stories came from.
 
     The ``QApplication`` is created before any story module is imported, so a module that creates a widget at import time works.
     With ``--list`` no window is opened, and the offscreen platform is used unless ``QT_QPA_PLATFORM`` says otherwise, so listing
@@ -38,24 +38,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         argv: The arguments after the program name. Defaults to ``sys.argv[1:]``.
 
     Returns:
-        0 on success; 1 when no stories were found, a target does not exist, or (with ``--list``) any story module failed to load;
+        0 on success; 1 when the configuration is wrong, no stories were found, a target does not exist, or (with ``--list``) any
+        story module failed to load;
         otherwise the gallery's exit code. Story modules that fail to load are reported on standard error, and the gallery still
         opens with the stories that did load and lists the failures under "Load errors".
     """
     arguments = _parser().parse_args(argv)
-    targets: list[str] = list(arguments.targets)
-    if arguments.examples:
-        # The bundled folder, not the module name: an existing path wins over a module name, so a local folder that happens to be
-        # called "pyside6_storybook.examples" would otherwise be loaded instead.
-        targets.append(str(_EXAMPLES_FOLDER))
-    if not targets:
-        _print_error(
-            "no stories to show: pass the folders, files or modules that contain them, for example "
-            f"`{PROGRAM_NAME} path/to/stories`, or try the built-in examples with `{PROGRAM_NAME} --examples`"
-        )
+    cwd = Path.cwd().resolve()
+    try:
+        sources = resolve_story_sources(arguments.targets, examples=arguments.examples, cwd=cwd)
+    except StorySourcesError as error:
+        _print_error(str(error))
         return 1
+    targets = sources.targets
     _application = _ensure_application(offscreen=arguments.list)  # kept alive until main returns
-    result = load_stories(targets)
+    put_on_sys_path(sources.pythonpath, cwd=cwd)
+    result = load_stories(targets, cwd=cwd)
     _print_load_errors(result.errors)
     if any(error.target_error for error in result.errors):
         return 1
@@ -63,6 +61,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         _print_error("no stories found in: " + ", ".join(targets))
         return 1
     if arguments.list:
+        print(f"{PROGRAM_NAME}: stories from {sources.origin}", file=sys.stderr)
         for story_id in result.registry.ids():
             print(story_id)
         return 1 if result.errors else 0

@@ -8,6 +8,7 @@ import pytest
 from story_files import story_source, write
 
 from pyside6_storybook import LoadError, StoryRegistry, __version__, cli
+from pyside6_storybook.discovery import sources
 
 
 class _RecordingRun:
@@ -90,7 +91,7 @@ def test_list_prints_story_ids_and_does_not_open_the_gallery(project: Path, gall
     assert cli.main(["--list", "stories"]) == 0
     captured = capsys.readouterr()
     assert captured.out.splitlines() == ["Inputs/A", "Inputs/B"]
-    assert captured.err == ""
+    assert captured.err == "pyside6-storybook: stories from the command line\n"
     assert gallery.calls == []
 
 
@@ -135,14 +136,70 @@ def test_no_stories_found_exits_non_zero(tmp_path: Path, monkeypatch: pytest.Mon
     assert gallery.calls == []
 
 
-def test_no_targets_explains_how_to_pass_them(stories: StoryRegistry, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]) -> None:
+def test_no_targets_and_nothing_configured_opens_the_examples(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stories: StoryRegistry, gallery: _RecordingRun
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sources, "entry_points", lambda group: [])
+
+    assert cli.main([]) == 0
+
+    ((ids, _theme),) = gallery.calls
+    assert "Buttons/Push Button" in ids
+
+
+def test_no_targets_opens_the_stories_configured_in_pyproject(project: Path, monkeypatch: pytest.MonkeyPatch, gallery: _RecordingRun) -> None:
+    write(project, "pyproject.toml", '[tool.pyside6-storybook]\nstories = ["stories"]\n')
+    monkeypatch.setattr(sources, "entry_points", lambda group: [])
+
+    assert cli.main([]) == 0
+
+    assert gallery.calls == [(["Inputs/A", "Inputs/B"], None)]
+
+
+def test_pythonpath_lets_configured_stories_import_the_application(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stories: StoryRegistry, gallery: _RecordingRun
+) -> None:
+    write(tmp_path, "src/demo_app/__init__.py", "CAPTION = 'from src'\n")
+    write(tmp_path, "gallery/app_story.py", story_source("App/Caption", "CAPTION", imports="from demo_app import CAPTION"))
+    write(tmp_path, "pyproject.toml", '[tool.pyside6-storybook]\nstories = ["gallery"]\npythonpath = ["src"]\n')
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main([]) == 0
+
+    assert gallery.calls == [(["App/Caption"], None)]
+
+
+def test_a_typo_in_the_configured_stories_is_an_error_not_the_examples(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stories: StoryRegistry, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write(tmp_path, "pyproject.toml", '[tool.pyside6-storybook]\nstories = ["storeis"]\n')
+    monkeypatch.chdir(tmp_path)
+
     assert cli.main([]) == 1
 
-    error_output = capsys.readouterr().err
-    assert "pyside6-storybook path/to/stories" in error_output
-    assert "pyside6-storybook --examples" in error_output
+    assert "storeis: no such file, folder or module" in capsys.readouterr().err
     assert gallery.calls == []
 
+
+def test_a_broken_configuration_is_reported(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stories: StoryRegistry, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]) -> None:
+    write(tmp_path, "pyproject.toml", '[tool.pyside6-storybook]\nstory = ["stories"]\n')
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main([]) == 1
+
+    assert "unknown key 'story'" in capsys.readouterr().err
+    assert gallery.calls == []
+
+
+def test_list_says_where_the_stories_came_from(project: Path, monkeypatch: pytest.MonkeyPatch, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]) -> None:
+    write(project, "pyproject.toml", '[tool.pyside6-storybook]\nstories = ["stories"]\n')
+
+    assert cli.main(["--list"]) == 0
+
+    captured = capsys.readouterr()
+    assert captured.out.splitlines() == ["Inputs/A", "Inputs/B"]
+    assert f"stories from [tool.pyside6-storybook] in {project / 'pyproject.toml'}" in captured.err
 
 def test_examples_open_the_gallery_with_the_example_stories(stories: StoryRegistry, gallery: _RecordingRun) -> None:
     assert cli.main(["--examples"]) == 0
@@ -237,3 +294,17 @@ def test_examples_are_the_bundled_ones_even_next_to_a_folder_of_the_same_name(
     assert cli.main(["--list", "--examples"]) == 0
 
     assert "Buttons/Push Button" in capsys.readouterr().out.splitlines()
+
+
+def test_pythonpath_folders_win_over_modules_at_the_project_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stories: StoryRegistry, gallery: _RecordingRun
+) -> None:
+    write(tmp_path, "demo_app/__init__.py", "CAPTION = 'from the root'\n")
+    write(tmp_path, "src/demo_app/__init__.py", "CAPTION = 'from src'\n")
+    write(tmp_path, "gallery/app_story.py", story_source("App/Caption", "CAPTION", imports="from demo_app import CAPTION"))
+    write(tmp_path, "pyproject.toml", '[tool.pyside6-storybook]\nstories = ["gallery"]\npythonpath = ["src"]\n')
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main([]) == 0
+
+    assert sys.modules["demo_app"].CAPTION == "from src"

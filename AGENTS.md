@@ -27,7 +27,9 @@ uv run pyside6-storybook --examples                 # the built-in example stori
 uv run pyside6-storybook --list path/to/stories     # print the story ids and exit, without a window or a display
 uv run python -m pyside6_storybook path/to/stories  # the same command line
 ```
-Without a target or `--examples` the command exits with a hint; default story sources come with #11.
+Without a target or `--examples` the command uses the default sources: `[tool.pyside6-storybook]` (`stories`, `pythonpath`) in the
+working directory's `pyproject.toml`, then the `pyside6_storybook.stories` entry points, then the built-in examples. The README documents
+both settings.
 
 ## Tests
 There is no display in CI or in agent sandboxes: set `QT_QPA_PLATFORM=offscreen` for every test run. `tests/conftest.py` also sets it as a
@@ -70,7 +72,8 @@ in the same pull request as the bump.
     the `@story` decorator
   - `discovery/` - story discovery: `loader.py` (`load_stories`, which imports story modules from folders, files and dotted module
     names, and collects errors), `file_search.py` (which files are stories), `module_import.py` (importing one file under the module
-    name that keeps it a single module), `load_result.py` (`LoadResult`, `LoadError`) and `constants.py` (file-name patterns and messages)
+    name that keeps it a single module), `load_result.py` (`LoadResult`, `LoadError`), `sources.py` (`resolve_story_sources`: the command line's targets or the
+    default sources from `pyproject.toml`, entry points or the examples) and `constants.py` (file-name patterns, names and messages)
   - `gui/` - the gallery's widgets, one module per widget: `window.py` (`GalleryWindow`), `controls_panel.py` (`ControlsPanel`, the
     editors for a story's controls) and `error_panel.py` (`ErrorPanel`, which the window shows in the preview for a story that fails and
     for the load errors). New gallery widgets go here, not at the package root.
