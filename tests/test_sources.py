@@ -1,3 +1,4 @@
+import sys
 from importlib.metadata import EntryPoint
 from pathlib import Path
 
@@ -6,7 +7,7 @@ from story_files import write
 
 from pyside6_storybook.discovery import sources
 from pyside6_storybook.discovery.constants import ENTRY_POINT_GROUP
-from pyside6_storybook.discovery.sources import EXAMPLES_FOLDER, StorySourcesError, resolve_story_sources
+from pyside6_storybook.discovery.sources import EXAMPLES_FOLDER, StorySourcesError, put_on_sys_path, resolve_story_sources
 
 
 @pytest.fixture
@@ -114,3 +115,41 @@ def test_command_line_targets_skip_reading_a_broken_pyproject(tmp_path: Path, no
     write(tmp_path, "pyproject.toml", "[tool.pyside6-storybook\n")
 
     assert resolve_story_sources(["given"], examples=False, cwd=tmp_path).targets == ("given",)
+
+
+def test_an_empty_pythonpath_is_the_same_as_none(tmp_path: Path, no_entry_points: None) -> None:
+    write(tmp_path, "pyproject.toml", '[tool.pyside6-storybook]\nstories = ["stories"]\npythonpath = []\n')
+
+    resolved = resolve_story_sources([], examples=False, cwd=tmp_path)
+
+    assert resolved.targets == ("stories",)
+    assert resolved.pythonpath == ()
+
+
+def test_a_pyproject_that_is_not_utf8_is_a_configuration_error(tmp_path: Path, no_entry_points: None) -> None:
+    (tmp_path / "pyproject.toml").write_bytes(b'[tool.pyside6-storybook]\nstories = ["\xff\xfe"]\n')
+
+    with pytest.raises(StorySourcesError, match="pyproject.toml"):
+        resolve_story_sources([], examples=False, cwd=tmp_path)
+
+
+def test_an_unreadable_pyproject_is_a_configuration_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_entry_points: None) -> None:
+    write(tmp_path, "pyproject.toml", '[tool.pyside6-storybook]\nstories = ["stories"]\n')
+
+    def refuse(self: Path, *args: object, **kwargs: object) -> str:
+        raise PermissionError(13, "Permission denied", str(self))
+
+    monkeypatch.setattr(Path, "read_text", refuse)
+
+    with pytest.raises(StorySourcesError, match="pyproject.toml") as error_info:
+        resolve_story_sources([], examples=False, cwd=tmp_path)
+    assert "Permission denied" in str(error_info.value)
+
+
+def test_put_on_sys_path_keeps_the_configured_order_ahead_of_the_working_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    src, lib, cwd = (tmp_path / "src").resolve(), (tmp_path / "lib").resolve(), tmp_path.resolve()
+    monkeypatch.setattr(sys, "path", ["/somewhere/else", str(src)])
+
+    put_on_sys_path((src, lib), cwd=cwd)
+
+    assert sys.path == [str(src), str(lib), str(cwd), "/somewhere/else"]

@@ -15,8 +15,7 @@ from pyside6_storybook import __version__
 from pyside6_storybook.app import run
 from pyside6_storybook.discovery import LoadError, load_stories
 from pyside6_storybook.discovery.constants import EXAMPLES_MODULE
-from pyside6_storybook.discovery.module_import import prepend_to_sys_path
-from pyside6_storybook.discovery.sources import StorySourcesError, resolve_story_sources
+from pyside6_storybook.discovery.sources import StorySourcesError, put_on_sys_path, resolve_story_sources
 from pyside6_storybook.themes import BUILTIN_THEME_NAMES
 
 PROGRAM_NAME = "pyside6-storybook"
@@ -45,16 +44,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         opens with the stories that did load and lists the failures under "Load errors".
     """
     arguments = _parser().parse_args(argv)
+    cwd = Path.cwd().resolve()
     try:
-        sources = resolve_story_sources(arguments.targets, examples=arguments.examples, cwd=Path.cwd())
+        sources = resolve_story_sources(arguments.targets, examples=arguments.examples, cwd=cwd)
     except StorySourcesError as error:
         _print_error(str(error))
         return 1
     targets = sources.targets
     _application = _ensure_application(offscreen=arguments.list)  # kept alive until main returns
-    for folder in reversed(sources.pythonpath):
-        prepend_to_sys_path(folder)
-    result = load_stories(targets)
+    put_on_sys_path(sources.pythonpath, cwd=cwd)
+    result = load_stories(targets, cwd=cwd)
     _print_load_errors(result.errors)
     if any(error.target_error for error in result.errors):
         return 1

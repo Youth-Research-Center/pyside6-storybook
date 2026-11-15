@@ -7,6 +7,7 @@ examples are used only when nothing is configured, never because configured stor
 
 from __future__ import annotations
 
+import sys
 import tomllib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -15,6 +16,7 @@ from pathlib import Path
 
 import pyside6_storybook.examples
 from pyside6_storybook.discovery.constants import CONFIG_FILE_NAME, CONFIG_TABLE, ENTRY_POINT_GROUP
+from pyside6_storybook.discovery.module_import import prepend_to_sys_path
 
 EXAMPLES_FOLDER = Path(pyside6_storybook.examples.__file__).resolve().parent
 """The folder of the installed example stories. Loaded by path, not by module name, so a local folder or module of the same name
@@ -74,11 +76,32 @@ def resolve_story_sources(command_line_targets: Sequence[str], *, examples: bool
     return StorySources((str(EXAMPLES_FOLDER),), "the built-in examples (nothing is configured)", pythonpath=pythonpath)
 
 
+def put_on_sys_path(folders: Sequence[Path], *, cwd: Path) -> None:
+    """Put the working directory and then the configured ``pythonpath`` folders at the front of ``sys.path``.
+
+    The folders end up first, in the configured order, ahead of the working directory, so a module in ``src`` is not shadowed by
+    one of the same name at the project root. A folder already on ``sys.path`` is moved, not duplicated.
+
+    Args:
+        folders: The configured folders, in order.
+        cwd: The working directory, which ``load_stories`` also puts on ``sys.path``.
+    """
+    prepend_to_sys_path(cwd)
+    for folder in reversed(folders):
+        entry = str(folder)
+        sys.path[:] = [existing for existing in sys.path if existing != entry]
+        sys.path.insert(0, entry)
+
+
 def _read_config_table(path: Path) -> Mapping[str, object] | None:
     if not path.is_file():
         return None
     try:
-        document = tomllib.loads(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise StorySourcesError(f"{path} cannot be read: {error}") from error
+    try:
+        document = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
         raise StorySourcesError(f"{path} is not valid TOML: {error}") from error
     tool = document.get("tool", {})
@@ -102,13 +125,14 @@ def _string_list(table: Mapping[str, object], key: str, path: Path) -> tuple[str
         return None
     if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
         raise StorySourcesError(f"[tool.{CONFIG_TABLE}] in {path}: '{key}' must be a list of strings")
-    if not value:
-        raise StorySourcesError(f"[tool.{CONFIG_TABLE}] in {path}: '{key}' is empty")
     return tuple(value)
 
 
 def _stories(table: Mapping[str, object], path: Path) -> tuple[str, ...] | None:
-    return _string_list(table, "stories", path)
+    stories = _string_list(table, "stories", path)
+    if stories == ():
+        raise StorySourcesError(f"[tool.{CONFIG_TABLE}] in {path}: 'stories' is empty")
+    return stories
 
 
 def _pythonpath(table: Mapping[str, object], path: Path) -> tuple[Path, ...]:
@@ -122,4 +146,4 @@ def _pythonpath(table: Mapping[str, object], path: Path) -> tuple[Path, ...]:
     return tuple(folders)
 
 
-__all__ = ["EXAMPLES_FOLDER", "StorySources", "StorySourcesError", "resolve_story_sources"]
+__all__ = ["EXAMPLES_FOLDER", "StorySources", "StorySourcesError", "put_on_sys_path", "resolve_story_sources"]

@@ -294,3 +294,17 @@ def test_examples_are_the_bundled_ones_even_next_to_a_folder_of_the_same_name(
     assert cli.main(["--list", "--examples"]) == 0
 
     assert "Buttons/Push Button" in capsys.readouterr().out.splitlines()
+
+
+def test_pythonpath_folders_win_over_modules_at_the_project_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stories: StoryRegistry, gallery: _RecordingRun
+) -> None:
+    write(tmp_path, "demo_app/__init__.py", "CAPTION = 'from the root'\n")
+    write(tmp_path, "src/demo_app/__init__.py", "CAPTION = 'from src'\n")
+    write(tmp_path, "gallery/app_story.py", story_source("App/Caption", "CAPTION", imports="from demo_app import CAPTION"))
+    write(tmp_path, "pyproject.toml", '[tool.pyside6-storybook]\nstories = ["gallery"]\npythonpath = ["src"]\n')
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main([]) == 0
+
+    assert sys.modules["demo_app"].CAPTION == "from src"
