@@ -35,6 +35,7 @@ EXPECTED_IDS = [
     "Display/Palette",
     "Display/Color Swatch",
     "Display/Alignment",
+    "Display/Table",
     "Forms/Sign-in Form",
     "Inputs/Line Edit/Default",
     "Inputs/Line Edit/Password",

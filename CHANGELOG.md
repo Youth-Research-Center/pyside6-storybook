@@ -5,6 +5,10 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Preview layouts: `layout=` on `@story` and `Story.variant()` takes a `Layout` (`CENTERED`, `PADDED` or `FILL`) or its string value, and
+  `StoryRegistry.default_layout` (`Layout.PADDED` by default) applies to stories that declare none; a variant keeps its story's layout
+  unless it gives another. The preview scrolls a widget larger than the pane in `PADDED` and `CENTERED`, and `FILL` grows the widget
+  with the pane. `Layout` is exported from the package. Example stories show all three (`Display/Table` fills the preview).
 - `ColorControl` (a hex string default, `alpha=True` for `#RRGGBBAA`; the story receives a `QColor`), `EnumControl` (a Python or Qt enum
   member; `options` lists the named members) and `FileControl` (the story receives a `Path`, or `None` while empty; `filter=` is the
   Browse dialog's name filter), with editors in the gallery and example stories.

@@ -110,6 +110,44 @@ push_button.variant("Long label", args={"text": "A button with a much longer lab
   only after `@story` registered it. A story whose id has no group (`"Button"`) cannot have variants.
 - Variants appear after their story, in the order you create them. Creating the same variant twice replaces the first one.
 
+## Layout and decorators
+
+The preview places your widget in one of three ways. Pick one per story with `layout=`, a `Layout` member or its string value:
+
+```python
+from PySide6.QtWidgets import QPlainTextEdit, QPushButton, QWidget
+
+from pyside6_storybook import Layout, StoryContext, story
+
+
+@story("Buttons/Centered/Default", layout=Layout.CENTERED)
+def centered_button(ctx: StoryContext) -> QWidget:
+    """A push button at its natural size, in the middle of the preview."""
+    return QPushButton("Centred")
+
+
+centered_button.variant("Padded", layout=Layout.PADDED)
+
+
+@story("Editors/Notes", layout="fill")
+def notes(ctx: StoryContext) -> QWidget:
+    """A text editor that fills the preview."""
+    return QPlainTextEdit("Fills the preview")
+```
+
+- `Layout.PADDED` (the default) puts the widget at the top of the preview, inside a margin. Its width follows its size policy, so a
+  push button stretches across the preview, and its height is its natural height.
+- `Layout.CENTERED` gives the widget its natural size and centres it, horizontally and vertically.
+- `Layout.FILL` gives the widget the whole preview inside the margin, in each direction its size policy lets it grow. In a direction
+  it cannot grow (a push button is vertically fixed) it keeps its natural size and is centred. It shrinks with the window and the
+  preview shows no scroll bars.
+- In `PADDED` and `CENTERED` a widget larger than the preview scrolls instead of being squeezed. The natural size is the widget's
+  `sizeHint()`, raised to its minimum size and capped by its maximum size. A word-wrapped `QLabel` wraps in a narrow preview instead.
+- A variant has its story's layout unless you give it another with `layout=`. `layout=None` is the same as leaving it out.
+- To change the layout of every story that declares none, set `default_layout` on the registry, for example
+  `default_registry.default_layout = Layout.CENTERED`. An invalid layout, in `layout=` or in `default_layout`, raises a `ValueError`.
+- The error shown for a story that fails, and the "Load errors" view, always fill the preview.
+
 ## Controls
 
 Each control is an argument of the story and an editor in the gallery's controls pane.

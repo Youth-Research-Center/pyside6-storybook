@@ -11,6 +11,7 @@ from pyside6_storybook import (
     BoolControl,
     FloatControl,
     IntControl,
+    Layout,
     Story,
     StoryContext,
     StoryRegistry,
@@ -401,3 +402,81 @@ def test_reloading_a_story_module_replaces_the_base_and_its_variants_in_place(st
     assert stories.ids() == ids
     assert stories.get("Inputs/Label/Loud") is not old
     assert stories.get("Inputs/Label/Loud").variant_of is stories.get("Inputs/Label/Default")
+
+
+def test_layout_values() -> None:
+    assert [(member.name, member.value) for member in Layout] == [("CENTERED", "centered"), ("PADDED", "padded"), ("FILL", "fill")]
+    assert Layout("fill") is Layout.FILL
+    assert Layout.FILL == "fill"
+
+
+def _plain(ctx: StoryContext) -> QWidget:
+    return QLabel("x")
+
+
+@pytest.mark.parametrize(
+    ("declared", "expected"),
+    [(Layout.FILL, Layout.FILL), ("centered", Layout.CENTERED), ("padded", Layout.PADDED), (None, None)],
+)
+def test_a_story_keeps_the_layout_it_declared(declared: Layout | str | None, expected: Layout | None) -> None:
+    registry = StoryRegistry()
+
+    registered = registry.story("A/B", layout=declared)(_plain)
+
+    assert registered.layout is expected
+    assert Story("A/C", _plain, layout=declared).layout is expected
+
+
+@pytest.mark.parametrize("invalid", ["Fill", "stretch", "", 1, True, Layout])
+def test_an_invalid_layout_raises_at_registration_and_lists_the_valid_values(invalid: object) -> None:
+    registry = StoryRegistry()
+
+    with pytest.raises(ValueError, match=r"'centered', 'padded', 'fill'"):
+        registry.story("A/B", layout=invalid)  # ty: ignore[invalid-argument-type]
+    with pytest.raises(ValueError, match=r"'centered', 'padded', 'fill'"):
+        Story("A/B", _plain, layout=invalid)  # ty: ignore[invalid-argument-type]
+    assert len(registry) == 0
+
+
+def test_the_module_level_story_decorator_takes_a_layout(monkeypatch: pytest.MonkeyPatch) -> None:
+    isolated = StoryRegistry()
+    monkeypatch.setattr(registry_module, "default_registry", isolated)
+
+    registered = story("A/B", layout="fill")(_plain)
+
+    assert registered.layout is Layout.FILL
+    with pytest.raises(ValueError, match="Invalid layout"):
+        story("A/C", layout="nope")
+
+
+def test_the_default_layout_is_padded_and_the_setter_validates() -> None:
+    registry = StoryRegistry()
+    assert registry.default_layout is Layout.PADDED
+
+    registry.default_layout = Layout.FILL
+    assert registry.default_layout is Layout.FILL
+    registry.default_layout = "centered"
+    assert registry.default_layout is Layout.CENTERED
+    with pytest.raises(ValueError, match="stretch"):
+        registry.default_layout = "stretch"
+    assert registry.default_layout is Layout.CENTERED
+
+
+def test_a_variant_inherits_the_base_layout_and_can_override_it() -> None:
+    registry = StoryRegistry()
+    base = registry.story("A/B/Default", layout=Layout.CENTERED)(_plain)
+    plain_base = registry.story("A/C/Default")(_plain)
+
+    inherited = base.variant("Same")
+    overridden = base.variant("Other", layout="fill")
+    undeclared = plain_base.variant("Same")
+    declared = plain_base.variant("Padded", layout=Layout.PADDED)
+
+    assert inherited.layout is Layout.CENTERED
+    assert overridden.layout is Layout.FILL
+    assert base.layout is Layout.CENTERED
+    assert undeclared.layout is None
+    assert declared.layout is Layout.PADDED
+    with pytest.raises(ValueError, match="Invalid layout"):
+        base.variant("Bad", layout="nope")
+    assert "A/B/Bad" not in registry

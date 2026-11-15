@@ -6,10 +6,10 @@ import typing
 from pathlib import Path
 
 import pytest
-from PySide6.QtWidgets import QPushButton
+from PySide6.QtWidgets import QPlainTextEdit, QPushButton
 from story_files import write
 
-from pyside6_storybook import Control, StoryContext, StoryRegistry, load_stories
+from pyside6_storybook import Control, Layout, StoryContext, StoryRegistry, load_stories
 from pyside6_storybook.discovery import sources
 from pyside6_storybook.discovery.sources import resolve_story_sources
 
@@ -76,3 +76,21 @@ def test_the_variants_example_registers_its_variants(qtbot, tmp_path: Path, stor
     qtbot.addWidget(widget)
     assert isinstance(widget, QPushButton)
     assert not widget.isEnabled()
+
+
+def test_the_layout_example_registers_stories_with_their_layouts(qtbot, tmp_path: Path, stories: StoryRegistry) -> None:
+    (source,) = _code_blocks(_section("Layout and decorators"), "python")
+    write(tmp_path, "stories/layout_stories.py", source)
+
+    result = load_stories(["stories"], cwd=tmp_path)
+
+    assert result.errors == ()
+    assert stories.ids() == ["Buttons/Centered/Default", "Buttons/Centered/Padded", "Editors/Notes"]
+    assert stories.get("Buttons/Centered/Default").layout is Layout.CENTERED
+    assert stories.get("Buttons/Centered/Padded").layout is Layout.PADDED
+    assert stories.get("Editors/Notes").layout is Layout.FILL
+    for story_id, widget_type in (("Buttons/Centered/Padded", QPushButton), ("Editors/Notes", QPlainTextEdit)):
+        example = stories.get(story_id)
+        widget = example(StoryContext(args=example.default_args()))
+        qtbot.addWidget(widget)
+        assert isinstance(widget, widget_type)

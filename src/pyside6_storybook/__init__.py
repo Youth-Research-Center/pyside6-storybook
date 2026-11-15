@@ -14,7 +14,7 @@ from pyside6_storybook.controls import (
     TextControl,
 )
 from pyside6_storybook.discovery import LoadError, LoadResult, load_stories
-from pyside6_storybook.registry import Story, StoryContext, StoryRegistry, default_registry, story
+from pyside6_storybook.registry import Layout, Story, StoryContext, StoryRegistry, default_registry, story
 
 try:
     __version__ = version("pyside6-storybook")
@@ -30,6 +30,7 @@ __all__ = [
     "FileControl",
     "FloatControl",
     "IntControl",
+    "Layout",
     "LoadError",
     "LoadResult",
     "Story",

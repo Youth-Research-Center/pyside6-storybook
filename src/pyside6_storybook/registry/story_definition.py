@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from PySide6.QtWidgets import QWidget
 
 from pyside6_storybook.controls import Control
+from pyside6_storybook.registry.layout import Layout, coerce_layout
 from pyside6_storybook.registry.story_context import StoryContext, StoryFunction
 
 if TYPE_CHECKING:
@@ -37,6 +38,8 @@ class Story:
         groups: The segments of ``id`` before the name.
         component: The groups joined with ``/`` (``"Inputs/Button"`` for ``"Inputs/Button/Default"``), or ``None`` without groups.
         controls: The story's controls, in order.
+        layout: The layout the story declared, or ``None`` to use the registry's ``default_layout``. A variant without its own layout
+            has its base's.
         args: For a variant, the values it overrides, by control name, as a read-only mapping; empty for any other story.
         variant_of: The base story, for a variant; ``None`` otherwise.
         doc: The function's docstring, or an empty string.
@@ -45,18 +48,34 @@ class Story:
             module and qualified name of its type.
     """
 
-    __slots__ = ("_function", "_registry", "args", "component", "controls", "doc", "groups", "id", "module", "name", "qualname", "variant_of")
+    __slots__ = (
+        "_function",
+        "_registry",
+        "args",
+        "component",
+        "controls",
+        "doc",
+        "groups",
+        "id",
+        "layout",
+        "module",
+        "name",
+        "qualname",
+        "variant_of",
+    )
 
-    def __init__(self, id: str, function: StoryFunction, *, controls: Iterable[Control] = ()) -> None:
+    def __init__(self, id: str, function: StoryFunction, *, controls: Iterable[Control] = (), layout: Layout | str | None = None) -> None:
         """Create a story.
 
         Args:
             id: A non-empty ``/``-separated path without empty segments.
             function: The function that builds the widget.
             controls: The story's controls.
+            layout: How the gallery places the widget in the preview: a ``Layout``, its string value, or ``None`` for the registry's
+                ``default_layout``.
 
         Raises:
-            ValueError: If ``id`` is empty or has an empty segment, or two controls share a name.
+            ValueError: If ``id`` is empty or has an empty segment, two controls share a name, or ``layout`` is not valid.
             TypeError: If an item of ``controls`` is not a control.
         """
         segments = id.split("/")
@@ -70,6 +89,7 @@ class Story:
             if control.name in names:
                 raise ValueError(f"Story {id!r} has more than one control named {control.name!r}")
             names.add(control.name)
+        self.layout: Layout | None = coerce_layout(layout)
         self.id = id
         self.name = segments[-1]
         self.groups = tuple(segments[:-1])
@@ -96,7 +116,7 @@ class Story:
         """
         return {control.name: control.coerce(self.args.get(control.name, control.default)) for control in self.controls}
 
-    def variant(self, name: str, *, args: Mapping[str, object] | None = None) -> Story:
+    def variant(self, name: str, *, args: Mapping[str, object] | None = None, layout: Layout | str | None = None) -> Story:
         """Register a variant of this story: the same function and controls, with other starting values.
 
         The variant's id is the component plus ``name`` (``"Inputs/Button/Disabled"``), and it comes after this story in the
@@ -105,6 +125,7 @@ class Story:
         Args:
             name: The variant's name: not blank, without ``/``, and different from this story's name.
             args: Values that replace control defaults, by control name. Each must be accepted by its control's ``coerce``.
+            layout: The variant's layout; ``None`` keeps this story's.
 
         Returns:
             The registered variant.
@@ -112,7 +133,8 @@ class Story:
         Raises:
             TypeError: If this story is itself a variant.
             RuntimeError: If this story was never registered.
-            ValueError: If this story's id has no group, ``name`` is invalid, or ``args`` has an unknown key or an invalid value.
+            ValueError: If this story's id has no group, ``name`` is invalid, ``args`` has an unknown key or an invalid value,
+                or ``layout`` is not valid.
         """
         if self.variant_of is not None:
             raise TypeError(f"{self.id!r} is a variant of {self.variant_of.id!r}; call .variant() on the base story instead")
@@ -137,7 +159,7 @@ class Story:
                 checked[key] = control.coerce(value)
             except (TypeError, ValueError) as error:
                 raise ValueError(f"Variant {variant_id!r}: invalid value for {key!r}: {error}") from error
-        variant = Story(variant_id, self._function, controls=self.controls)
+        variant = Story(variant_id, self._function, controls=self.controls, layout=self.layout if layout is None else layout)
         variant.args = MappingProxyType(checked)
         variant.variant_of = self
         return self._registry.register(variant)

@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 
 from pyside6_storybook.controls import Control
+from pyside6_storybook.registry.layout import Layout
 from pyside6_storybook.registry.story_context import StoryContext, StoryFunction
 from pyside6_storybook.registry.story_definition import Story, StoryOrigin
 from pyside6_storybook.registry.story_registry import StoryRegistry
@@ -17,20 +18,26 @@ default_registry = StoryRegistry()
 """The process-wide registry that the module-level ``story`` decorator registers into."""
 
 
-def story(id: str, *, controls: Iterable[Control] = ()) -> Callable[[StoryFunction], Story]:
+def story(id: str, *, controls: Iterable[Control] = (), layout: Layout | str | None = None) -> Callable[[StoryFunction], Story]:
     """Turn a function into a story registered in ``default_registry``.
 
     Args:
         id: A ``/``-separated path such as ``"Inputs/Button"``; the last segment is the story's name.
         controls: The story's controls.
+        layout: How the gallery places the widget in the preview: a ``Layout``, its string value, or ``None`` for the registry's
+            ``default_layout``.
 
     Returns:
         A decorator returning the registered ``Story``.
+
+    Raises:
+        ValueError: If ``layout`` is not valid.
     """
-    return default_registry.story(id, controls=controls)
+    return default_registry.story(id, controls=controls, layout=layout)
 
 
 __all__ = [
+    "Layout",
     "Story",
     "StoryContext",
     "StoryFunction",

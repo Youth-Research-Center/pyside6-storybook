@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPalette
-from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QProgressBar, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QProgressBar, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 
-from pyside6_storybook import BoolControl, ChoiceControl, ColorControl, EnumControl, IntControl, StoryContext, TextControl, story
+from pyside6_storybook import BoolControl, ChoiceControl, ColorControl, EnumControl, IntControl, Layout, StoryContext, TextControl, story
 
 _ALIGNMENTS = {"Left": Qt.AlignmentFlag.AlignLeft, "Center": Qt.AlignmentFlag.AlignHCenter, "Right": Qt.AlignmentFlag.AlignRight}
 _ROLE = QPalette.ColorRole
@@ -111,4 +111,23 @@ def alignment(ctx: StoryContext) -> QWidget:
     widget.setFrameShape(QFrame.Shape.Box)
     widget.setMinimumHeight(120)
     widget.setAlignment(ctx.args["alignment"])
+    return widget
+
+
+@story(
+    "Display/Table",
+    controls=[
+        IntControl("rows", 8, 1, 50, slider=True),
+        IntControl("columns", 4, 1, 12),
+        BoolControl("alternating_rows", default=True, label="Alternating row colours"),
+    ],
+    layout=Layout.FILL,
+)
+def table(ctx: StoryContext) -> QWidget:
+    """A ``QTableWidget`` that fills the preview. It grows and shrinks with the window, and scrolls inside itself."""
+    widget = QTableWidget(ctx.args["rows"], ctx.args["columns"])
+    widget.setAlternatingRowColors(ctx.args["alternating_rows"])
+    for row in range(ctx.args["rows"]):
+        for column in range(ctx.args["columns"]):
+            widget.setItem(row, column, QTableWidgetItem(f"R{row + 1}C{column + 1}"))
     return widget

@@ -18,6 +18,7 @@ def test_public_api_is_exported() -> None:
         "FileControl",
         "FloatControl",
         "IntControl",
+        "Layout",
         "LoadError",
         "LoadResult",
         "Story",

@@ -3,11 +3,24 @@ from pathlib import Path
 
 import pytest
 import shiboken6
-from PySide6.QtCore import QEvent, Qt
-from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QFrame, QLabel, QLineEdit, QListWidget, QPushButton, QScrollArea, QWidget
+from PySide6.QtCore import QEvent, QSize, Qt
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QFrame,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QWidget,
+)
 from story_files import story_source, write
 
-from pyside6_storybook import BoolControl, FloatControl, IntControl, LoadError, StoryContext, StoryRegistry, load_stories
+from pyside6_storybook import BoolControl, FloatControl, IntControl, Layout, LoadError, StoryContext, StoryRegistry, load_stories
+from pyside6_storybook.cli import EXAMPLES_MODULE
 from pyside6_storybook.gui.controls_panel import NO_CONTROLS_MESSAGE, ControlsPanel
 from pyside6_storybook.gui.error_panel import ErrorPanel
 from pyside6_storybook.gui.window import NO_STORIES_MESSAGE, GalleryWindow
@@ -496,3 +509,305 @@ def test_a_variants_panel_starts_at_its_args_and_stays_editable(qtbot, themes: B
     preview = window.current_preview_widget()
     assert isinstance(preview, QLabel)
     assert preview.text() == "quiet"
+
+
+class _FixedHint(QWidget):
+    """A widget with a fixed size hint that can shrink below it, like most real widgets."""
+
+    def __init__(self, width: int, height: int) -> None:
+        super().__init__()
+        self._hint = QSize(width, height)
+
+    def sizeHint(self) -> QSize:
+        return self._hint
+
+
+def _layout_window(
+    qtbot, themes: BuiltinThemes, story_function, *, layout: Layout | str | None, width: int = 700, height: int = 500
+) -> GalleryWindow:
+    registry = StoryRegistry()
+    registry.story("Layout/Story", layout=layout)(story_function)
+    window = _make_window(qtbot, registry, themes)
+    window.resize(width, height)
+    window.show()
+    qtbot.waitExposed(window)
+    QApplication.processEvents()
+    return window
+
+
+def _surface(window: GalleryWindow) -> QFrame:
+    surface = window.findChild(QFrame, "previewSurface")
+    assert surface is not None
+    return surface
+
+
+def _scroll(window: GalleryWindow) -> QScrollArea:
+    scroll = window.findChild(QScrollArea, "previewScroll")
+    assert scroll is not None
+    return scroll
+
+
+def _preview(window: GalleryWindow) -> QWidget:
+    widget = window.current_preview_widget()
+    assert widget is not None
+    return widget
+
+
+def _inner_rect(window: GalleryWindow):
+    surface = _surface(window)
+    return surface.rect().adjusted(10, 10, -10, -10)
+
+
+def _button(ctx: StoryContext) -> QWidget:
+    return QPushButton("Push")
+
+
+def _expanding(ctx: StoryContext) -> QWidget:
+    widget = QWidget()
+    widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+    return widget
+
+
+def _small_expanding_horizontally(ctx: StoryContext) -> QWidget:
+    widget = QLabel("x")
+    widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    return widget
+
+
+def _wrapping_label(ctx: StoryContext) -> QWidget:
+    widget = QLabel("A label wraps long text onto several lines when word wrap is on, instead of growing wider. " * 3)
+    widget.setWordWrap(True)
+    return widget
+
+
+def _big(ctx: StoryContext) -> QWidget:
+    return _FixedHint(800, 600)
+
+
+def _small(ctx: StoryContext) -> QWidget:
+    return _FixedHint(300, 200)
+
+
+def test_the_preview_surface_is_the_widget_of_a_scroll_area_and_owns_the_preview(qtbot, themes: BuiltinThemes) -> None:
+    window = _layout_window(qtbot, themes, _button, layout=None)
+
+    assert _scroll(window).widget() is _surface(window)
+    assert _scroll(window).widgetResizable()
+    assert _preview(window).parent() is _surface(window)
+    assert _surface(window).backgroundRole() == _scroll(window).viewport().backgroundRole()
+
+
+def test_a_story_without_a_layout_uses_the_registry_default(qtbot, themes: BuiltinThemes) -> None:
+    registry = StoryRegistry()
+    registry.default_layout = Layout.FILL
+    registry.story("A/B")(_expanding)
+    window = _make_window(qtbot, registry, themes)
+    window.resize(700, 500)
+    window.show()
+    qtbot.waitExposed(window)
+    QApplication.processEvents()
+
+    assert _preview(window).geometry() == _inner_rect(window)
+
+
+def test_padded_is_top_aligned_with_the_full_width_for_a_horizontally_expanding_widget(qtbot, themes: BuiltinThemes) -> None:
+    window = _layout_window(qtbot, themes, _small_expanding_horizontally, layout=Layout.PADDED)
+
+    for width, height in ((700, 500), (900, 600)):
+        window.resize(width, height)
+        QApplication.processEvents()
+        inner = _inner_rect(window)
+        geometry = _preview(window).geometry()
+        assert geometry.x() == inner.x()
+        assert geometry.width() == inner.width()
+        assert geometry.y() == inner.y()
+        assert geometry.height() == _preview(window).sizeHint().height()
+
+
+def test_padded_stretches_a_button_to_the_full_width_at_its_natural_height(qtbot, themes: BuiltinThemes) -> None:
+    window = _layout_window(qtbot, themes, _button, layout=Layout.PADDED)
+
+    geometry = _preview(window).geometry()
+
+    assert geometry.width() == _inner_rect(window).width()
+    assert geometry.height() == _preview(window).sizeHint().height()
+    assert geometry.y() == _inner_rect(window).y()
+
+
+def test_centered_keeps_the_natural_size_and_stays_centered_after_a_resize(qtbot, themes: BuiltinThemes) -> None:
+    window = _layout_window(qtbot, themes, _button, layout=Layout.CENTERED)
+
+    for width, height in ((700, 500), (900, 650), (600, 400)):
+        window.resize(width, height)
+        QApplication.processEvents()
+        surface = _surface(window)
+        geometry = _preview(window).geometry()
+        assert geometry.size() == _preview(window).sizeHint()
+        assert abs(geometry.center().x() - surface.rect().center().x()) <= 1
+        assert abs(geometry.center().y() - surface.rect().center().y()) <= 1
+
+
+def test_fill_gives_an_expanding_widget_the_whole_area_inside_the_margins_before_and_after_a_resize(qtbot, themes: BuiltinThemes) -> None:
+    window = _layout_window(qtbot, themes, _expanding, layout=Layout.FILL)
+
+    for width, height in ((700, 500), (900, 650), (600, 400)):
+        window.resize(width, height)
+        QApplication.processEvents()
+        assert _preview(window).geometry() == _inner_rect(window)
+
+
+def test_fill_keeps_a_buttons_natural_height_and_centres_it_vertically(qtbot, themes: BuiltinThemes) -> None:
+    window = _layout_window(qtbot, themes, _button, layout=Layout.FILL)
+
+    for width, height in ((700, 500), (900, 650)):
+        window.resize(width, height)
+        QApplication.processEvents()
+        inner = _inner_rect(window)
+        geometry = _preview(window).geometry()
+        assert geometry.height() == _preview(window).sizeHint().height()
+        assert geometry.width() == inner.width()
+        assert abs(geometry.center().y() - inner.center().y()) <= 1
+
+
+@pytest.mark.parametrize("layout", [Layout.PADDED, Layout.CENTERED])
+def test_an_oversized_widget_keeps_its_natural_size_and_scrolls_in_padded_and_centered(qtbot, themes: BuiltinThemes, layout: Layout) -> None:
+    window = _layout_window(qtbot, themes, _big, layout=layout, width=900, height=500)
+    window.resize(900, 500)
+    QApplication.processEvents()
+    scroll = _scroll(window)
+
+    assert _preview(window).size() == QSize(800, 600)
+    assert scroll.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAsNeeded
+    assert scroll.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAsNeeded
+    assert scroll.horizontalScrollBar().maximum() > 0
+    assert scroll.verticalScrollBar().maximum() > 0
+    window.resize(1000, 560)
+    QApplication.processEvents()
+    assert _preview(window).size() == QSize(800, 600)
+    assert scroll.horizontalScrollBar().maximum() > 0
+    assert scroll.verticalScrollBar().maximum() > 0
+
+
+@pytest.mark.parametrize("layout", [Layout.PADDED, Layout.CENTERED])
+def test_a_widget_that_fits_does_not_scroll(qtbot, themes: BuiltinThemes, layout: Layout) -> None:
+    window = _layout_window(qtbot, themes, _small, layout=layout)
+    scroll = _scroll(window)
+
+    assert scroll.horizontalScrollBar().maximum() == 0
+    assert scroll.verticalScrollBar().maximum() == 0
+    assert _surface(window).minimumSize() == QSize(320, 220)
+
+
+def test_fill_has_no_scroll_bars_and_shrinks_the_widget_with_the_pane(qtbot, themes: BuiltinThemes) -> None:
+    window = _layout_window(qtbot, themes, _big, layout=Layout.FILL, width=900, height=500)
+    scroll = _scroll(window)
+
+    assert scroll.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    assert scroll.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    assert scroll.horizontalScrollBar().maximum() == 0
+    assert scroll.verticalScrollBar().maximum() == 0
+    assert _surface(window).minimumSize() == QSize(0, 0)
+    assert _preview(window).geometry() == _inner_rect(window)
+    assert _preview(window).width() < 800
+
+
+def test_switching_from_a_scrolling_story_to_fill_resets_the_surface_minimum(qtbot, themes: BuiltinThemes) -> None:
+    registry = StoryRegistry()
+    registry.story("A/Big", layout=Layout.PADDED)(_big)
+    registry.story("B/Fill", layout=Layout.FILL)(_expanding)
+    window = _make_window(qtbot, registry, themes)
+    window.resize(900, 500)
+    window.show()
+    qtbot.waitExposed(window)
+    QApplication.processEvents()
+    assert _surface(window).minimumSize() == QSize(820, 620)
+
+    _sidebar(window).setCurrentRow(1)
+    QApplication.processEvents()
+
+    assert _surface(window).minimumSize() == QSize(0, 0)
+    assert _scroll(window).horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    assert _preview(window).geometry() == _inner_rect(window)
+
+
+def test_the_error_panel_uses_fill_whatever_the_story_declares(qtbot, themes: BuiltinThemes) -> None:
+    def failing(ctx: StoryContext) -> QWidget:
+        raise RuntimeError("boom")
+
+    for layout in (Layout.CENTERED, Layout.PADDED, Layout.FILL):
+        window = _layout_window(qtbot, themes, failing, layout=layout)
+        panel = _error_panel(window)
+        assert panel is not None
+        assert panel.geometry() == _inner_rect(window)
+        assert _surface(window).minimumSize() == QSize(0, 0)
+        assert _scroll(window).horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        assert _scroll(window).verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+
+
+def test_the_load_errors_view_uses_fill(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+    window = GalleryWindow(registry, themes, load_errors=[LoadError(source="x", message="m", details="d")])
+    qtbot.addWidget(window)
+    window.resize(700, 500)
+    window.show()
+    qtbot.waitExposed(window)
+
+    _sidebar(window).setCurrentRow(_sidebar(window).count() - 1)
+    QApplication.processEvents()
+
+    panel = _error_panel(window)
+    assert panel is not None
+    assert panel.geometry() == _inner_rect(window)
+    assert _surface(window).minimumSize() == QSize(0, 0)
+    assert _scroll(window).verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+
+
+def test_a_word_wrapped_label_wraps_in_a_narrow_window_without_a_horizontal_scroll_range(qtbot, themes: BuiltinThemes) -> None:
+    registry = StoryRegistry()
+    registry.story("Display/Padded", layout=Layout.PADDED)(_wrapping_label)
+    registry.story("Display/Centered", layout=Layout.CENTERED)(_wrapping_label)
+    window = _make_window(qtbot, registry, themes)
+    window.resize(500, 300)
+    window.show()
+    qtbot.waitExposed(window)
+    QApplication.processEvents()
+
+    for row in (0, 1):
+        _sidebar(window).setCurrentRow(row)
+        window.resize(500, 300)
+        QApplication.processEvents()
+        scroll = _scroll(window)
+        preview = _preview(window)
+        assert isinstance(preview, QLabel)
+        assert preview.hasHeightForWidth()
+        assert scroll.horizontalScrollBar().maximum() == 0
+        assert preview.width() <= scroll.viewport().width()
+        assert preview.height() >= preview.fontMetrics().height() * 2
+        assert _surface(window).minimumHeight() == 0
+
+
+def test_the_label_example_wraps_in_a_narrow_window(qtbot, stories: StoryRegistry, themes: BuiltinThemes) -> None:
+    examples = load_stories([EXAMPLES_MODULE]).registry
+    window = _make_window(qtbot, examples, themes)
+    window.resize(560, 400)
+    window.show()
+    qtbot.waitExposed(window)
+    sidebar = _sidebar(window)
+    sidebar.setCurrentRow(_sidebar_ids(window).index("Display/Label"))
+    QApplication.processEvents()
+
+    assert _scroll(window).horizontalScrollBar().maximum() == 0
+    assert isinstance(_preview(window), QLabel)
+    assert _preview(window).height() >= _preview(window).fontMetrics().height() * 2
+
+
+def test_the_example_layouts_are_centered_for_push_buttons_fill_for_the_table_and_padded_otherwise(stories: StoryRegistry) -> None:
+    examples = load_stories([EXAMPLES_MODULE]).registry
+    layouts = {story.id: story.layout for story in examples}
+
+    for story_id, layout in layouts.items():
+        if story_id.startswith("Buttons/Push Button/"):
+            assert layout is Layout.CENTERED, story_id
+        elif story_id == "Display/Table":
+            assert layout is Layout.FILL
+        else:
+            assert layout is None, story_id
