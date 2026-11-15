@@ -79,9 +79,9 @@ value types (`QColor`), so a story that mutates its argument cannot affect the n
 | `BoolControl` | `bool` | `bool` | `bool` only (not `0`/`1`) |
 | `ChoiceControl` | `str` in `options` | `str` | a string in `options` |
 | `IntControl` | `int` | `int` | `int` (not `bool`) within `minimum..maximum` |
-| `FloatControl` | `float` | `float` | `int` or `float`, finite, within the range, needing no more decimals than the editor shows (1.2); returned as `float` |
+| `FloatControl` | `float` | `float` | `int` (not `bool`) or `float`, finite, within the range, needing no more decimals than the editor shows (1.2); returned as `float` |
 | `ColorControl` | hex `str` | `QColor` | a hex string in the control's grammar, or a valid `QColor` (1.3) |
-| `EnumControl` | an option | the member | one of the control's options, by membership (1.3), not `isinstance` |
+| `EnumControl` | an option | the member | an instance of the default's enum class that is one of the options (1.3); returns that option |
 | `FileControl` | `str` or `Path` | `Path`, or `None` when empty | `str`, `Path` or `None` |
 
 `Story.default_args()` keeps its name and return type (`dict[str, object]`) and becomes "the values the story starts with":
@@ -98,12 +98,16 @@ call means each call returns fresh objects.
   - The editor's decimals, exposed as the property `effective_decimals`: an explicit `decimals` (`0..10`), or, when `None`, the
     fewest decimals (at least 2, at most 10) that represent the step, the default and both bounds exactly (today's rule).
   - An explicit `decimals` too small for the step, the default or a bound is a `ValueError` at construction.
-  - `coerce` rejects a value that needs more than `effective_decimals` decimals, so a variant's `args` can never be silently
-    rounded by the editor (`QDoubleSpinBox.setValue(0.123)` with 2 decimals reads back `0.12`). The message suggests `decimals=`.
+  - `coerce` rejects a value for which `round(value, effective_decimals)` is not close to `value`, so a variant's `args` can
+    never be silently rounded by the editor (`QDoubleSpinBox.setValue(0.123)` with 2 decimals reads back `0.12`). The message
+    suggests `decimals=`. This also rejects defaults and bounds that need more than 10 decimals (`1e-12`), which milestone 1
+    showed rounded; the changelog lists it under `### Changed`.
+  - On a zero-width range (`minimum == maximum`) the derived step is `1.0`, and an explicit `step` is always a `ValueError`.
 - `slider=True` on `IntControl` / `FloatControl`: a `QSlider` beside the spin box.
   - Integers: the slider's range is `minimum..maximum` with the same `step`.
-  - Floats: the slider has positions `0..n` with `n = ceil((maximum - minimum) / step)`; position `i` means
-    `min(minimum + i * step, maximum)`, so the last position always reaches `maximum`. A range needing more than 10 000 positions
+  - Floats: the slider has positions `0..n` with `n = ceil((maximum - minimum) / step - 1e-9)`; position `i` means
+    `min(minimum + i * step, maximum)`, so the last position always reaches `maximum`. The tolerance absorbs floating-point error:
+    without it `(0, 0.07, step=0.01)` gets 8 positions instead of 7, the last two both meaning `0.07`. A range needing more than 10 000 positions
     is a `ValueError` at construction suggesting a larger `step`.
   - The two editors mirror each other inside `QSignalBlocker`, so one user edit emits exactly one `valuesChanged`. Moving the
     slider sets the spin box to that position's value; editing the spin box moves the slider to the nearest position and keeps the
@@ -120,20 +124,23 @@ call means each call returns fresh objects.
   - The editor is a swatch button and a hex `QLineEdit`:
     - The swatch button shows an icon of the colour plus the hex text, so the colour is not conveyed by background alone and the
       focus ring stays the button's own. It opens `QColorDialog`, with `ShowAlphaChannel` when `alpha`.
-    - The hex field commits on `editingFinished` and reverts to the current value on invalid input.
+    - The hex field commits on `editingFinished` and reverts to the current value on invalid input. `editingFinished` fires
+      again when focus leaves after Return, so the editor emits only when the value changes.
 - **`EnumControl(name, default)`.**
   - The options are the enum class's named members, taken from `type(default).__members__` in definition order and de-duplicated
     by value, keeping the first name, so aliases disappear.
   - For a `Flag` this includes named combinations, so `Qt.AlignmentFlag.AlignCenter` is an option even though
     `list(Qt.AlignmentFlag)` lists only the nine single-bit members.
   - An unnamed combination (`AlignLeft | AlignTop`) is not an option: it passes `isinstance` but fails `coerce`, because `coerce`
-    checks membership in the options.
+    also checks membership in the options.
+  - Plain ints and bools are rejected even for `IntEnum` and `IntFlag` classes (Qt's enums are among them): `1 in options` is
+    true for `Qt.AlignmentFlag`, so the `isinstance` check against the default's class is needed as well.
   - Works for Python enums and PySide6's Qt enums, which are Python enums.
   - The editor is a `QComboBox` of option names; the story receives the member.
 - **`FileControl(name, default="", *, filter="")`.**
   - `filter` is a `QFileDialog` name filter (`"Images (*.png *.jpg)"`).
-  - The editor is a `QLineEdit`, which commits on `editingFinished`, plus a "Browse…" button that opens
-    `QFileDialog.getOpenFileName`.
+  - The editor is a `QLineEdit`, which commits on `editingFinished` (emitting only when the value changes, as the hex field),
+    plus a "Browse…" button that opens `QFileDialog.getOpenFileName`.
   - The value is a `Path` (relative paths stay relative to the working directory) or `None` when empty. The file need not exist.
 
 The `Control` union grows to the eight types. Editors open dialogs through module-level functions in their modules (`_ask_color`,
@@ -146,12 +153,16 @@ one module per editor. Each editor is a `QWidget` subclass with the same small i
 
 ```python
 class ControlEditor(QWidget):
-    valueChanged = Signal(object)          # once per user edit, with the new value (already coerced)
+    valueChanged = Signal(object)          # once per user edit that changes the value, with the new (coerced) value
     def value(self) -> object: ...
 ```
 
+The editor's parts are children of the editor, and the editor is the child of the panel and the label's buddy.
+
 The panel:
-- maps control type to editor class in a dict (`AGENTS.md`: a dict over a long `if` chain);
+- maps control type to editor class in a dict (`AGENTS.md`: a dict over a long `if` chain), typed
+  `dict[type, Callable[..., ControlEditor]]`: `ty` checks a `type[ControlEditor]` value against `QWidget.__init__` and rejects the
+  call;
 - takes the starting values with a keyword-only `values` argument, defaulting to the controls' coerced defaults:
   `ControlsPanel(controls, parent=None, *, values=None)`;
 - labels each row with `display_label`, sets the label as the editor's buddy, and applies `description`;
@@ -161,11 +172,11 @@ Accessibility of composite editors (colour, file, slider plus spin box): the edi
 input>)`, so the label's buddy and Tab reach the input. The primary input gets the label text as its accessible name. The
 secondary parts get their own names: "Choose colour for Accent", "Browse for Image", "Opacity slider".
 
-Wheel handling (#16): spin boxes, sliders and combo boxes in the panel get `Qt.FocusPolicy.StrongFocus` and an event filter
+Wheel handling (#16, and #15 for the enum combo box): spin boxes, sliders and combo boxes in the panel get `Qt.FocusPolicy.StrongFocus` and an event filter
 (`gui/editors/_wheel.py`). For a `QEvent.Wheel` on an editor without focus, the filter calls `event.ignore()` and returns `True`.
 Qt then skips the editor and, since the event is not accepted, passes it to the parent, so the controls pane scrolls instead.
-Tests can assert that the editor's value does not change; Qt only propagates spontaneous wheel events, so "the pane scrolls"
-cannot be unit-tested. The window's controls section becomes scrollable (`QScrollArea`, no horizontal scroll bar), which this
+Tests assert both cases: an unfocused editor keeps its value and leaves the event unaccepted, and a focused one changes. Qt only
+propagates spontaneous wheel events, so "the pane scrolls" cannot be unit-tested. The window's controls section becomes scrollable (`QScrollArea`, no horizontal scroll bar), which this
 needs and which long control lists need anyway.
 
 ## 2. Variants (#14)
@@ -174,6 +185,8 @@ needs and which long control lists need anyway.
 
 - `Story.component`: the groups joined with `/` (`"Inputs/Button"` for `"Inputs/Button/Default"`), or `None` for an id without
   groups. The future sidebar tree and Docs tab group by it.
+- `Story.__init__` gains keyword-only `layout=None` and `decorators=()` (sections 3 and 4), which `StoryRegistry.story` passes
+  through. `args` and `variant_of` are not constructor parameters: `variant()` sets them on the new story.
 - `StoryRegistry.register` records itself on the story (internal `_registry`). It is used only by `Story.variant()`; rendering and
   layout never read it. Calling `.variant()` on a story that was never registered raises `RuntimeError`.
 - `Story.variant_of`: the base `Story` for a variant, `None` otherwise. A variant of a variant is a `TypeError` that says to call
@@ -234,6 +247,9 @@ Examples: two examples get variants, and their base ids gain a `/Default` segmen
   natural size plus the surface margins. The natural size is the size hint, raised to the minimum size and capped by the maximum
   size. This minimum is what makes the scroll area scroll instead of squashing the widget: without it the surface's minimum size
   hint is invalid, and an 800×600 widget in a 300×200 pane was squashed to 278×178.
+  A widget whose `hasHeightForWidth()` is true (a word-wrapped `QLabel`) gets only a minimum width, from its minimum size hint,
+  and no minimum height, so it wraps in a narrow pane instead of scrolling sideways; the layout gives it the height its width
+  needs.
 - **The modes:**
   - `PADDED`: today's behaviour. Top-aligned inside the margins; the width follows the widget's horizontal size policy (a
     button stretches to the full width, as now), and the height is the natural height. A widget larger than the pane scrolls.

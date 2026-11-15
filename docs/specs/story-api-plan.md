@@ -1,6 +1,6 @@
 # Story API (milestone 2): implementation plan
 
-Status: draft. Implements `docs/specs/story-api.md` (the spec) in five pull requests, one per issue. Section numbers below
+Status: reviewed; ready for implementation. Implements `docs/specs/story-api.md` (the spec) in five pull requests, one per issue. Section numbers below
 (§1.2, §4.3) refer to the spec.
 
 ## Order and branches
@@ -32,9 +32,22 @@ Each PR says "Closes #N" for its issue, lists the public names it adds, and upda
    - `QT_QPA_PLATFORM=offscreen uv run pytest -q`
    - `QT_QPA_PLATFORM=offscreen uv run --isolated --python 3.11 --resolution lowest-direct pytest -q`
 3. Problems go back to the same subagent (SendMessage) or are fixed directly when small.
-4. I push the branch and open a draft PR. Nobody watches it; review comments are handled when the user asks.
+4. I push the branch and open a draft PR with the GitHub MCP tools (`gh pr create` and `gh pr edit` need GraphQL, which is not
+   available here). Nobody watches it; review comments are handled when the user asks.
 
-Review checklist for every PR: keyword-only new parameters after the existing ones; no zero-argument `super()` in slotted
+Existing tests that a PR must change are listed under its "Changed tests" heading with the replacement assertion; the PR
+description repeats the list. Any other existing test that fails is a bug in the PR, not a test to adjust.
+
+Tests that hold across all five PRs and need updating whenever their subject changes:
+- `tests/test_package.py::test_public_api_is_exported` compares `__all__` with an exact set: add each new public name.
+- `tests/test_examples.py`: `EXPECTED_IDS`, the control types used, and
+  `test_example_modules_are_story_files_that_import_only_pyside6_and_the_library`, which pins the four example module names and
+  allows imports only from `PySide6` and the library. New examples go into the existing four modules, without `enum` or `pathlib`
+  imports (use Qt enums; a `FileControl` story can use `str(path)`).
+- `tests/test_readme.py`: every new README code example is executed or checked the way the first story is (spec §7).
+
+Review checklist for every PR: new `Story` attributes added to its `__slots__`; type-only imports of `StoryRegistry` in
+`story_definition.py` under `TYPE_CHECKING` (a runtime import is a cycle); keyword-only new parameters after the existing ones; no zero-argument `super()` in slotted
 dataclasses; `QSignalBlocker` for linked editors; every new widget has a parent; accessible names on every editor part; colours
 only from palette roles; docstrings match the code; `__all__` and the changelog list exactly the new public names; existing
 assertions are not weakened (changed tests are called out in the PR description).
@@ -52,7 +65,8 @@ Code:
 - `gui/editors/`: `ControlEditor` base (`QWidget`, `valueChanged = Signal(object)`, `value()`), and one module per editor:
   `text_editor.py` (line edit or plain-text edit), `bool_editor.py`, `choice_editor.py`, `int_editor.py`, `float_editor.py`
   (spin box, optional slider, mirrored with `QSignalBlocker`). `_wheel.py` holds the wheel filter (§1.4). `__init__.py` holds the
-  control-type-to-editor dict and a `create_editor(control, value, parent)` function.
+  control-type-to-editor dict, typed `dict[type, Callable[..., ControlEditor]]` (spec §1.4: `ty` rejects
+  `type[ControlEditor]` here), and a `create_editor(control, value, parent)` function. Editors emit only when the value changes.
 - `gui/controls_panel.py`: the form over the editors, `ControlsPanel(controls, parent=None, *, values=None)`, `display_label`,
   buddy, `description` as tooltip and accessible description, focus proxies; `values()` coerces.
 - `gui/window.py`: the controls section is a `QScrollArea` (`widgetResizable`, no horizontal scroll bar); the window passes
@@ -62,29 +76,43 @@ Code:
 
 Tests:
 - `tests/test_controls.py`: the `coerce` table, per control, accepted and rejected values (bool rejects `1`, int rejects `True`,
-  float rejects `nan`, out-of-range values and values finer than `effective_decimals`); each new field's validation; `display_label`;
-  the decimals derivation and the explicit-`decimals` error; slider positions (`ceil`, last position is `maximum`, the limit).
+  float rejects `True`, `nan`, out-of-range values, values finer than `effective_decimals`, and `1e-12` even with no explicit
+  `decimals`); each new field's validation; `display_label`; the decimals derivation and the explicit-`decimals` error; an
+  explicit `step` on a zero-width range; slider positions (`(0, 0.07, step=0.01)` has 7 steps, `(0, 2.1, step=0.7)` has 3, the
+  last position is `maximum`, the 10 000 limit).
 - `tests/test_editors.py`: each editor driven like a user (typing, clicking, `setValue` on the spin box or slider) emits exactly one
-  `valueChanged` with the coerced value; slider and spin box mirror each other; the last slider position gives `maximum`; a wheel
-  event sent to an unfocused spin box, slider or combo box leaves the value unchanged and is not accepted; focus proxy and accessible
-  names on composite editors; multiline text.
-- `tests/test_controls_panel.py`: keeps passing; adds `values=`, labels and descriptions, buddies, `values()` returning coerced
-  values.
+  `valueChanged` with the coerced value; slider and spin box mirror each other; the last slider position gives `maximum`; wheel
+  events, both ways: sent (`QApplication.sendEvent`) to an unfocused spin box, slider or combo box, the value is unchanged and the
+  event not accepted; after `show()`, `activateWindow()` and `setFocus()` (assert `hasFocus()`), the same event changes the value.
+  Focus proxy and accessible names on composite editors; multiline text.
+- `tests/test_controls_panel.py`: adds `values=`, labels and descriptions, buddies, `values()` returning coerced values.
+
+Changed tests:
+- `test_every_editor_is_owned_by_the_panel`: the `ControlEditor` is the panel's child, and each input is a descendant of its
+  editor (was: the input's parent is the panel).
+- `test_labels_are_derived_from_names_and_are_buddies_and_accessible_names`: the label's buddy is the `ControlEditor`, its
+  `focusProxy()` is the input (a `QLineEdit` for text), and the input's accessible name is the label text (was: the buddy is the
+  `QLineEdit`).
 - `tests/test_window.py`: the controls section scrolls (a story with many controls gets a vertical scroll bar).
 
 Docs: README "Controls" table gains the shared fields and the options; changelog `### Added` (options, label, description) and
-`### Changed` (defaults must have the control's value type); `AGENTS.md` structure (`gui/editors/`, `controls/_options.py`).
+`### Changed` (defaults must have the control's value type; defaults and bounds needing more than 10 decimals are rejected);
+`AGENTS.md` structure (`gui/editors/`, `controls/_options.py`).
 
 ## PR 2: variants (#14)
 
 Code (§2):
-- `Story`: `component`, `variant_of`, `args` (read-only mapping, `types.MappingProxyType`), internal `_registry`,
-  `variant(name, *, args=None)`. `default_args()` uses the variant's `args` first. The variant shares the base's function,
+- `Story`: `component`, `variant_of`, `args` (read-only mapping, `types.MappingProxyType`), internal `_registry`, all in
+  `__slots__`, and `variant(name, *, args=None)`. `args` and `variant_of` are set by `variant()` on the new story, not passed to
+  the public constructor (spec §2.1). `default_args()` uses the variant's `args` first. The variant shares the base's function,
   controls, doc and origin. Validation errors as §2.2 lists them.
 - `StoryRegistry.register` sets `story._registry`; the registration rules of §2.3 already hold through the origin check, so only
   ordering needs checking (a variant registers after its base, by construction).
 - Examples (§2.4): `Buttons/Push Button/Default` with `Disabled` and `Checkable`; `Inputs/Line Edit/Default` with `Password`
   and `Read-only`. `EXPECTED_IDS` in `tests/test_examples.py` changes, and the PR description says so.
+
+Changed tests: `tests/test_cli.py` asserts `"Buttons/Push Button"` at lines 148, 207, 215, 221 and 299 (line 221 as `listed[0]`);
+they assert `"Buttons/Push Button/Default"` instead, and wherever the whole list is compared, the variants follow it.
 
 Tests (`tests/test_registry.py`, `tests/test_window.py`):
 - ids and `component`; `variant_of`; `args` reach the render function and the panel's starting values, and stay editable;
@@ -94,29 +122,33 @@ Tests (`tests/test_registry.py`, `tests/test_window.py`):
 - reloading a story module (through the `stories` fixture) replaces the base and its variants, with no duplicates, in order;
 - a variant id colliding with another function's story raises.
 
-Docs: README "Variants" section with the component-id advice; changelog `### Added` (variants) and `### Changed` (renamed example
-ids).
+Docs: README "Variants" section with the component-id advice, and a `tests/test_readme.py` test that loads its example and checks
+the variant ids and args; changelog `### Added` (variants) and `### Changed` (renamed example ids).
 
 ## PR 3: colour, enum and file controls (#15)
 
 Code (§1.3):
 - `controls/color_control.py`, `enum_control.py`, `file_control.py`, each with `label`, `description`, `display_label` and
   `coerce` like the others; the `Control` union and `__all__` (package root too) grow.
-- `gui/editors/color_editor.py` (swatch button with icon and hex text, hex line edit, `_ask_color`), `enum_editor.py`,
-  `file_editor.py` (line edit, "Browse…" button, `_ask_file`); registered in the editor dict.
+- `gui/editors/color_editor.py` (swatch button with icon and hex text, hex line edit, `_ask_color`), `enum_editor.py` (combo
+  box with `StrongFocus` and the wheel filter), `file_editor.py` (line edit, "Browse…" button, `_ask_file`); registered in the
+  editor dict. The hex and path fields emit only when the value changes.
 - Examples: a story using each new control (for example a colour swatch label, an alignment enum on a `QLabel`, a file path
   shown in a label); `test_the_examples_use_every_control_type` grows to eight types.
 
 Tests:
 - `tests/test_controls.py`: the colour grammar (accepted and rejected strings, case, 8 digits only with `alpha`), `QColor` input
   (invalid, translucent without `alpha`), a new object on every `coerce`; enum options from `__members__` with aliases removed,
-  `Qt.AlignmentFlag.AlignCenter` accepted, `AlignLeft | AlignTop` rejected, a Python `Enum` and a Qt enum; file `str`, `Path`,
-  `None`, empty string.
+  `Qt.AlignmentFlag.AlignCenter` accepted, `AlignLeft | AlignTop`, `1` and `True` rejected, a Python `Enum` and a Qt enum;
+  file `str`, `Path`, `None`, empty string.
 - `tests/test_editors.py`: the colour editor with `_ask_color` monkeypatched (chosen colour, cancelled dialog), typing a valid and an
-  invalid hex value; the enum combo; the file editor with `_ask_file` monkeypatched (chosen, cancelled) and typed paths; one
-  `valueChanged` per edit; accessible names on the swatch and browse buttons; focus proxies.
+  invalid hex value; the enum combo (including the wheel cases of PR 1); the file editor with `_ask_file` monkeypatched (chosen,
+  cancelled) and typed paths; one `valueChanged` per edit, including Return followed by focus leaving the hex and path fields
+  (one signal, not two); accessible names on the swatch and browse buttons; focus proxies.
 
-Docs: README controls table; changelog `### Added`.
+Changed tests: `test_public_api_is_exported` and the examples' control-type set (eight types).
+
+Docs: README controls table; changelog `### Added`; `AGENTS.md`, which lists the control modules by name.
 
 ## PR 4: layout (#18)
 
@@ -137,8 +169,13 @@ Tests (`tests/test_registry.py`, `tests/test_window.py`; the window shown with `
 - An 800×600 fixed-size-hint widget in a small window keeps its natural size and gets scroll bars in PADDED and CENTERED, and no
   scroll bars in FILL.
 - The error panel uses FILL whatever the story declares.
+- The `Display/Label` example (a word-wrapped `QLabel`) in a narrow window wraps, with no horizontal scroll bar (spec §3,
+  `hasHeightForWidth`).
 
-Docs: README "Layout and decorators" section (layout part); changelog.
+Changed tests: `EXPECTED_IDS` gains `Display/Table`; `test_public_api_is_exported` gains `Layout`.
+
+Docs: README "Layout and decorators" section (layout part) with a `tests/test_readme.py` check; changelog; `AGENTS.md` structure
+(`registry/layout.py`).
 
 ## PR 5: decorators (#17)
 
@@ -158,13 +195,16 @@ Code (§4):
 Tests:
 - `tests/test_rendering.py`: order with story and registry decorators (record the call order, and check parentage); the 320×200
   inside 24 px example; each failure title of §4.3 and that the error chains the original (`__cause__`); nothing left alive after a
-  failure (`shiboken6.isValid` after sending posted deferred deletes); the `QGroupBox` decorator from the issue.
+  failure (`shiboken6.isValid` after sending posted deferred deletes); a five-line decorator, written in the test, that puts the
+  widget in a `QGroupBox` (#17's acceptance criterion).
 - `tests/test_decorators.py`: each built-in's geometry and validation and `repr`.
 - `tests/test_window.py`: `current_preview_widget()` is the undecorated widget; the decorated root and the widget are deleted on
   rebuild; a decorator error shows the error panel and logs with `exc_info`; existing error-title tests unchanged.
 
-Docs: README "Layout and decorators" section (decorators part: the built-ins and a custom decorator); changelog; `AGENTS.md`
-structure (`decorators/`, `registry/rendering.py`, `registry/layout.py`).
+Changed tests: `test_public_api_is_exported` gains `Decorator`.
+
+Docs: README "Layout and decorators" section (decorators part: the built-ins and a custom decorator) with a `tests/test_readme.py`
+check; changelog; `AGENTS.md` structure (`decorators/`, `registry/rendering.py`).
 
 ## After the five PRs
 
