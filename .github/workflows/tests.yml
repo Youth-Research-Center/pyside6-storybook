@@ -1,5 +1,8 @@
 name: Tests
 
+# Every push to main and every pull request: lint, type check and the core tests on Linux.
+# The slower tests marked `full`, and the Windows, macOS and lowest-version runs, are in full-tests.yml (run it from the Actions tab).
+
 on:
   push:
     branches: [main]
@@ -29,39 +32,17 @@ jobs:
       - run: uv run --no-sync ruff check .
       - run: uv run --no-sync ty check
 
-  test:
-    name: test (${{ matrix.os }}, Python ${{ matrix.python-version }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.11", "3.14"]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Qt system libraries
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libegl1 libxkbcommon0 libfontconfig1 libdbus-1-3
-      - uses: astral-sh/setup-uv@v7
-        with:
-          python-version: ${{ matrix.python-version }}
-          enable-cache: true
-      - run: uv sync --locked
-      - run: uv run --no-sync pytest -q
-
-  test-lowest:
-    name: test (lowest direct dependencies, Python 3.11)
+  test-core:
+    name: core tests (ubuntu-latest, Python 3.11)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Install Qt system libraries
         run: sudo apt-get update && sudo apt-get install -y libegl1 libxkbcommon0 libfontconfig1 libdbus-1-3
-      # PySide6 6.8.0 declares Requires-Python <3.13 and uv ignores that bound, so the interpreter is fixed by hand.
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.11"
           enable-cache: true
-      - run: uv sync --resolution lowest-direct
-      - run: uv run --no-sync pytest -q
+      - run: uv sync --locked
+      - run: uv run --no-sync pytest -q -m "not full"
