@@ -36,12 +36,24 @@ There is no display in CI or in agent sandboxes: set `QT_QPA_PLATFORM=offscreen`
 default before Qt is imported.
 
 ```bash
-QT_QPA_PLATFORM=offscreen uv run pytest -q
+QT_QPA_PLATFORM=offscreen uv run pytest -q                    # every test; run this locally before pushing
+QT_QPA_PLATFORM=offscreen uv run pytest -q -m "not full"      # only the core tests, as CI runs them on every push
 QT_QPA_PLATFORM=offscreen uv run pytest tests/test_window.py
 QT_QPA_PLATFORM=offscreen uv run --isolated --python 3.11 --resolution lowest-direct pytest -q   # oldest supported dependencies
 ```
 
 `pytest-timeout` aborts any test that runs longer than 120 seconds (set in `pyproject.toml`), so a hung Qt test cannot hold a job.
+
+Mark a test `@pytest.mark.full` when it is a slower end-to-end check rather than a test of one behaviour: it runs the installed script
+in a subprocess, or renders every example or story in every theme. Everything else is a core test. `--strict-markers` is on, so a
+misspelt marker fails instead of silently selecting nothing.
+
+CI runs in two workflows:
+- **Tests** (`.github/workflows/tests.yml`), on every push to `main` and every pull request: lint, `ty` and the core tests
+  (`-m "not full"`) on Linux with Python 3.11.
+- **Full test suite** (`.github/workflows/full-tests.yml`), started by hand (Actions > Full test suite > Run workflow, on any
+  branch): every test on Windows, macOS and Linux with Python 3.11 and 3.14, plus the lowest allowed dependency versions. Run it
+  before a release, after a dependency or Python bump, and for changes to platform-dependent code (paths, themes, the command line).
 
 ## Code quality
 Two gates run in CI: `ruff check` (rules `E`, `F`, `B`, `Q`, `I`, `FBT`, 150-character lines; there is no `ruff format` step) and the

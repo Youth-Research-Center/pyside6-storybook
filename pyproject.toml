@@ -38,3 +38,7 @@ extend-select = ["B", "Q", "I", "FBT"]
 testpaths = ["tests"]
 timeout = 120
 qt_api = "pyside6"
+addopts = "--strict-markers"
+markers = [
+    "full: slower end-to-end tests (the installed script in a subprocess, every example in every theme); CI runs them only in the manual Full test suite workflow",
+]

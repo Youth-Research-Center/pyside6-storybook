@@ -235,6 +235,7 @@ def _without_platform_override() -> dict[str, str]:
     return {key: value for key, value in os.environ.items() if key != "QT_QPA_PLATFORM"}
 
 
+@pytest.mark.full
 def test_the_installed_script_lists_stories_without_a_display(tmp_path: Path) -> None:
     write(tmp_path, "stories/a_story.py", story_source("Script/A"))
     write(tmp_path, "stories/widget_at_import_story.py", story_source("Script/B", imports="from PySide6.QtWidgets import QLabel\n_LABEL = QLabel('made at import')"))
@@ -253,6 +254,7 @@ def test_the_installed_script_lists_stories_without_a_display(tmp_path: Path) ->
     assert completed.stdout.splitlines() == ["Script/A", "Script/B"]
 
 
+@pytest.mark.full
 def test_the_installed_script_lists_the_examples_without_a_display(tmp_path: Path) -> None:
     completed = subprocess.run(
         [_installed_script(), "--list", "--examples"],
@@ -268,6 +270,7 @@ def test_the_installed_script_lists_the_examples_without_a_display(tmp_path: Pat
     assert "Forms/Sign-in Form" in completed.stdout.splitlines()
 
 
+@pytest.mark.full
 def test_python_dash_m_runs_the_same_command(tmp_path: Path) -> None:
     write(tmp_path, "stories/a_story.py", story_source("Module/A"))
 
