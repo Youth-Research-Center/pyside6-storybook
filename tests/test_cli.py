@@ -226,3 +226,14 @@ def test_python_dash_m_runs_the_same_command(tmp_path: Path) -> None:
 
     assert completed.returncode == 0, completed.stderr
     assert completed.stdout.splitlines() == ["Module/A"]
+
+
+def test_examples_are_the_bundled_ones_even_next_to_a_folder_of_the_same_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stories: StoryRegistry, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "pyside6_storybook.examples").mkdir()
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main(["--list", "--examples"]) == 0
+
+    assert "Buttons/Push Button" in capsys.readouterr().out.splitlines()

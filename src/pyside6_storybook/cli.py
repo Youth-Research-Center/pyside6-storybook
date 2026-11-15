@@ -7,9 +7,11 @@ import os
 import sys
 import textwrap
 from collections.abc import Sequence
+from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
+import pyside6_storybook.examples
 from pyside6_storybook import __version__
 from pyside6_storybook.app import run
 from pyside6_storybook.discovery import LoadError, load_stories
@@ -18,6 +20,7 @@ from pyside6_storybook.themes import BUILTIN_THEME_NAMES
 PROGRAM_NAME = "pyside6-storybook"
 EXAMPLES_MODULE = "pyside6_storybook.examples"
 """The package of built-in example stories that ``--examples`` loads."""
+_EXAMPLES_FOLDER = Path(pyside6_storybook.examples.__file__).resolve().parent
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -42,7 +45,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     targets: list[str] = list(arguments.targets)
     if arguments.examples:
-        targets.append(EXAMPLES_MODULE)
+        # The bundled folder, not the module name: an existing path wins over a module name, so a local folder that happens to be
+        # called "pyside6_storybook.examples" would otherwise be loaded instead.
+        targets.append(str(_EXAMPLES_FOLDER))
     if not targets:
         _print_error(
             "no stories to show: pass the folders, files or modules that contain them, for example "
