@@ -24,10 +24,19 @@ or, as a development dependency of a project managed with [uv](https://docs.astr
 uv add --dev git+https://github.com/Youth-Research-Center/pyside6-storybook
 ```
 
+uv installs it into the project's `.venv` without activating that environment, so with uv, put `uv run` in front of the
+`pyside6-storybook` commands in this README (or activate `.venv` first).
+
 Then open the built-in example stories:
 
 ```bash
 pyside6-storybook --examples
+```
+
+With uv:
+
+```bash
+uv run pyside6-storybook --examples
 ```
 
 ## Your first story
@@ -51,7 +60,7 @@ def greeting_button(ctx: StoryContext) -> QWidget:
     return button
 ```
 
-and open it:
+and open it, with `uv run` in front when you installed with uv:
 
 ```bash
 pyside6-storybook stories
