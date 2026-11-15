@@ -81,12 +81,15 @@ in the same pull request as the bump.
     the range check shared by the int and float controls, and `_options.py` holds the functions every control uses (label
     derivation, `label`/`description` validation, the float step and decimals rules). Controls share no base class: each has
     `label`, `description`, `display_label` and `coerce`
-  - `registry/` - the story model, one module per type: `story_context.py` (`StoryContext`, `StoryFunction`, `Decorator`), `story_definition.py`
-    (`Story`, `StoryOrigin`; `Story.variant` registers a variant through the registry link that `StoryRegistry.register` sets),
-    `layout.py` (`Layout`, how the preview places a story's widget) and `story_registry.py` (`StoryRegistry`, with `default_layout` and
-    `decorators`) and `rendering.py` (internal: `render_story`, which builds a story's widget and applies its decorators and the registry's, and raises
-    `StoryRenderError` with the error panel's title and details; it deletes every widget it built when it fails);
-    `__init__.py` re-exports them and holds `default_registry` and the `@story` decorator
+  - `registry/` - the story model, one module per type:
+    - `story_context.py`: `StoryContext`, `StoryFunction`, `Decorator`;
+    - `story_definition.py`: `Story`, `StoryOrigin`; `Story.variant` registers a variant through the registry link that
+      `StoryRegistry.register` sets;
+    - `layout.py`: `Layout`, how the preview places a story's widget;
+    - `story_registry.py`: `StoryRegistry`, with `default_layout` and `decorators`;
+    - `rendering.py` (internal): `render_story`, which builds a story's widget, applies its decorators and the registry's, and raises
+      `StoryRenderError` with the error panel's title and details, deleting every widget it built when it fails;
+    - `__init__.py` re-exports them and holds `default_registry` and the `@story` decorator.
   - `decorators/` - the built-in story decorators, one module each: `padding.py`, `frame.py`, `fixed_size.py` (plus `_checks.py`, the
     argument checks they share); `__init__.py` re-exports them and the `Decorator` type, which is defined in `registry/story_context.py`
     because `registry` needs it and defining it here would be an import cycle
