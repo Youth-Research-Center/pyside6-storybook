@@ -77,8 +77,10 @@ in the same pull request as the bump.
   - `__main__.py` - `python -m pyside6_storybook`, which runs `cli.main`
   - `cli.py` - the `pyside6-storybook` command line (`main`): loads the targets and opens the gallery, or lists the stories
   - `controls/` - control dataclasses, one module per type (`text_control.py`, `bool_control.py`, `choice_control.py`,
-    `int_control.py`, `float_control.py`); `__init__.py` re-exports them and defines the `Control` union, and `_range.py` holds
-    the range check shared by the int and float controls
+    `int_control.py`, `float_control.py`); `__init__.py` re-exports them and defines the `Control` union, `_range.py` holds
+    the range check shared by the int and float controls, and `_options.py` holds the functions every control uses (label
+    derivation, `label`/`description` validation, the float step and decimals rules). Controls share no base class: each has
+    `label`, `description`, `display_label` and `coerce`
   - `registry/` - the story model, one module per type: `story_context.py` (`StoryContext`, `StoryFunction`), `story_definition.py`
     (`Story`, `StoryOrigin`) and `story_registry.py` (`StoryRegistry`); `__init__.py` re-exports them and holds `default_registry` and
     the `@story` decorator
@@ -87,11 +89,15 @@ in the same pull request as the bump.
     name that keeps it a single module), `load_result.py` (`LoadResult`, `LoadError`), `sources.py` (`resolve_story_sources`: the command line's targets or the
     default sources from `pyproject.toml`, entry points or the examples) and `constants.py` (file-name patterns, names and messages)
   - `gui/` - the gallery's widgets, one module per widget: `window.py` (`GalleryWindow`), `controls_panel.py` (`ControlsPanel`, the
-    editors for a story's controls) and `error_panel.py` (`ErrorPanel`, which the window shows in the preview for a story that fails and
-    for the load errors). New gallery widgets go here, not at the package root.
+    labelled form over the editors of a story's controls) and `error_panel.py` (`ErrorPanel`, which the window shows in the preview for a
+    story that fails and for the load errors). New gallery widgets go here, not at the package root.
+    - `gui/editors/` - one module per editor (`text_editor.py`, `bool_editor.py`, `choice_editor.py`, `int_editor.py`,
+      `float_editor.py`), all `ControlEditor` subclasses (`control_editor.py`: `valueChanged` and `value()`). `__init__.py` maps each
+      control type to its editor in `EDITORS` and has `create_editor`; `_wheel.py` holds the wheel filter that ignores the wheel on an
+      editor without focus.
   - `examples/` - the example stories `--examples` shows, built from stock Qt widgets, in `*_stories.py` modules loaded by discovery
     like any project's stories. They import only PySide6 and this package, every story has a docstring, and together they use every
-    control type; `tests/test_examples.py` checks all three. They are copied as first stories, so keep them idiomatic.
+    control type and every control option; `tests/test_examples.py` checks all three. They are copied as first stories, so keep them idiomatic.
   - `themes/` - the built-in themes: `theme_definition.py` (`ThemeDefinition`: name, colour scheme and palette colours), one module
     per theme (`light_theme.py`, `dark_theme.py`) and `builtin_themes.py` (`BuiltinThemes`, which applies them)
   - `contrast.py` - WCAG contrast helpers

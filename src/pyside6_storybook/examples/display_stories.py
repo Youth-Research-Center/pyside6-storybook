@@ -23,8 +23,13 @@ _SWATCHES = (
 @story(
     "Display/Label",
     controls=[
-        TextControl("text", "A label wraps long text onto several lines when word wrap is on, instead of growing wider."),
-        BoolControl("word_wrap", default=True),
+        TextControl(
+            "text",
+            "A label wraps long text onto several lines when word wrap is on, instead of growing wider.",
+            multiline=True,
+            description="The label's text. Press Enter for a line break.",
+        ),
+        BoolControl("word_wrap", default=True, label="Word wrap"),
         ChoiceControl("alignment", "Left", tuple(_ALIGNMENTS)),
     ],
 )
@@ -38,7 +43,11 @@ def label(ctx: StoryContext) -> QWidget:
 
 @story(
     "Display/Progress Bar",
-    controls=[IntControl("value", 40, 0, 100), BoolControl("text_visible", default=True), BoolControl("busy", default=False)],
+    controls=[
+        IntControl("value", 40, 0, 100, slider=True, description="Ignored while the bar is busy."),
+        BoolControl("text_visible", default=True),
+        BoolControl("busy", default=False),
+    ],
 )
 def progress_bar(ctx: StoryContext) -> QWidget:
     """A ``QProgressBar``. ``busy`` gives it an empty range, which shows a busy indicator instead of a percentage."""

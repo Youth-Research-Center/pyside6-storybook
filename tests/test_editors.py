@@ -1,0 +1,386 @@
+from collections.abc import Iterator
+from typing import TypeVar
+
+import pytest
+from PySide6.QtCore import QEvent, QPoint, QPointF, Qt, QTimer
+from PySide6.QtGui import QTextCursor, QWheelEvent
+from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QLineEdit, QPlainTextEdit, QSlider, QSpinBox, QVBoxLayout, QWidget
+
+from pyside6_storybook import BoolControl, ChoiceControl, FloatControl, IntControl, TextControl
+from pyside6_storybook.controls import Control
+from pyside6_storybook.gui.editors import EDITORS, ControlEditor, create_editor
+
+_WidgetT = TypeVar("_WidgetT", bound=QWidget)
+_HOSTS: list[QWidget] = []
+"""The windows of the editors under test, kept alive until the test ends (``qtbot`` holds its widgets weakly)."""
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _platform_gives_focus(qapp: QApplication) -> None:
+    """Let the platform activate windows again after an earlier test ended the event loop (``run()`` does, in ``test_app.py``).
+
+    The offscreen platform ignores activation requests once an event loop has quit, until the next loop runs, and a window an earlier
+    test closed keeps the platform's focus until it is deleted. Both are cleared by deleting what is pending and running a loop.
+    """
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    QTimer.singleShot(0, qapp.quit)
+    qapp.exec()
+
+
+@pytest.fixture(autouse=True)
+def _release_hosts() -> Iterator[None]:
+    try:
+        yield
+    finally:
+        _HOSTS.clear()
+
+
+class _Recorder:
+    """Collects what an editor emits."""
+
+    def __init__(self, editor: ControlEditor) -> None:
+        self.values: list[object] = []
+        editor.valueChanged.connect(self.values.append)
+
+
+def _make(qtbot, control: Control, value: object | None = None) -> tuple[ControlEditor, _Recorder]:
+    """Show an editor in a window next to a line edit that can take focus away from it."""
+    host = QWidget()
+    qtbot.addWidget(host)
+    _HOSTS.append(host)
+    layout = QVBoxLayout(host)
+    other = QLineEdit(host)
+    other.setObjectName("other")
+    editor = create_editor(control, control.default if value is None else value, host)
+    layout.addWidget(other)
+    layout.addWidget(editor)
+    host.show()
+    qtbot.waitExposed(host)
+    return editor, _Recorder(editor)
+
+
+def _child(editor: QWidget, widget_type: type[_WidgetT]) -> _WidgetT:
+    child = editor.findChild(widget_type)
+    assert child is not None, widget_type.__name__
+    return child
+
+
+def _wheel(widget: QWidget, delta: int = 120) -> QWheelEvent:
+    """Send a wheel event to ``widget`` and return it, so the test can ask whether it was accepted."""
+    event = QWheelEvent(
+        QPointF(widget.rect().center()),
+        QPointF(widget.mapToGlobal(widget.rect().center())),
+        QPoint(0, 0),
+        QPoint(0, delta),
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+        Qt.ScrollPhase.NoScrollPhase,
+        False,  # noqa: FBT003 (QWheelEvent's signature)
+    )
+    QApplication.sendEvent(widget, event)
+    return event
+
+
+def _focus(qtbot, widget: QWidget) -> None:
+    widget.window().activateWindow()
+    widget.setFocus()
+    qtbot.waitUntil(widget.hasFocus)
+
+
+def test_every_control_type_has_an_editor_and_an_unknown_one_is_rejected() -> None:
+    assert set(EDITORS) == {TextControl, BoolControl, ChoiceControl, IntControl, FloatControl}
+    with pytest.raises(TypeError, match="Unsupported control type"):
+        create_editor(object(), 1)  # ty: ignore[invalid-argument-type]
+
+
+def test_the_base_editor_has_no_value(qtbot) -> None:
+    editor = ControlEditor()
+    qtbot.addWidget(editor)
+    with pytest.raises(NotImplementedError):
+        editor.value()
+
+
+def test_text_editor_emits_once_per_keystroke_and_not_for_the_same_text(qtbot) -> None:
+    editor, recorder = _make(qtbot, TextControl("text", ""))
+    line_edit = _child(editor, QLineEdit)
+
+    qtbot.keyClicks(line_edit, "ab")
+    assert recorder.values == ["a", "ab"]
+    assert editor.value() == "ab"
+
+    line_edit.setText("ab")
+    assert recorder.values == ["a", "ab"]
+
+
+def test_text_editor_starts_with_the_given_value_without_emitting(qtbot) -> None:
+    editor, recorder = _make(qtbot, TextControl("text", "default"), "given")
+    assert editor.value() == "given"
+    assert recorder.values == []
+
+
+def test_multiline_text_editor_is_a_plain_text_edit_that_emits_once_per_keystroke(qtbot) -> None:
+    editor, recorder = _make(qtbot, TextControl("text", "a", multiline=True))
+    plain = _child(editor, QPlainTextEdit)
+    assert editor.findChild(QLineEdit) is None
+    assert editor.focusProxy() is plain
+    plain.moveCursor(QTextCursor.MoveOperation.End)
+
+    qtbot.keyClick(plain, Qt.Key.Key_Return)
+    qtbot.keyClicks(plain, "bc")
+
+    assert recorder.values == ["a\n", "a\nb", "a\nbc"]
+    assert editor.value() == "a\nbc"
+
+
+def test_multiline_text_editor_lets_tab_leave_it(qtbot) -> None:
+    editor, _recorder = _make(qtbot, TextControl("text", "", multiline=True))
+    assert _child(editor, QPlainTextEdit).tabChangesFocus()
+
+
+def test_bool_editor_emits_once_per_click(qtbot) -> None:
+    editor, recorder = _make(qtbot, BoolControl("flag", default=False))
+    check_box = _child(editor, QCheckBox)
+
+    qtbot.mouseClick(check_box, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(check_box, Qt.MouseButton.LeftButton)
+
+    assert recorder.values == [True, False]
+    assert editor.value() is False
+
+
+def test_bool_editor_toggles_with_the_space_key(qtbot) -> None:
+    editor, recorder = _make(qtbot, BoolControl("flag", default=False))
+    _focus(qtbot, _child(editor, QCheckBox))
+
+    qtbot.keyClick(_child(editor, QCheckBox), Qt.Key.Key_Space)
+
+    assert recorder.values == [True]
+
+
+def test_choice_editor_emits_the_option_once_per_change(qtbot) -> None:
+    editor, recorder = _make(qtbot, ChoiceControl("role", "b", ("a", "b", "c")))
+    combo = _child(editor, QComboBox)
+    assert [combo.itemText(i) for i in range(combo.count())] == ["a", "b", "c"]
+    assert editor.value() == "b"
+
+    combo.setCurrentIndex(2)
+    combo.setCurrentIndex(2)
+
+    assert recorder.values == ["c"]
+    assert editor.value() == "c"
+
+
+def test_int_editor_uses_range_and_step(qtbot) -> None:
+    editor, _recorder = _make(qtbot, IntControl("n", 10, 0, 100, step=5))
+    spin_box = _child(editor, QSpinBox)
+    assert (spin_box.minimum(), spin_box.maximum(), spin_box.value(), spin_box.singleStep()) == (0, 100, 10, 5)
+    assert editor.findChild(QSlider) is None
+
+
+def test_int_editor_emits_once_per_typed_value_and_arrow_press(qtbot) -> None:
+    editor, recorder = _make(qtbot, IntControl("n", 5, 0, 100, step=5))
+    spin_box = _child(editor, QSpinBox)
+
+    spin_box.selectAll()
+    qtbot.keyClicks(spin_box, "40")
+    assert recorder.values[-1] == 40
+
+    recorder.values.clear()
+    qtbot.keyClick(spin_box, Qt.Key.Key_Up)
+    assert recorder.values == [45]
+    assert editor.value() == 45
+
+
+def test_int_editor_slider_and_spin_box_mirror_each_other_with_one_emit_per_edit(qtbot) -> None:
+    editor, recorder = _make(qtbot, IntControl("n", 10, 0, 100, slider=True))
+    spin_box = _child(editor, QSpinBox)
+    slider = _child(editor, QSlider)
+    assert (slider.minimum(), slider.maximum(), slider.value()) == (0, 100, 10)
+
+    slider.setValue(60)
+    assert (spin_box.value(), slider.value(), recorder.values) == (60, 60, [60])
+
+    spin_box.setValue(25)
+    assert (spin_box.value(), slider.value(), recorder.values) == (25, 25, [60, 25])
+
+    spin_box.setValue(25)
+    assert recorder.values == [60, 25]
+    assert editor.value() == 25
+
+
+def test_int_editor_slider_uses_the_step(qtbot) -> None:
+    editor, recorder = _make(qtbot, IntControl("n", 0, 0, 100, step=10, slider=True))
+    slider = _child(editor, QSlider)
+    assert slider.singleStep() == 10
+    _focus(qtbot, slider)
+
+    qtbot.keyClick(slider, Qt.Key.Key_Right)
+
+    assert recorder.values == [10]
+
+
+def test_float_editor_uses_range_step_and_decimals(qtbot) -> None:
+    editor, _recorder = _make(qtbot, FloatControl("x", 0.5, 0.0, 1.0, step=0.25, decimals=3))
+    spin_box = _child(editor, QDoubleSpinBox)
+    assert (spin_box.minimum(), spin_box.maximum(), spin_box.value()) == (0.0, 1.0, 0.5)
+    assert (spin_box.singleStep(), spin_box.decimals()) == (0.25, 3)
+    assert editor.findChild(QSlider) is None
+
+
+def test_float_editor_emits_once_per_typed_value(qtbot) -> None:
+    editor, recorder = _make(qtbot, FloatControl("x", 0.5, 0.0, 1.0))
+    spin_box = _child(editor, QDoubleSpinBox)
+
+    spin_box.selectAll()
+    qtbot.keyClicks(spin_box, "0.25")
+
+    assert recorder.values[-1] == pytest.approx(0.25)
+    assert editor.value() == pytest.approx(0.25)
+
+
+def test_float_editor_slider_reaches_the_maximum_exactly(qtbot) -> None:
+    editor, recorder = _make(qtbot, FloatControl("x", 0.0, 0.0, 0.07, step=0.01, slider=True))
+    slider = _child(editor, QSlider)
+    assert (slider.minimum(), slider.maximum()) == (0, 7)
+
+    slider.setValue(7)
+
+    assert recorder.values == [0.07]
+    assert editor.value() == 0.07
+
+
+def test_float_editor_slider_last_position_is_the_maximum_when_the_step_does_not_divide_the_range(qtbot) -> None:
+    editor, recorder = _make(qtbot, FloatControl("x", 0.0, 0.0, 2.1, step=0.7, slider=True))
+    slider = _child(editor, QSlider)
+    assert slider.maximum() == 3
+
+    slider.setValue(1)
+    slider.setValue(3)
+
+    assert recorder.values == [0.7, 2.1]
+
+
+def test_float_editor_slider_position_is_a_step_from_the_minimum(qtbot) -> None:
+    editor, recorder = _make(qtbot, FloatControl("x", 1.0, 1.0, 2.0, step=0.25, slider=True))
+    slider = _child(editor, QSlider)
+
+    slider.setValue(2)
+
+    assert recorder.values == [1.5]
+    assert _child(editor, QDoubleSpinBox).value() == 1.5
+
+
+def test_float_editor_slider_and_spin_box_mirror_each_other_with_one_emit_per_edit(qtbot) -> None:
+    editor, recorder = _make(qtbot, FloatControl("x", 0.0, 0.0, 1.0, step=0.25, slider=True))
+    spin_box = _child(editor, QDoubleSpinBox)
+    slider = _child(editor, QSlider)
+
+    spin_box.setValue(0.3)
+    assert (slider.value(), spin_box.value(), recorder.values) == (1, 0.3, [0.3])
+
+    spin_box.setValue(0.3)
+    assert recorder.values == [0.3]
+
+    slider.setValue(4)
+    assert (spin_box.value(), recorder.values) == (1.0, [0.3, 1.0])
+
+
+def test_float_editor_slider_starts_at_the_position_nearest_the_value(qtbot) -> None:
+    editor, recorder = _make(qtbot, FloatControl("x", 0.4, 0.0, 1.0, step=0.25, slider=True))
+    assert _child(editor, QSlider).value() == 2
+    assert recorder.values == []
+    assert editor.value() == 0.4
+
+
+def test_float_editor_on_a_zero_width_range_has_a_one_position_slider(qtbot) -> None:
+    editor, _recorder = _make(qtbot, FloatControl("x", 5.0, 5.0, 5.0, slider=True))
+    slider = _child(editor, QSlider)
+    assert (slider.minimum(), slider.maximum(), slider.value()) == (0, 0, 0)
+    assert editor.value() == 5.0
+
+
+@pytest.mark.parametrize(
+    ("control", "widget_type"),
+    [
+        (IntControl("n", 5, 0, 10, slider=True), QSpinBox),
+        (IntControl("n", 5, 0, 10, slider=True), QSlider),
+        (FloatControl("x", 0.5, 0.0, 1.0, slider=True), QDoubleSpinBox),
+        (FloatControl("x", 0.5, 0.0, 1.0, slider=True), QSlider),
+        (ChoiceControl("c", "b", ("a", "b", "c")), QComboBox),
+    ],
+)
+def test_wheel_is_ignored_without_focus_and_acts_with_it(qtbot, control: Control, widget_type: type[QWidget]) -> None:
+    editor, recorder = _make(qtbot, control)
+    widget = _child(editor, widget_type)
+    assert widget.focusPolicy() == Qt.FocusPolicy.StrongFocus
+    before = editor.value()
+    other = editor.window().findChild(QLineEdit, "other")
+    assert other is not None
+    _focus(qtbot, other)
+    assert not widget.hasFocus()
+
+    event = _wheel(widget)
+
+    assert not event.isAccepted()
+    assert editor.value() == before
+    assert recorder.values == []
+
+    _focus(qtbot, widget)
+    event = _wheel(widget)
+
+    assert event.isAccepted()
+    assert editor.value() != before
+    assert len(recorder.values) == 1
+
+
+def test_wheel_filter_is_owned_by_its_widget(qtbot) -> None:
+    editor, _recorder = _make(qtbot, IntControl("n", 5, 0, 10))
+    spin_box = _child(editor, QSpinBox)
+    assert [child for child in spin_box.children() if type(child).__name__ == "_WheelFilter"]
+
+
+@pytest.mark.parametrize(
+    "control",
+    [
+        TextControl("t", "x"),
+        TextControl("t", "x", multiline=True),
+        BoolControl("b", default=True),
+        ChoiceControl("c", "x", ("x",)),
+        IntControl("i", 1, 0, 2),
+        IntControl("i", 1, 0, 2, slider=True),
+        FloatControl("f", 1.0, 0.0, 2.0),
+        FloatControl("f", 1.0, 0.0, 2.0, slider=True),
+    ],
+)
+def test_the_primary_input_is_the_focus_proxy_and_gets_the_accessible_texts(qtbot, control: Control) -> None:
+    editor, _recorder = _make(qtbot, control)
+
+    editor.set_accessible_texts("Opacity", "How see-through")
+
+    proxy = editor.focusProxy()
+    assert proxy is not None
+    assert editor.isAncestorOf(proxy)
+    assert proxy.accessibleName() == "Opacity"
+    assert proxy.accessibleDescription() == "How see-through"
+    assert proxy.focusPolicy() != Qt.FocusPolicy.NoFocus
+    slider = editor.findChild(QSlider)
+    if getattr(control, "slider", False):
+        assert slider is not None
+        assert slider.accessibleName() == "Opacity slider"
+        assert slider.accessibleDescription() == "How see-through"
+        assert slider is not proxy
+    else:
+        assert slider is None
+
+
+def test_the_spin_box_is_the_focus_proxy_of_a_composite_editor(qtbot) -> None:
+    int_editor, _ = _make(qtbot, IntControl("n", 1, 0, 2, slider=True))
+    float_editor, _ = _make(qtbot, FloatControl("x", 1.0, 0.0, 2.0, slider=True))
+    assert int_editor.focusProxy() is _child(int_editor, QSpinBox)
+    assert float_editor.focusProxy() is _child(float_editor, QDoubleSpinBox)
+
+
+def test_every_part_of_an_editor_is_a_descendant_of_it(qtbot) -> None:
+    editor, _recorder = _make(qtbot, FloatControl("x", 1.0, 0.0, 2.0, slider=True))
+    for widget_type in (QDoubleSpinBox, QSlider):
+        assert _child(editor, widget_type).parent() is editor

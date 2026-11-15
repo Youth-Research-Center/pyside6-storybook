@@ -30,7 +30,10 @@ def line_edit(ctx: StoryContext) -> QWidget:
     return edit
 
 
-@story("Inputs/Spin Box", controls=[IntControl("value", 5, -100, 100), IntControl("maximum", 10, 1, 100), TextControl("suffix", " items")])
+@story(
+    "Inputs/Spin Box",
+    controls=[IntControl("value", 5, -100, 100, step=5), IntControl("maximum", 10, 1, 100), TextControl("suffix", " items")],
+)
 def spin_box(ctx: StoryContext) -> QWidget:
     """A ``QSpinBox`` from 0 to ``maximum``. A ``value`` outside that range is clamped, which is how the widget behaves."""
     box = QSpinBox()
@@ -40,7 +43,13 @@ def spin_box(ctx: StoryContext) -> QWidget:
     return box
 
 
-@story("Inputs/Double Spin Box", controls=[FloatControl("value", 2.5, 0.0, 10.0), IntControl("decimals", 2, 0, 6)])
+@story(
+    "Inputs/Double Spin Box",
+    controls=[
+        FloatControl("value", 2.5, 0.0, 10.0, step=0.25, decimals=2, slider=True, label="Value (0 to 10)"),
+        IntControl("decimals", 2, 0, 6, label="Shown decimals"),
+    ],
+)
 def double_spin_box(ctx: StoryContext) -> QWidget:
     """A ``QDoubleSpinBox`` from 0 to 10. Fewer ``decimals`` round the shown value."""
     box = QDoubleSpinBox()
