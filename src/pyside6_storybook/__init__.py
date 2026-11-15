@@ -2,7 +2,17 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from pyside6_storybook.controls import BoolControl, ChoiceControl, Control, FloatControl, IntControl, TextControl
+from pyside6_storybook.controls import (
+    BoolControl,
+    ChoiceControl,
+    ColorControl,
+    Control,
+    EnumControl,
+    FileControl,
+    FloatControl,
+    IntControl,
+    TextControl,
+)
 from pyside6_storybook.discovery import LoadError, LoadResult, load_stories
 from pyside6_storybook.registry import Story, StoryContext, StoryRegistry, default_registry, story
 
@@ -14,7 +24,10 @@ except PackageNotFoundError:
 __all__ = [
     "BoolControl",
     "ChoiceControl",
+    "ColorControl",
     "Control",
+    "EnumControl",
+    "FileControl",
     "FloatControl",
     "IntControl",
     "LoadError",

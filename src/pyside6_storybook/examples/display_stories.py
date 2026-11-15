@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPalette
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QProgressBar, QVBoxLayout, QWidget
 
-from pyside6_storybook import BoolControl, ChoiceControl, IntControl, StoryContext, TextControl, story
+from pyside6_storybook import BoolControl, ChoiceControl, ColorControl, EnumControl, IntControl, StoryContext, TextControl, story
 
 _ALIGNMENTS = {"Left": Qt.AlignmentFlag.AlignLeft, "Center": Qt.AlignmentFlag.AlignHCenter, "Right": Qt.AlignmentFlag.AlignRight}
 _ROLE = QPalette.ColorRole
@@ -78,4 +78,37 @@ def palette(ctx: StoryContext) -> QWidget:
         swatch.setMargin(12)
         grid.addWidget(swatch, index // 3, index % 3)
     layout.addLayout(grid)
+    return widget
+
+
+@story(
+    "Display/Color Swatch",
+    controls=[
+        ColorControl("color", "#3a7bd5cc", alpha=True, description="Any colour; the last two digits are the opacity."),
+        TextControl("text", "Sample"),
+    ],
+)
+def color_swatch(ctx: StoryContext) -> QWidget:
+    """A ``QLabel`` filled with a colour. The control gives the story a ``QColor``, which a translucent colour keeps its opacity in."""
+    color: QColor = ctx.args["color"]
+    widget = QLabel(ctx.args["text"])
+    widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    widget.setMargin(24)
+    widget.setStyleSheet(f"background-color: rgba({color.red()}, {color.green()}, {color.blue()}, {color.alpha()});")
+    return widget
+
+
+@story(
+    "Display/Alignment",
+    controls=[
+        EnumControl("alignment", Qt.AlignmentFlag.AlignCenter, description="A named Qt.AlignmentFlag, including combinations such as AlignCenter."),
+        TextControl("text", "Aligned text"),
+    ],
+)
+def alignment(ctx: StoryContext) -> QWidget:
+    """A ``QLabel`` with an alignment chosen from ``Qt.AlignmentFlag``. The story receives the enum member itself."""
+    widget = QLabel(ctx.args["text"])
+    widget.setFrameShape(QFrame.Shape.Box)
+    widget.setMinimumHeight(120)
+    widget.setAlignment(ctx.args["alignment"])
     return widget

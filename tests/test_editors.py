@@ -1,14 +1,28 @@
 from collections.abc import Iterator
+from enum import Enum
+from pathlib import Path
 from typing import TypeVar
 
 import pytest
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt, QTimer
-from PySide6.QtGui import QTextCursor, QWheelEvent
-from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QLineEdit, QPlainTextEdit, QSlider, QSpinBox, QVBoxLayout, QWidget
+from PySide6.QtGui import QColor, QTextCursor, QWheelEvent
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QDoubleSpinBox,
+    QLineEdit,
+    QPlainTextEdit,
+    QPushButton,
+    QSlider,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
-from pyside6_storybook import BoolControl, ChoiceControl, FloatControl, IntControl, TextControl
+from pyside6_storybook import BoolControl, ChoiceControl, ColorControl, EnumControl, FileControl, FloatControl, IntControl, TextControl
 from pyside6_storybook.controls import Control
-from pyside6_storybook.gui.editors import EDITORS, ControlEditor, create_editor
+from pyside6_storybook.gui.editors import EDITORS, ControlEditor, color_editor, create_editor, file_editor
 
 _WidgetT = TypeVar("_WidgetT", bound=QWidget)
 _HOSTS: list[QWidget] = []
@@ -35,6 +49,12 @@ def _release_hosts() -> Iterator[None]:
         _HOSTS.clear()
 
 
+class _Mode(Enum):
+    FIRST = 1
+    SECOND = 2
+    THIRD = 3
+
+
 class _Recorder:
     """Collects what an editor emits."""
 
@@ -51,7 +71,7 @@ def _make(qtbot, control: Control, value: object | None = None) -> tuple[Control
     layout = QVBoxLayout(host)
     other = QLineEdit(host)
     other.setObjectName("other")
-    editor = create_editor(control, control.default if value is None else value, host)
+    editor = create_editor(control, control.coerce(control.default) if value is None else value, host)
     layout.addWidget(other)
     layout.addWidget(editor)
     host.show()
@@ -88,7 +108,7 @@ def _focus(qtbot, widget: QWidget) -> None:
 
 
 def test_every_control_type_has_an_editor_and_an_unknown_one_is_rejected() -> None:
-    assert set(EDITORS) == {TextControl, BoolControl, ChoiceControl, IntControl, FloatControl}
+    assert set(EDITORS) == {TextControl, BoolControl, ChoiceControl, IntControl, FloatControl, ColorControl, EnumControl, FileControl}
     with pytest.raises(TypeError, match="Unsupported control type"):
         create_editor(object(), 1)  # ty: ignore[invalid-argument-type]
 
@@ -307,6 +327,7 @@ def test_float_editor_on_a_zero_width_range_has_a_one_position_slider(qtbot) -> 
         (FloatControl("x", 0.5, 0.0, 1.0, slider=True), QDoubleSpinBox),
         (FloatControl("x", 0.5, 0.0, 1.0, slider=True), QSlider),
         (ChoiceControl("c", "b", ("a", "b", "c")), QComboBox),
+        (EnumControl("e", _Mode.SECOND), QComboBox),
     ],
 )
 def test_wheel_is_ignored_without_focus_and_acts_with_it(qtbot, control: Control, widget_type: type[QWidget]) -> None:
@@ -350,6 +371,9 @@ def test_wheel_filter_is_owned_by_its_widget(qtbot) -> None:
         IntControl("i", 1, 0, 2, slider=True),
         FloatControl("f", 1.0, 0.0, 2.0),
         FloatControl("f", 1.0, 0.0, 2.0, slider=True),
+        ColorControl("c", "#336699"),
+        EnumControl("e", _Mode.FIRST),
+        FileControl("p", "a.txt"),
     ],
 )
 def test_the_primary_input_is_the_focus_proxy_and_gets_the_accessible_texts(qtbot, control: Control) -> None:
@@ -384,3 +408,207 @@ def test_every_part_of_an_editor_is_a_descendant_of_it(qtbot) -> None:
     editor, _recorder = _make(qtbot, FloatControl("x", 1.0, 0.0, 2.0, slider=True))
     for widget_type in (QDoubleSpinBox, QSlider):
         assert _child(editor, widget_type).parent() is editor
+
+
+def test_color_editor_starts_with_the_value_without_emitting(qtbot) -> None:
+    editor, recorder = _make(qtbot, ColorControl("c", "#336699"), QColor("#336699"))
+    assert editor.value() == QColor("#336699")
+    assert _child(editor, QLineEdit).text() == "#336699"
+    assert _child(editor, QPushButton).text() == "#336699"
+    assert not _child(editor, QPushButton).icon().isNull()
+    assert recorder.values == []
+
+
+def test_color_editor_value_is_a_new_object(qtbot) -> None:
+    editor, _recorder = _make(qtbot, ColorControl("c", "#336699"), QColor("#336699"))
+    value = editor.value()
+    assert isinstance(value, QColor)
+    value.setRed(0)
+    assert editor.value() == QColor("#336699")
+
+
+def test_color_editor_emits_the_color_chosen_in_the_dialog(qtbot, monkeypatch: pytest.MonkeyPatch) -> None:
+    asked: list[tuple[QColor, bool]] = []
+
+    def fake(parent: QWidget, initial: QColor, *, alpha: bool, title: str) -> QColor | None:
+        asked.append((initial, alpha))
+        return QColor("#ff0000")
+
+    monkeypatch.setattr(color_editor, "_ask_color", fake)
+    editor, recorder = _make(qtbot, ColorControl("c", "#336699"), QColor("#336699"))
+
+    qtbot.mouseClick(_child(editor, QPushButton), Qt.MouseButton.LeftButton)
+
+    assert asked == [(QColor("#336699"), False)]
+    assert recorder.values == [QColor("#ff0000")]
+    assert editor.value() == QColor("#ff0000")
+    assert _child(editor, QLineEdit).text() == "#ff0000"
+    assert _child(editor, QPushButton).text() == "#ff0000"
+
+
+def test_color_editor_does_not_emit_when_the_dialog_returns_the_same_color_and_ignores_a_cancel(qtbot, monkeypatch: pytest.MonkeyPatch) -> None:
+    answers: list[QColor | None] = [QColor("#336699"), None]
+    monkeypatch.setattr(color_editor, "_ask_color", lambda *_args, **_kwargs: answers.pop(0))
+    editor, recorder = _make(qtbot, ColorControl("c", "#336699"), QColor("#336699"))
+
+    qtbot.mouseClick(_child(editor, QPushButton), Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(_child(editor, QPushButton), Qt.MouseButton.LeftButton)
+
+    assert recorder.values == []
+    assert editor.value() == QColor("#336699")
+
+
+def test_color_editor_asks_for_alpha_only_when_the_control_allows_it(qtbot, monkeypatch: pytest.MonkeyPatch) -> None:
+    alphas: list[bool] = []
+
+    def fake(parent: QWidget, initial: QColor, *, alpha: bool, title: str) -> QColor | None:
+        alphas.append(alpha)
+        return None
+
+    monkeypatch.setattr(color_editor, "_ask_color", fake)
+    editor, _recorder = _make(qtbot, ColorControl("c", "#33669980", alpha=True), QColor(0x33, 0x66, 0x99, 0x80))
+    qtbot.mouseClick(_child(editor, QPushButton), Qt.MouseButton.LeftButton)
+    assert alphas == [True]
+    assert _child(editor, QLineEdit).text() == "#33669980"
+
+
+def test_color_editor_commits_a_typed_hex_value_once_even_after_focus_leaves(qtbot) -> None:
+    editor, recorder = _make(qtbot, ColorControl("c", "#336699"), QColor("#336699"))
+    line_edit = _child(editor, QLineEdit)
+    _focus(qtbot, line_edit)
+    line_edit.selectAll()
+
+    qtbot.keyClicks(line_edit, "#FF8800")
+    assert recorder.values == []
+    qtbot.keyClick(line_edit, Qt.Key.Key_Return)
+    other = editor.window().findChild(QLineEdit, "other")
+    assert other is not None
+    _focus(qtbot, other)
+
+    assert recorder.values == [QColor("#ff8800")]
+    assert line_edit.text() == "#ff8800"
+
+
+def test_color_editor_reverts_an_invalid_hex_value(qtbot) -> None:
+    editor, recorder = _make(qtbot, ColorControl("c", "#336699"), QColor("#336699"))
+    line_edit = _child(editor, QLineEdit)
+    _focus(qtbot, line_edit)
+
+    for bad in ("red", "#abc", "#12345678"):
+        line_edit.selectAll()
+        qtbot.keyClicks(line_edit, bad)
+        qtbot.keyClick(line_edit, Qt.Key.Key_Return)
+        assert line_edit.text() == "#336699"
+
+    assert recorder.values == []
+    assert editor.value() == QColor("#336699")
+
+
+def test_color_editor_buttons_are_named_and_the_hex_field_is_the_focus_proxy(qtbot) -> None:
+    editor, _recorder = _make(qtbot, ColorControl("c", "#336699"), QColor("#336699"))
+    editor.set_accessible_texts("Accent", "The accent colour")
+    swatch = _child(editor, QPushButton)
+    assert swatch.accessibleName() == "Choose colour for Accent"
+    assert swatch.accessibleDescription() == "The accent colour"
+    assert swatch.focusPolicy() != Qt.FocusPolicy.NoFocus
+    assert editor.focusProxy() is _child(editor, QLineEdit)
+
+
+def test_enum_editor_lists_the_option_names_and_emits_the_member_once_per_change(qtbot) -> None:
+    editor, recorder = _make(qtbot, EnumControl("mode", _Mode.SECOND), _Mode.SECOND)
+    combo = _child(editor, QComboBox)
+    assert [combo.itemText(row) for row in range(combo.count())] == ["FIRST", "SECOND", "THIRD"]
+    assert editor.value() is _Mode.SECOND
+
+    combo.setCurrentIndex(2)
+
+    assert recorder.values == [_Mode.THIRD]
+    assert editor.value() is _Mode.THIRD
+
+
+def test_enum_editor_offers_the_named_combinations_of_a_qt_flag(qtbot) -> None:
+    editor, recorder = _make(qtbot, EnumControl("alignment", Qt.AlignmentFlag.AlignCenter), Qt.AlignmentFlag.AlignCenter)
+    combo = _child(editor, QComboBox)
+    names = [combo.itemText(row) for row in range(combo.count())]
+    assert "AlignCenter" in names
+    assert editor.value() == Qt.AlignmentFlag.AlignCenter
+
+    combo.setCurrentIndex(names.index("AlignLeft"))
+
+    assert recorder.values == [Qt.AlignmentFlag.AlignLeft]
+
+
+def test_file_editor_starts_with_the_path_without_emitting(qtbot) -> None:
+    editor, recorder = _make(qtbot, FileControl("p", "a/b.txt"), Path("a/b.txt"))
+    assert _child(editor, QLineEdit).text() == str(Path("a/b.txt"))
+    assert editor.value() == Path("a/b.txt")
+    assert _child(editor, QPushButton).text() == "Browse…"
+    assert recorder.values == []
+
+
+def test_file_editor_emits_the_path_chosen_in_the_dialog(qtbot, monkeypatch: pytest.MonkeyPatch) -> None:
+    asked: list[tuple[Path | None, str]] = []
+
+    def fake(parent: QWidget, current: Path | None, *, name_filter: str, title: str) -> Path | None:
+        asked.append((current, name_filter))
+        return Path("chosen.png")
+
+    monkeypatch.setattr(file_editor, "_ask_file", fake)
+    editor, recorder = _make(qtbot, FileControl("p", filter="Images (*.png)"), None)
+
+    qtbot.mouseClick(_child(editor, QPushButton), Qt.MouseButton.LeftButton)
+
+    assert asked == [(None, "Images (*.png)")]
+    assert recorder.values == [Path("chosen.png")]
+    assert editor.value() == Path("chosen.png")
+    assert _child(editor, QLineEdit).text() == "chosen.png"
+
+
+def test_file_editor_ignores_a_cancelled_dialog(qtbot, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(file_editor, "_ask_file", lambda *_args, **_kwargs: None)
+    editor, recorder = _make(qtbot, FileControl("p", "a.txt"), Path("a.txt"))
+
+    qtbot.mouseClick(_child(editor, QPushButton), Qt.MouseButton.LeftButton)
+
+    assert recorder.values == []
+    assert editor.value() == Path("a.txt")
+    assert _child(editor, QLineEdit).text() == "a.txt"
+
+
+def test_file_editor_commits_a_typed_path_once_even_after_focus_leaves(qtbot) -> None:
+    editor, recorder = _make(qtbot, FileControl("p"), None)
+    line_edit = _child(editor, QLineEdit)
+    _focus(qtbot, line_edit)
+
+    qtbot.keyClicks(line_edit, "docs/readme.md")
+    assert recorder.values == []
+    qtbot.keyClick(line_edit, Qt.Key.Key_Return)
+    other = editor.window().findChild(QLineEdit, "other")
+    assert other is not None
+    _focus(qtbot, other)
+
+    assert recorder.values == [Path("docs/readme.md")]
+    assert editor.value() == Path("docs/readme.md")
+
+
+def test_file_editor_emits_none_when_the_field_is_emptied(qtbot) -> None:
+    editor, recorder = _make(qtbot, FileControl("p", "a.txt"), Path("a.txt"))
+    line_edit = _child(editor, QLineEdit)
+    _focus(qtbot, line_edit)
+    line_edit.selectAll()
+
+    qtbot.keyClick(line_edit, Qt.Key.Key_Delete)
+    qtbot.keyClick(line_edit, Qt.Key.Key_Return)
+
+    assert recorder.values == [None]
+    assert editor.value() is None
+
+
+def test_file_editor_browse_button_is_named_and_the_path_field_is_the_focus_proxy(qtbot) -> None:
+    editor, _recorder = _make(qtbot, FileControl("p"), None)
+    editor.set_accessible_texts("Image", "The picture")
+    browse = _child(editor, QPushButton)
+    assert browse.accessibleName() == "Browse for Image"
+    assert browse.accessibleDescription() == "The picture"
+    assert browse.focusPolicy() != Qt.FocusPolicy.NoFocus
+    assert editor.focusProxy() is _child(editor, QLineEdit)

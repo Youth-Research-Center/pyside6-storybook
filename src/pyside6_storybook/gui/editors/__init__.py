@@ -6,10 +6,23 @@ from collections.abc import Callable
 
 from PySide6.QtWidgets import QWidget
 
-from pyside6_storybook.controls import BoolControl, ChoiceControl, Control, FloatControl, IntControl, TextControl
+from pyside6_storybook.controls import (
+    BoolControl,
+    ChoiceControl,
+    ColorControl,
+    Control,
+    EnumControl,
+    FileControl,
+    FloatControl,
+    IntControl,
+    TextControl,
+)
 from pyside6_storybook.gui.editors.bool_editor import BoolEditor
 from pyside6_storybook.gui.editors.choice_editor import ChoiceEditor
+from pyside6_storybook.gui.editors.color_editor import ColorEditor
 from pyside6_storybook.gui.editors.control_editor import ControlEditor
+from pyside6_storybook.gui.editors.enum_editor import EnumEditor
+from pyside6_storybook.gui.editors.file_editor import FileEditor
 from pyside6_storybook.gui.editors.float_editor import FloatEditor
 from pyside6_storybook.gui.editors.int_editor import IntEditor
 from pyside6_storybook.gui.editors.text_editor import TextEditor
@@ -20,6 +33,9 @@ EDITORS: dict[type, Callable[..., ControlEditor]] = {
     ChoiceControl: ChoiceEditor,
     IntControl: IntEditor,
     FloatControl: FloatEditor,
+    ColorControl: ColorEditor,
+    EnumControl: EnumEditor,
+    FileControl: FileEditor,
 }
 """The editor class of each control type, called as ``editor(control, value, parent)``."""
 

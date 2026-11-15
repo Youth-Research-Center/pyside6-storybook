@@ -5,6 +5,9 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- `ColorControl` (a hex string default, `alpha=True` for `#RRGGBBAA`; the story receives a `QColor`), `EnumControl` (a Python or Qt enum
+  member; `options` lists the named members) and `FileControl` (the story receives a `Path`, or `None` while empty; `filter=` is the
+  Browse dialog's name filter), with editors in the gallery and example stories.
 - Story variants: `Story.variant(name, *, args=None)` registers the same story with other starting values under the id
   `<component>/<name>`, and `Story` gains `component`, `variant_of` and `args` (a read-only mapping). `Story.default_args()` uses a variant's
   `args`, and the gallery shows variants as stories of their own.

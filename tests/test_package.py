@@ -12,7 +12,10 @@ def test_public_api_is_exported() -> None:
     expected = {
         "BoolControl",
         "ChoiceControl",
+        "ColorControl",
         "Control",
+        "EnumControl",
+        "FileControl",
         "FloatControl",
         "IntControl",
         "LoadError",

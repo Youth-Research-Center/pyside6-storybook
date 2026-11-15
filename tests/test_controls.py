@@ -1,8 +1,14 @@
 import dataclasses
+import enum
+from collections.abc import Callable
+from functools import partial
+from pathlib import Path
 
 import pytest
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 
-from pyside6_storybook import BoolControl, ChoiceControl, Control, FloatControl, IntControl, TextControl
+from pyside6_storybook import BoolControl, ChoiceControl, ColorControl, Control, EnumControl, FileControl, FloatControl, IntControl, TextControl
 from pyside6_storybook.controls._options import derive_label
 
 
@@ -340,3 +346,183 @@ def test_controls_are_hashable_and_comparable_with_the_new_fields() -> None:
     assert first == IntControl("n", 1, 0, 2, label="N", slider=True)
     assert first != IntControl("n", 1, 0, 2, label="N")
     assert hash(first) == hash(IntControl("n", 1, 0, 2, label="N", slider=True))
+
+
+class _Mode(enum.Enum):
+    FIRST = 1
+    SECOND = 2
+    ALIAS_OF_SECOND = 2  # noqa: PIE796 (an alias on purpose)
+    THIRD = 3
+
+
+class _Other(enum.Enum):
+    FIRST = 1
+
+
+@pytest.mark.parametrize("control", [ColorControl("a", "#336699"), EnumControl("a", _Mode.FIRST), FileControl("a")])
+def test_new_controls_are_frozen_slotted_and_have_a_display_label(control: Control) -> None:
+    assert not hasattr(control, "__dict__")
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        control.name = "b"  # ty: ignore[invalid-assignment]
+    assert control.display_label == "A"
+    assert dataclasses.replace(control, label="Shown", description="Help").display_label == "Shown"
+
+
+@pytest.mark.parametrize("make", [partial(ColorControl, "a", "#336699"), partial(EnumControl, "a", _Mode.FIRST), partial(FileControl, "a")])
+def test_new_controls_validate_label_and_description(make: Callable[..., Control]) -> None:
+    with pytest.raises(ValueError, match="blank"):
+        make(label=" ")
+    with pytest.raises(TypeError, match="description"):
+        make(description=1)
+
+
+@pytest.mark.parametrize("text", ["#336699", "#ABCDEF", "#abcdef", "#AbCdEf", "#000000"])
+def test_color_control_accepts_six_digit_hex_in_any_case(text: str) -> None:
+    color = ColorControl("c", "#000000").coerce(text)
+    assert color == QColor(text)
+    assert color.alpha() == 255
+
+
+@pytest.mark.parametrize("text", ["", "red", "#abc", "336699", "#33669", "#3366990", "#gggggg", " #336699", "#336699 "])
+def test_color_control_rejects_everything_but_six_digit_hex(text: str) -> None:
+    with pytest.raises(ValueError, match="hex colour"):
+        ColorControl("c", "#000000", alpha=False).coerce(text)
+
+
+def test_color_control_rejects_eight_digits_without_alpha() -> None:
+    with pytest.raises(ValueError, match="alpha=True"):
+        ColorControl("c", "#000000").coerce("#11223344")
+
+
+def test_color_control_eight_digits_need_alpha_and_use_css_byte_order() -> None:
+    with pytest.raises(ValueError, match="alpha=True"):
+        ColorControl("c", "#000000").coerce("#11223344")
+    control = ColorControl("c", "#00000000", alpha=True)
+    color = control.coerce("#11223344")
+    assert (color.red(), color.green(), color.blue(), color.alpha()) == (0x11, 0x22, 0x33, 0x44)
+    assert control.coerce("#112233").alpha() == 255
+    for text in ("#abc", "#1122334", "#112233445"):
+        with pytest.raises(ValueError, match="#RRGGBBAA"):
+            control.coerce(text)
+
+
+def test_color_control_accepts_a_qcolor_and_rejects_invalid_or_translucent_ones() -> None:
+    control = ColorControl("c", "#336699")
+    assert control.coerce(QColor(1, 2, 3)) == QColor(1, 2, 3)
+    with pytest.raises(ValueError, match="invalid"):
+        control.coerce(QColor())
+    with pytest.raises(ValueError, match="alpha=True"):
+        control.coerce(QColor(1, 2, 3, 100))
+    assert ColorControl("c", "#336699", alpha=True).coerce(QColor(1, 2, 3, 100)).alpha() == 100
+
+
+def test_color_control_returns_a_new_qcolor_every_time() -> None:
+    control = ColorControl("c", "#336699")
+    given = QColor(1, 2, 3)
+    from_string = control.coerce("#336699")
+    from_color = control.coerce(given)
+    assert control.coerce("#336699") is not from_string
+    assert from_color is not given
+    from_color.setRed(200)
+    assert given.red() == 1
+    assert control.coerce(given).red() == 1
+
+
+def test_color_control_rejects_a_default_that_is_not_a_hex_string_and_other_types() -> None:
+    with pytest.raises(TypeError, match="hex colour string"):
+        ColorControl("c", QColor("#336699"))  # ty: ignore[invalid-argument-type]
+    with pytest.raises(ValueError, match="hex colour"):
+        ColorControl("c", "blue")
+    with pytest.raises(ValueError, match="alpha=True"):
+        ColorControl("c", "#33669980")
+    with pytest.raises(TypeError, match="alpha"):
+        ColorControl("c", "#336699", alpha=1)  # ty: ignore[invalid-argument-type]
+    with pytest.raises(TypeError, match="hex colour string or a QColor"):
+        ColorControl("c", "#336699").coerce(0x336699)
+
+
+def test_enum_control_options_follow_definition_order_without_aliases() -> None:
+    control = EnumControl("mode", _Mode.THIRD)
+    assert control.options == (_Mode.FIRST, _Mode.SECOND, _Mode.THIRD)
+    assert isinstance(control.options, tuple)
+
+
+def test_enum_control_coerce_returns_the_option_and_rejects_other_types() -> None:
+    control = EnumControl("mode", _Mode.FIRST)
+    assert control.coerce(_Mode.ALIAS_OF_SECOND) is _Mode.SECOND
+    for bad in (1, True, "FIRST", None):
+        with pytest.raises(TypeError, match="member of _Mode"):
+            control.coerce(bad)
+    with pytest.raises(TypeError, match="member of _Mode"):
+        control.coerce(_Other.FIRST)
+
+
+def test_enum_control_works_with_qt_flags_and_their_named_combinations() -> None:
+    control = EnumControl("alignment", Qt.AlignmentFlag.AlignCenter)
+    assert Qt.AlignmentFlag.AlignCenter in control.options
+    assert Qt.AlignmentFlag.AlignLeft in control.options
+    assert control.coerce(Qt.AlignmentFlag.AlignCenter) == Qt.AlignmentFlag.AlignCenter
+    assert control.coerce(Qt.AlignmentFlag.AlignLeft) == Qt.AlignmentFlag.AlignLeft
+
+
+def test_enum_control_rejects_unnamed_flag_combinations_ints_and_bools() -> None:
+    control = EnumControl("alignment", Qt.AlignmentFlag.AlignLeft)
+    combination = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+    assert combination not in control.options
+    with pytest.raises(ValueError, match="not one of its options"):
+        control.coerce(combination)
+    with pytest.raises(ValueError, match="not one of its options"):
+        EnumControl("alignment", combination)
+    for bad in (1, True):
+        with pytest.raises(TypeError, match="member of Qt.AlignmentFlag"):
+            control.coerce(bad)
+
+
+def test_enum_control_works_with_a_qt_plain_enum_and_rejects_a_non_enum_default() -> None:
+    control = EnumControl("orientation", Qt.Orientation.Vertical)
+    assert control.options == (Qt.Orientation.Horizontal, Qt.Orientation.Vertical)
+    assert control.coerce(Qt.Orientation.Horizontal) is Qt.Orientation.Horizontal
+    with pytest.raises(TypeError, match="enum member"):
+        EnumControl("mode", "FIRST")  # ty: ignore[invalid-argument-type]
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("a/b.txt", Path("a/b.txt")), (Path("a/b.txt"), Path("a/b.txt")), ("", None), (None, None), ("/abs/c.png", Path("/abs/c.png"))],
+)
+def test_file_control_coerces_strings_paths_and_none(value: object, expected: Path | None) -> None:
+    result = FileControl("f").coerce(value)
+    assert result == expected
+    assert result is None or not result.is_absolute() or str(value).startswith("/")
+
+
+def test_file_control_keeps_a_relative_path_relative_and_does_not_need_the_file() -> None:
+    result = FileControl("f").coerce("missing/nowhere.txt")
+    assert result is not None
+    assert not result.is_absolute()
+    assert not result.exists()
+
+
+def test_file_control_default_is_empty_and_the_filter_is_stored() -> None:
+    control = FileControl("f", filter="Images (*.png)")
+    assert control.default == ""
+    assert control.coerce(control.default) is None
+    assert control.filter == "Images (*.png)"
+    assert FileControl("f", Path("x.txt")).coerce(Path("x.txt")) == Path("x.txt")
+
+
+def test_file_control_rejects_other_types() -> None:
+    with pytest.raises(TypeError, match="string, a Path or None"):
+        FileControl("f").coerce(1)
+    with pytest.raises(TypeError, match="default"):
+        FileControl("f", 1)  # ty: ignore[invalid-argument-type]
+    with pytest.raises(TypeError, match="filter"):
+        FileControl("f", filter=1)  # ty: ignore[invalid-argument-type]
+
+
+def test_new_controls_are_hashable_and_comparable() -> None:
+    assert ColorControl("c", "#336699", alpha=True) == ColorControl("c", "#336699", alpha=True)
+    assert ColorControl("c", "#336699") != ColorControl("c", "#336699", alpha=True)
+    assert hash(EnumControl("e", _Mode.FIRST)) == hash(EnumControl("e", _Mode.FIRST))
+    assert FileControl("f", filter="x") != FileControl("f")
+    assert hash(FileControl("f")) == hash(FileControl("f"))

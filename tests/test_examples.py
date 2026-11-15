@@ -7,7 +7,20 @@ import pytest
 from PySide6.QtWidgets import QApplication, QLabel, QListWidget, QWidget
 
 import pyside6_storybook.examples
-from pyside6_storybook import BoolControl, ChoiceControl, Control, FloatControl, IntControl, StoryContext, StoryRegistry, TextControl, load_stories
+from pyside6_storybook import (
+    BoolControl,
+    ChoiceControl,
+    ColorControl,
+    Control,
+    EnumControl,
+    FileControl,
+    FloatControl,
+    IntControl,
+    StoryContext,
+    StoryRegistry,
+    TextControl,
+    load_stories,
+)
 from pyside6_storybook.cli import EXAMPLES_MODULE
 from pyside6_storybook.gui import ErrorPanel, GalleryWindow
 from pyside6_storybook.themes import BUILTIN_THEME_NAMES, BuiltinThemes
@@ -20,6 +33,8 @@ EXPECTED_IDS = [
     "Display/Label",
     "Display/Progress Bar",
     "Display/Palette",
+    "Display/Color Swatch",
+    "Display/Alignment",
     "Forms/Sign-in Form",
     "Inputs/Line Edit/Default",
     "Inputs/Line Edit/Password",
@@ -28,6 +43,7 @@ EXPECTED_IDS = [
     "Inputs/Double Spin Box",
     "Inputs/Combo Box",
     "Inputs/Slider",
+    "Inputs/File Path",
 ]
 _EXAMPLES_FOLDER = Path(pyside6_storybook.examples.__file__).parent
 
@@ -45,12 +61,12 @@ def test_the_examples_are_the_expected_stories(examples: StoryRegistry) -> None:
 
 def test_the_examples_use_every_control_type(examples: StoryRegistry) -> None:
     used = {type(control) for story in examples for control in story.controls}
-    assert used == {TextControl, BoolControl, ChoiceControl, IntControl, FloatControl}
+    assert used == {TextControl, BoolControl, ChoiceControl, IntControl, FloatControl, ColorControl, EnumControl, FileControl}
 
 
 def test_the_examples_use_every_control_option(examples: StoryRegistry) -> None:
     options = {field.name: field.default for control_type in typing.get_args(Control) for field in dataclasses.fields(control_type) if field.kw_only}
-    assert {"label", "description", "multiline", "step", "decimals", "slider"} <= set(options)
+    assert {"label", "description", "multiline", "step", "decimals", "slider", "alpha", "filter"} <= set(options)
     used = {
         name
         for story in examples

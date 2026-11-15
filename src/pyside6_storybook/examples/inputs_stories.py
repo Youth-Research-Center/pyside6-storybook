@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QLineEdit, QSlider, QSpinBox, QWidget
+from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QLabel, QLineEdit, QSlider, QSpinBox, QWidget
 
-from pyside6_storybook import BoolControl, ChoiceControl, FloatControl, IntControl, StoryContext, TextControl, story
+from pyside6_storybook import BoolControl, ChoiceControl, FileControl, FloatControl, IntControl, StoryContext, TextControl, story
 
 _ECHO_MODES = {"Normal": QLineEdit.EchoMode.Normal, "Password": QLineEdit.EchoMode.Password}
 _FRUITS = ("Apple", "Banana", "Cherry")
@@ -79,4 +79,16 @@ def slider(ctx: StoryContext) -> QWidget:
     widget = QSlider(_ORIENTATIONS[ctx.args["orientation"]])
     widget.setRange(0, 100)
     widget.setValue(ctx.args["value"])
+    return widget
+
+
+@story(
+    "Inputs/File Path",
+    controls=[FileControl("path", "", filter="Images (*.png *.jpg *.svg);;All files (*)", description="Type a path or use Browse.")],
+)
+def file_path(ctx: StoryContext) -> QWidget:
+    """A ``QLabel`` that shows the chosen path. The story receives a ``Path``, or ``None`` while the field is empty."""
+    path = ctx.args["path"]
+    widget = QLabel("No file chosen" if path is None else str(path))
+    widget.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
     return widget

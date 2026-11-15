@@ -121,6 +121,9 @@ Each control is an argument of the story and an editor in the gallery's controls
 | `ChoiceControl(name, default, options)` | combo box | `str`, one of `options` |
 | `IntControl(name, default, minimum, maximum, *, step=1, slider=False)` | spin box (32-bit range), optionally with a slider | `int` |
 | `FloatControl(name, default, minimum, maximum, *, step=None, decimals=None, slider=False)` | spin box with decimals, optionally with a slider | `float` |
+| `ColorControl(name, default, *, alpha=False)` | swatch button that opens a colour dialog, and a hex field | `QColor` |
+| `EnumControl(name, default)` | combo box of the member names | the enum member |
+| `FileControl(name, default="", *, filter="")` | path field and a "Browse…" button | `pathlib.Path`, or `None` while empty |
 
 Every control also takes two keyword-only fields:
 
@@ -141,9 +144,18 @@ The options:
   default and both bounds exactly, at least 2. With `slider=True`, the slider has one position per step, and its last position is
   always `maximum`, even when the step does not divide the range. A slider may have at most 10 000 steps; use a larger `step` for a
   wider range.
+- `ColorControl` takes a hex string as its default: `"#RRGGBB"`, in either case. With `alpha=True` it also takes `"#RRGGBBAA"` (the CSS
+  byte order, opacity last), and the dialog shows an alpha channel. Colour names and `"#RGB"` are not accepted. The story receives a
+  new `QColor` on every render. In the hex field, an invalid entry reverts to the current colour.
+- `EnumControl` takes a member of any Python or Qt enum as its default, which also fixes the enum class. The editor offers the named
+  members in definition order; an alias is left out and the first name kept. For a flag enum, named combinations such as
+  `Qt.AlignmentFlag.AlignCenter` are options, but an unnamed combination such as `AlignLeft | AlignTop` is not. `control.options` lists
+  them.
+- `FileControl(filter=...)` is a `QFileDialog` name filter such as `"Images (*.png *.jpg)"`. The file need not exist, and a relative path
+  stays relative to the working directory.
 
 A control checks its own values. A default must have the control's type: a `bool` is not accepted for an `IntControl` or a
-`FloatControl`, and an `int` is not accepted for a `BoolControl`. A `FloatControl` rejects a default or bound that needs more than 10
+`FloatControl`, an `int` is not accepted for a `BoolControl`, and a `ColorControl`'s default is a hex string, not a `QColor`. A `FloatControl` rejects a default or bound that needs more than 10
 decimals, and one that needs more decimals than `decimals` allows, because the editor would silently round it.
 
 In the gallery, a spin box, slider or combo box reacts to the mouse wheel only while it has keyboard focus, so scrolling the controls
