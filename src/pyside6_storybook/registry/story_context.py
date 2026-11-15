@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
+from typing import Any
 
 from PySide6.QtWidgets import QWidget
 
@@ -14,11 +15,12 @@ class StoryContext:
     """Everything a story function receives.
 
     Attributes:
-        args: The current control values by control name. Stored as a read-only copy.
+        args: The current control values by control name. Stored as a read-only copy. Typed ``Any`` so a story can pass a value
+            straight to Qt (``QSpinBox.setValue(ctx.args["count"])``); each value has the type of its control's default.
         theme: Name of the active theme.
     """
 
-    args: Mapping[str, object]
+    args: Mapping[str, Any]
     theme: str = "Light"
 
     def __post_init__(self) -> None:
