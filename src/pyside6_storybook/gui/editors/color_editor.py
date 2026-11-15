@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QColor, QIcon, QPainter, QPalette, QPixmap
 from PySide6.QtWidgets import QColorDialog, QHBoxLayout, QLineEdit, QPushButton, QWidget
 
@@ -60,6 +60,12 @@ class ColorEditor(ControlEditor):
         self._title = label
         self._swatch.setAccessibleName(f"Choose colour for {label}")
         self._swatch.setAccessibleDescription(description)
+
+    def changeEvent(self, event: QEvent) -> None:
+        """Redraw the swatch's border in the new palette when the theme changes."""
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.PaletteChange:
+            self._show_color()
 
     def _hex_text(self) -> str:
         return format_color(self._color, alpha=self._control.alpha)

@@ -5,7 +5,7 @@ from typing import TypeVar
 
 import pytest
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt, QTimer
-from PySide6.QtGui import QColor, QTextCursor, QWheelEvent
+from PySide6.QtGui import QColor, QPalette, QTextCursor, QWheelEvent
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -417,6 +417,22 @@ def test_color_editor_starts_with_the_value_without_emitting(qtbot) -> None:
     assert _child(editor, QPushButton).text() == "#336699"
     assert not _child(editor, QPushButton).icon().isNull()
     assert recorder.values == []
+
+
+def test_color_editor_redraws_the_swatch_border_when_the_palette_changes(qtbot) -> None:
+    editor, _recorder = _make(qtbot, ColorControl("c", "#336699"), QColor("#336699"))
+    swatch = _child(editor, QPushButton)
+
+    def border() -> QColor:
+        return swatch.icon().pixmap(swatch.iconSize()).toImage().pixelColor(0, 0)
+
+    palette = editor.palette()
+    palette.setColor(QPalette.ColorRole.WindowText, QColor("#ff0000"))
+    editor.setPalette(palette)
+    assert border() == QColor("#ff0000")
+    palette.setColor(QPalette.ColorRole.WindowText, QColor("#00ff00"))
+    editor.setPalette(palette)
+    assert border() == QColor("#00ff00")
 
 
 def test_color_editor_value_is_a_new_object(qtbot) -> None:

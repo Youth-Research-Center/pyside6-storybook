@@ -155,8 +155,9 @@ The options:
   stays relative to the working directory.
 
 A control checks its own values. A default must have the control's type: a `bool` is not accepted for an `IntControl` or a
-`FloatControl`, an `int` is not accepted for a `BoolControl`, and a `ColorControl`'s default is a hex string, not a `QColor`. A `FloatControl` rejects a default or bound that needs more than 10
-decimals, and one that needs more decimals than `decimals` allows, because the editor would silently round it.
+`FloatControl`, an `int` is not accepted for a `BoolControl`, and a `ColorControl`'s default is a hex string, not a `QColor`. A
+`FloatControl` rejects a default or bound that needs more than 10 decimals, and one that needs more decimals than `decimals` allows,
+because the editor would silently round it.
 
 In the gallery, a spin box, slider or combo box reacts to the mouse wheel only while it has keyboard focus, so scrolling the controls
 pane never changes a value by accident. Click a control or press Tab to focus it. The controls pane scrolls when a story has more
