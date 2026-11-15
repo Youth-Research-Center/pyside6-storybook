@@ -139,9 +139,9 @@ class FloatControl:
             TypeError: If ``value`` is not an ``int`` or ``float``.
             ValueError: If ``value`` is not finite, is outside the range, or needs more decimals than the editor shows.
         """
-        if not is_number(value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise TypeError(f"value {value!r} of control {self.name!r} must be a number")
-        number = float(value)  # ty: ignore[invalid-argument-type]
+        number = float(value)
         if not math.isfinite(number):
             raise ValueError(f"value {value!r} of control {self.name!r} must be finite")
         if not self.minimum <= number <= self.maximum:
