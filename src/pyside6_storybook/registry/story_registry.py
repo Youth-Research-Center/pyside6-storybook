@@ -6,16 +6,22 @@ from collections.abc import Callable, Iterable, Iterator
 
 from pyside6_storybook.controls import Control
 from pyside6_storybook.registry.layout import Layout, coerce_layout
-from pyside6_storybook.registry.story_context import StoryFunction
+from pyside6_storybook.registry.story_context import Decorator, StoryFunction
 from pyside6_storybook.registry.story_definition import Story
 
 
 class StoryRegistry:
-    """An ordered collection of stories, unique by id."""
+    """An ordered collection of stories, unique by id.
+
+    Attributes:
+        decorators: Decorators applied to every story of this registry, outside the story's own, the first one outermost. A plain
+            list that is read at render time, so a project may append to it after its stories are registered.
+    """
 
     def __init__(self) -> None:
         self._stories: dict[str, Story] = {}
         self._default_layout = Layout.PADDED
+        self.decorators: list[Decorator] = []
 
     @property
     def default_layout(self) -> Layout:
@@ -70,24 +76,33 @@ class StoryRegistry:
         """Return every story id in registration order."""
         return list(self._stories)
 
-    def story(self, id: str, *, controls: Iterable[Control] = (), layout: Layout | str | None = None) -> Callable[[StoryFunction], Story]:
+    def story(
+        self,
+        id: str,
+        *,
+        controls: Iterable[Control] = (),
+        layout: Layout | str | None = None,
+        decorators: Iterable[Decorator] = (),
+    ) -> Callable[[StoryFunction], Story]:
         """Return a decorator that turns a function into a story registered here.
 
         Args:
             id: The story id, see ``Story``.
             controls: The story's controls.
             layout: The story's layout: a ``Layout``, its string value, or ``None`` for ``default_layout``.
+            decorators: Functions that wrap the story's widget, the first one outermost; see ``Decorator``.
 
         Returns:
             A decorator returning the registered ``Story``.
 
         Raises:
             ValueError: If ``layout`` is not valid; raised here, when the decorator is created.
+            TypeError: If ``decorators`` is not a collection of callables; raised when the story is registered.
         """
         story_layout = coerce_layout(layout)
 
         def decorator(function: StoryFunction) -> Story:
-            return self.register(Story(id, function, controls=controls, layout=story_layout))
+            return self.register(Story(id, function, controls=controls, layout=story_layout, decorators=decorators))
 
         return decorator
 

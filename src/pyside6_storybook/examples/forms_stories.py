@@ -5,11 +5,19 @@ from __future__ import annotations
 from PySide6.QtWidgets import QCheckBox, QFormLayout, QGroupBox, QLineEdit, QPushButton, QWidget
 
 from pyside6_storybook import BoolControl, StoryContext, TextControl, story
+from pyside6_storybook.decorators import padding
 
 
-@story("Forms/Sign-in Form", controls=[TextControl("title", "Sign in"), BoolControl("show_remember", default=True)])
+@story(
+    "Forms/Sign-in Form",
+    controls=[TextControl("title", "Sign in"), BoolControl("show_remember", default=True)],
+    decorators=[padding(24)],
+)
 def sign_in_form(ctx: StoryContext) -> QWidget:
-    """A composite: line edits, a check box and a button in a ``QGroupBox``. The form labels are the fields' buddies."""
+    """A composite: line edits, a check box and a button in a ``QGroupBox``, with 24 pixels of padding added by a decorator.
+
+    The form labels are the fields' buddies.
+    """
     group = QGroupBox(ctx.args["title"])
     form = QFormLayout(group)
     email = QLineEdit(group)

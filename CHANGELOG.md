@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Story decorators: `decorators=` on `@story` and `Story.variant()` takes functions that wrap the story's widget, the first one outermost
+  (`decorators=[padding(24), fixed_size(320, 200)]` is a 320 by 200 widget inside 24 pixels of padding). `StoryRegistry.decorators` wraps
+  every story of a registry, outside the story's own, and a variant keeps its story's decorators unless it gives a list. The built-ins
+  `padding`, `frame` and `fixed_size` are in `pyside6_storybook.decorators`, and `Decorator` is exported from the package. A decorator
+  that fails, or does not return a widget containing the story's widget, shows an error in the preview that names it. `Story` gains
+  `decorators`, and `GalleryWindow.current_preview_widget()` still returns the story's own widget. The sign-in form example uses `padding`.
 - Preview layouts: `layout=` on `@story` and `Story.variant()` takes a `Layout` (`CENTERED`, `PADDED` or `FILL`) or its string value, and
   `StoryRegistry.default_layout` (`Layout.PADDED` by default) applies to stories that declare none; a variant keeps its story's layout
   unless it gives another. The preview scrolls a widget larger than the pane in `PADDED` and `CENTERED`, and `FILL` grows the widget

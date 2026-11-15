@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QWidget
 
 from pyside6_storybook.controls import Control
 from pyside6_storybook.registry.layout import Layout, coerce_layout
-from pyside6_storybook.registry.story_context import StoryContext, StoryFunction
+from pyside6_storybook.registry.story_context import Decorator, StoryContext, StoryFunction
 
 if TYPE_CHECKING:
     from pyside6_storybook.registry.story_registry import StoryRegistry
@@ -38,6 +38,7 @@ class Story:
         groups: The segments of ``id`` before the name.
         component: The groups joined with ``/`` (``"Inputs/Button"`` for ``"Inputs/Button/Default"``), or ``None`` without groups.
         controls: The story's controls, in order.
+        decorators: The decorators that wrap the story's widget, the first one outermost. A variant without its own has its base's.
         layout: The layout the story declared, or ``None`` to use the registry's ``default_layout``. A variant without its own layout
             has its base's.
         args: For a variant, the values it overrides, by control name, as a read-only mapping; empty for any other story.
@@ -54,6 +55,7 @@ class Story:
         "args",
         "component",
         "controls",
+        "decorators",
         "doc",
         "groups",
         "id",
@@ -64,7 +66,15 @@ class Story:
         "variant_of",
     )
 
-    def __init__(self, id: str, function: StoryFunction, *, controls: Iterable[Control] = (), layout: Layout | str | None = None) -> None:
+    def __init__(
+        self,
+        id: str,
+        function: StoryFunction,
+        *,
+        controls: Iterable[Control] = (),
+        layout: Layout | str | None = None,
+        decorators: Iterable[Decorator] = (),
+    ) -> None:
         """Create a story.
 
         Args:
@@ -73,10 +83,11 @@ class Story:
             controls: The story's controls.
             layout: How the gallery places the widget in the preview: a ``Layout``, its string value, or ``None`` for the registry's
                 ``default_layout``.
+            decorators: Functions that wrap the widget, the first one outermost; see ``Decorator``.
 
         Raises:
             ValueError: If ``id`` is empty or has an empty segment, two controls share a name, or ``layout`` is not valid.
-            TypeError: If an item of ``controls`` is not a control.
+            TypeError: If an item of ``controls`` is not a control, or ``decorators`` is not a collection of callables.
         """
         segments = id.split("/")
         if any(not segment.strip() for segment in segments):
@@ -90,6 +101,7 @@ class Story:
                 raise ValueError(f"Story {id!r} has more than one control named {control.name!r}")
             names.add(control.name)
         self.layout: Layout | None = coerce_layout(layout)
+        self.decorators: tuple[Decorator, ...] = _check_decorators(id, decorators)
         self.id = id
         self.name = segments[-1]
         self.groups = tuple(segments[:-1])
@@ -116,7 +128,14 @@ class Story:
         """
         return {control.name: control.coerce(self.args.get(control.name, control.default)) for control in self.controls}
 
-    def variant(self, name: str, *, args: Mapping[str, object] | None = None, layout: Layout | str | None = None) -> Story:
+    def variant(
+        self,
+        name: str,
+        *,
+        args: Mapping[str, object] | None = None,
+        layout: Layout | str | None = None,
+        decorators: Iterable[Decorator] | None = None,
+    ) -> Story:
         """Register a variant of this story: the same function and controls, with other starting values.
 
         The variant's id is the component plus ``name`` (``"Inputs/Button/Disabled"``), and it comes after this story in the
@@ -126,6 +145,7 @@ class Story:
             name: The variant's name: not blank, without ``/``, and different from this story's name.
             args: Values that replace control defaults, by control name. Each must be accepted by its control's ``coerce``.
             layout: The variant's layout; ``None`` keeps this story's.
+            decorators: The variant's decorators, which replace this story's; ``None`` keeps them.
 
         Returns:
             The registered variant.
@@ -135,6 +155,7 @@ class Story:
             RuntimeError: If this story was never registered.
             ValueError: If this story's id has no group, ``name`` is invalid, ``args`` has an unknown key or an invalid value,
                 or ``layout`` is not valid.
+            TypeError: Also if ``decorators`` is not a collection of callables.
         """
         if self.variant_of is not None:
             raise TypeError(f"{self.id!r} is a variant of {self.variant_of.id!r}; call .variant() on the base story instead")
@@ -159,7 +180,13 @@ class Story:
                 checked[key] = control.coerce(value)
             except (TypeError, ValueError) as error:
                 raise ValueError(f"Variant {variant_id!r}: invalid value for {key!r}: {error}") from error
-        variant = Story(variant_id, self._function, controls=self.controls, layout=self.layout if layout is None else layout)
+        variant = Story(
+            variant_id,
+            self._function,
+            controls=self.controls,
+            layout=self.layout if layout is None else layout,
+            decorators=self.decorators if decorators is None else decorators,
+        )
         variant.args = MappingProxyType(checked)
         variant.variant_of = self
         return self._registry.register(variant)
@@ -177,6 +204,16 @@ class Story:
 
     def __repr__(self) -> str:
         return f"Story(id={self.id!r}, origin={self.origin})"
+
+
+def _check_decorators(story_id: str, decorators: Iterable[Decorator]) -> tuple[Decorator, ...]:
+    if callable(decorators):
+        raise TypeError(f"Story {story_id!r}: decorators must be a list of decorators, not the decorator {decorators!r} itself; wrap it in a list")
+    checked = tuple(decorators)
+    for decorator in checked:
+        if not callable(decorator):
+            raise TypeError(f"Story {story_id!r}: decorator {decorator!r} is not callable")
+    return checked
 
 
 __all__ = ["Story", "StoryOrigin"]

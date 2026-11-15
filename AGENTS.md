@@ -81,10 +81,15 @@ in the same pull request as the bump.
     the range check shared by the int and float controls, and `_options.py` holds the functions every control uses (label
     derivation, `label`/`description` validation, the float step and decimals rules). Controls share no base class: each has
     `label`, `description`, `display_label` and `coerce`
-  - `registry/` - the story model, one module per type: `story_context.py` (`StoryContext`, `StoryFunction`), `story_definition.py`
+  - `registry/` - the story model, one module per type: `story_context.py` (`StoryContext`, `StoryFunction`, `Decorator`), `story_definition.py`
     (`Story`, `StoryOrigin`; `Story.variant` registers a variant through the registry link that `StoryRegistry.register` sets),
-    `layout.py` (`Layout`, how the preview places a story's widget) and `story_registry.py` (`StoryRegistry`, with `default_layout`);
+    `layout.py` (`Layout`, how the preview places a story's widget) and `story_registry.py` (`StoryRegistry`, with `default_layout` and
+    `decorators`) and `rendering.py` (internal: `render_story`, which builds a story's widget and applies its decorators and the registry's, and raises
+    `StoryRenderError` with the error panel's title and details; it deletes every widget it built when it fails);
     `__init__.py` re-exports them and holds `default_registry` and the `@story` decorator
+  - `decorators/` - the built-in story decorators, one module each: `padding.py`, `frame.py`, `fixed_size.py` (plus `_checks.py`, the
+    argument checks they share); `__init__.py` re-exports them and the `Decorator` type, which is defined in `registry/story_context.py`
+    because `registry` needs it and defining it here would be an import cycle
   - `discovery/` - story discovery: `loader.py` (`load_stories`, which imports story modules from folders, files and dotted module
     names, and collects errors), `file_search.py` (which files are stories), `module_import.py` (importing one file under the module
     name that keeps it a single module), `load_result.py` (`LoadResult`, `LoadError`), `sources.py` (`resolve_story_sources`: the command line's targets or the
