@@ -1,10 +1,24 @@
 import dataclasses
 import functools
+import importlib
+import sys
 
 import pytest
 from PySide6.QtWidgets import QLabel, QPushButton, QWidget
+from story_files import write
 
-from pyside6_storybook import BoolControl, FloatControl, IntControl, Story, StoryContext, StoryRegistry, TextControl, default_registry, story
+from pyside6_storybook import (
+    BoolControl,
+    FloatControl,
+    IntControl,
+    Story,
+    StoryContext,
+    StoryRegistry,
+    TextControl,
+    default_registry,
+    load_stories,
+    story,
+)
 from pyside6_storybook import registry as registry_module
 from pyside6_storybook.registry import StoryOrigin
 
@@ -198,3 +212,189 @@ def test_default_args_are_the_coerced_defaults() -> None:
 
     assert args == {"ratio": 1.0, "count": 3}
     assert isinstance(args["ratio"], float)
+
+
+def _variant_registry() -> tuple[StoryRegistry, Story]:
+    registry = StoryRegistry()
+
+    @registry.story("Inputs/Button/Default", controls=[TextControl("text", "Click"), BoolControl("enabled", default=True), FloatControl("ratio", 1, 0, 2)])
+    def button(ctx: StoryContext) -> QWidget:
+        """A button."""
+        return QLabel(str(ctx.args["text"]))
+
+    return registry, button
+
+
+def test_a_variant_has_the_components_id_and_shares_the_base_function_controls_and_origin() -> None:
+    registry, button = _variant_registry()
+
+    disabled = button.variant("Disabled", args={"enabled": False})
+
+    assert button.component == "Inputs/Button"
+    assert disabled.id == "Inputs/Button/Disabled"
+    assert disabled.name == "Disabled"
+    assert disabled.component == "Inputs/Button"
+    assert disabled.variant_of is button
+    assert button.variant_of is None
+    assert disabled.controls == button.controls
+    assert disabled.doc == "A button."
+    assert disabled.origin == button.origin
+    assert registry.get("Inputs/Button/Disabled") is disabled
+    assert Story("Solo", _widget).component is None
+
+
+def test_variant_args_are_the_starting_values_and_reach_the_render_function() -> None:
+    _registry, button = _variant_registry()
+
+    variant = button.variant("Quiet", args={"enabled": False, "ratio": 2})
+
+    assert dict(variant.args) == {"enabled": False, "ratio": 2.0}
+    assert variant.default_args() == {"text": "Click", "enabled": False, "ratio": 2.0}
+    assert button.default_args() == {"text": "Click", "enabled": True, "ratio": 1.0}
+    assert dict(button.args) == {}
+    label = variant(StoryContext(args=variant.default_args()))
+    assert isinstance(label, QLabel)
+    assert label.text() == "Click"
+    label.deleteLater()
+
+
+def test_variant_args_are_read_only_and_default_args_are_fresh_each_call() -> None:
+    _registry, button = _variant_registry()
+    variant = button.variant("Quiet", args={"enabled": False})
+
+    with pytest.raises(TypeError):
+        variant.args["enabled"] = True  # ty: ignore[invalid-assignment]
+    with pytest.raises(TypeError):
+        button.args["enabled"] = True  # ty: ignore[invalid-assignment]
+    first = variant.default_args()
+    first["enabled"] = True
+    assert variant.default_args()["enabled"] is False
+
+
+def test_variant_args_are_copied_from_the_callers_mapping() -> None:
+    _registry, button = _variant_registry()
+    given = {"enabled": False}
+
+    variant = button.variant("Quiet", args=given)
+    given["enabled"] = True
+
+    assert variant.default_args()["enabled"] is False
+
+
+def test_variants_register_after_their_base_in_order() -> None:
+    registry, button = _variant_registry()
+    button.variant("B")
+    button.variant("A")
+
+    assert registry.ids() == ["Inputs/Button/Default", "Inputs/Button/B", "Inputs/Button/A"]
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    [
+        ({"missing": 1}, r"Inputs/Button/Bad.*'missing' is not a control"),
+        ({"enabled": 1}, r"Inputs/Button/Bad.*invalid value for 'enabled'.*'enabled'"),
+        ({"ratio": 5}, r"Inputs/Button/Bad.*invalid value for 'ratio'"),
+        ({"text": 3}, r"Inputs/Button/Bad.*invalid value for 'text'"),
+    ],
+)
+def test_invalid_variant_args_raise_a_value_error_naming_the_variant_and_key(args: dict[str, object], message: str) -> None:
+    registry, button = _variant_registry()
+
+    with pytest.raises(ValueError, match=message):
+        button.variant("Bad", args=args)
+    assert registry.ids() == ["Inputs/Button/Default"]
+
+
+@pytest.mark.parametrize("name", ["", "  ", "A/B"])
+def test_a_blank_variant_name_or_one_with_a_slash_is_rejected(name: str) -> None:
+    _registry, button = _variant_registry()
+    with pytest.raises(ValueError, match="Invalid variant name"):
+        button.variant(name)
+
+
+def test_a_variant_named_like_its_base_is_rejected() -> None:
+    _registry, button = _variant_registry()
+    with pytest.raises(ValueError, match="name of its base story"):
+        button.variant("Default")
+
+
+def test_a_base_without_a_component_cannot_have_variants() -> None:
+    registry = StoryRegistry()
+    solo = registry.register(Story("Button", _widget))
+    with pytest.raises(ValueError, match="needs|no component"):
+        solo.variant("Disabled")
+
+
+def test_a_variant_of_a_variant_is_a_type_error_pointing_at_the_base() -> None:
+    _registry, button = _variant_registry()
+    disabled = button.variant("Disabled")
+    with pytest.raises(TypeError, match=r"call \.variant\(\) on the base"):
+        disabled.variant("Other")
+
+
+def test_variant_on_an_unregistered_story_is_a_runtime_error() -> None:
+    with pytest.raises(RuntimeError, match="not registered"):
+        Story("Inputs/Button/Default", _widget).variant("Disabled")
+
+
+def test_a_variant_id_colliding_with_another_functions_story_raises() -> None:
+    registry, button = _variant_registry()
+    other = Story("Inputs/Button/Disabled", _widget)
+    registry.register(other)
+
+    with pytest.raises(ValueError, match="already registered"):
+        button.variant("Disabled")
+    assert registry.get("Inputs/Button/Disabled") is other
+
+
+def test_defining_the_same_variant_twice_replaces_it() -> None:
+    registry, button = _variant_registry()
+    first = button.variant("Quiet", args={"enabled": False})
+    second = button.variant("Quiet", args={"text": "Again"})
+
+    assert registry.get("Inputs/Button/Quiet") is second
+    assert second is not first
+    assert registry.ids() == ["Inputs/Button/Default", "Inputs/Button/Quiet"]
+
+
+def test_variants_are_not_public_constructor_parameters() -> None:
+    with pytest.raises(TypeError):
+        Story("A/B", _widget, args={})  # ty: ignore[unknown-argument]
+    with pytest.raises(TypeError):
+        Story("A/B", _widget, variant_of=None)  # ty: ignore[unknown-argument]
+
+
+def test_reloading_a_story_module_replaces_the_base_and_its_variants_in_place(stories: StoryRegistry, tmp_path) -> None:
+    source = """
+        from PySide6.QtWidgets import QLabel
+
+        from pyside6_storybook import BoolControl, story
+
+
+        @story("Inputs/Label/Default", controls=[BoolControl("loud", default=False)])
+        def label(ctx):
+            return QLabel("x")
+
+
+        label.variant("Loud", args={"loud": True})
+        label.variant("Quiet")
+
+
+        @story("Inputs/Other/Default")
+        def other(ctx):
+            return QLabel("y")
+    """
+    write(tmp_path, "stories/label_stories.py", source)
+    first = load_stories(["stories"], cwd=tmp_path)
+    assert first.errors == ()
+    ids = stories.ids()
+    old = stories.get("Inputs/Label/Loud")
+    assert ids == ["Inputs/Label/Default", "Inputs/Label/Loud", "Inputs/Label/Quiet", "Inputs/Other/Default"]
+
+    (module_name,) = [name for name in sys.modules if name.endswith("label_stories")]
+    importlib.reload(sys.modules[module_name])
+
+    assert stories.ids() == ids
+    assert stories.get("Inputs/Label/Loud") is not old
+    assert stories.get("Inputs/Label/Loud").variant_of is stories.get("Inputs/Label/Default")

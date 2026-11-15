@@ -13,13 +13,17 @@ from pyside6_storybook.gui import ErrorPanel, GalleryWindow
 from pyside6_storybook.themes import BUILTIN_THEME_NAMES, BuiltinThemes
 
 EXPECTED_IDS = [
-    "Buttons/Push Button",
+    "Buttons/Push Button/Default",
+    "Buttons/Push Button/Disabled",
+    "Buttons/Push Button/Checkable",
     "Buttons/Check Box",
     "Display/Label",
     "Display/Progress Bar",
     "Display/Palette",
     "Forms/Sign-in Form",
-    "Inputs/Line Edit",
+    "Inputs/Line Edit/Default",
+    "Inputs/Line Edit/Password",
+    "Inputs/Line Edit/Read-only",
     "Inputs/Spin Box",
     "Inputs/Double Spin Box",
     "Inputs/Combo Box",

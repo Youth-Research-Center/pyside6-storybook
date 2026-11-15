@@ -13,7 +13,7 @@ _ORIENTATIONS = {"Horizontal": Qt.Orientation.Horizontal, "Vertical": Qt.Orienta
 
 
 @story(
-    "Inputs/Line Edit",
+    "Inputs/Line Edit/Default",
     controls=[
         TextControl("text", ""),
         TextControl("placeholder", "Type here…"),
@@ -28,6 +28,10 @@ def line_edit(ctx: StoryContext) -> QWidget:
     edit.setReadOnly(ctx.args["read_only"])
     edit.setEchoMode(_ECHO_MODES[ctx.args["echo_mode"]])
     return edit
+
+
+line_edit.variant("Password", args={"text": "secret", "echo_mode": "Password"})
+line_edit.variant("Read-only", args={"text": "This text cannot be edited", "read_only": True})
 
 
 @story(

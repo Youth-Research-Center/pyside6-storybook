@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import inspect
-from collections.abc import Iterable
-from typing import NamedTuple
+from collections.abc import Iterable, Mapping
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from PySide6.QtWidgets import QWidget
 
 from pyside6_storybook.controls import Control
 from pyside6_storybook.registry.story_context import StoryContext, StoryFunction
+
+if TYPE_CHECKING:
+    from pyside6_storybook.registry.story_registry import StoryRegistry
 
 
 class StoryOrigin(NamedTuple):
@@ -31,14 +35,17 @@ class Story:
         id: The unique ``/``-separated path, for example ``"Inputs/Button"``.
         name: The last segment of ``id``.
         groups: The segments of ``id`` before the name.
+        component: The groups joined with ``/`` (``"Inputs/Button"`` for ``"Inputs/Button/Default"``), or ``None`` without groups.
         controls: The story's controls, in order.
+        args: For a variant, the values it overrides, by control name, as a read-only mapping; empty for any other story.
+        variant_of: The base story, for a variant; ``None`` otherwise.
         doc: The function's docstring, or an empty string.
         module: Module the function was defined in.
         qualname: Qualified name of the function. For a callable without one (a ``functools.partial`` or a callable object), the
             module and qualified name of its type.
     """
 
-    __slots__ = ("_function", "controls", "doc", "groups", "id", "module", "name", "qualname")
+    __slots__ = ("_function", "_registry", "args", "component", "controls", "doc", "groups", "id", "module", "name", "qualname", "variant_of")
 
     def __init__(self, id: str, function: StoryFunction, *, controls: Iterable[Control] = ()) -> None:
         """Create a story.
@@ -66,6 +73,10 @@ class Story:
         self.id = id
         self.name = segments[-1]
         self.groups = tuple(segments[:-1])
+        self.component = "/".join(self.groups) or None
+        self.args: Mapping[str, Any] = MappingProxyType({})
+        self.variant_of: Story | None = None
+        self._registry: StoryRegistry | None = None
         self.controls = controls
         self.doc = inspect.getdoc(function) or ""
         self.module = getattr(function, "__module__", None) or type(function).__module__
@@ -80,9 +91,54 @@ class Story:
     def default_args(self) -> dict[str, object]:
         """Return the value every control starts with, keyed by control name.
 
-        Each value is the control's default passed through its ``coerce``, so it has the type a story receives.
+        Each value is the variant's value for the control, or the control's default, passed through the control's ``coerce``, so
+        it has the type a story receives. Every call returns new objects.
         """
-        return {control.name: control.coerce(control.default) for control in self.controls}
+        return {control.name: control.coerce(self.args.get(control.name, control.default)) for control in self.controls}
+
+    def variant(self, name: str, *, args: Mapping[str, object] | None = None) -> Story:
+        """Register a variant of this story: the same function and controls, with other starting values.
+
+        The variant's id is the component plus ``name`` (``"Inputs/Button/Disabled"``), and it comes after this story in the
+        registry. Calling this twice with the same name replaces the first variant.
+
+        Args:
+            name: The variant's name: not blank, without ``/``, and different from this story's name.
+            args: Values that replace control defaults, by control name. Each must be accepted by its control's ``coerce``.
+
+        Returns:
+            The registered variant.
+
+        Raises:
+            TypeError: If this story is itself a variant.
+            RuntimeError: If this story was never registered.
+            ValueError: If this story's id has no group, ``name`` is invalid, or ``args`` has an unknown key or an invalid value.
+        """
+        if self.variant_of is not None:
+            raise TypeError(f"{self.id!r} is a variant of {self.variant_of.id!r}; call .variant() on the base story instead")
+        if self._registry is None:
+            raise RuntimeError(f"Story {self.id!r} is not registered, so it cannot have variants; register it first")
+        if self.component is None:
+            raise ValueError(f"Story {self.id!r} has no component, so it cannot have variants; give it an id with a group, for example 'Button/Default'")
+        if not name.strip() or "/" in name:
+            raise ValueError(f"Invalid variant name {name!r} for story {self.id!r}: expected a non-blank name without '/'")
+        if name == self.name:
+            raise ValueError(f"Variant name {name!r} is the name of its base story {self.id!r}; choose another name")
+        variant_id = f"{self.component}/{name}"
+        controls = {control.name: control for control in self.controls}
+        checked: dict[str, object] = {}
+        for key, value in (args or {}).items():
+            control = controls.get(key)
+            if control is None:
+                raise ValueError(f"Variant {variant_id!r}: {key!r} is not a control of {self.id!r}; expected one of {sorted(controls)}")
+            try:
+                checked[key] = control.coerce(value)
+            except (TypeError, ValueError) as error:
+                raise ValueError(f"Variant {variant_id!r}: invalid value for {key!r}: {error}") from error
+        variant = Story(variant_id, self._function, controls=self.controls)
+        variant.args = MappingProxyType(checked)
+        variant.variant_of = self
+        return self._registry.register(variant)
 
     def __call__(self, ctx: StoryContext) -> QWidget:
         """Build the story's widget.

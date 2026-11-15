@@ -470,3 +470,29 @@ def test_the_controls_panel_starts_from_the_stories_default_args(qtbot, themes: 
     preview = window.current_preview_widget()
     assert isinstance(preview, QLabel)
     assert preview.text() == "1.0"
+
+
+def test_a_variants_panel_starts_at_its_args_and_stays_editable(qtbot, themes: BuiltinThemes) -> None:
+    stories = StoryRegistry()
+
+    @stories.story("Inputs/Label/Default", controls=[BoolControl("loud", default=False)])
+    def label(ctx: StoryContext) -> QWidget:
+        return QLabel("LOUD" if ctx.args["loud"] else "quiet")
+
+    label.variant("Loud", args={"loud": True})
+    window = _make_window(qtbot, stories, themes)
+    window.show()
+
+    _sidebar(window).setCurrentRow(1)
+
+    assert window.current_story_id() == "Inputs/Label/Loud"
+    preview = window.current_preview_widget()
+    assert isinstance(preview, QLabel)
+    assert preview.text() == "LOUD"
+    qtbot.waitUntil(lambda: any(box.isVisibleTo(window) for box in window.findChildren(QCheckBox)), timeout=2000)
+    check_box = next(box for box in window.findChildren(QCheckBox) if box.isVisibleTo(window))
+    assert check_box.isChecked()
+    check_box.setChecked(False)
+    preview = window.current_preview_widget()
+    assert isinstance(preview, QLabel)
+    assert preview.text() == "quiet"

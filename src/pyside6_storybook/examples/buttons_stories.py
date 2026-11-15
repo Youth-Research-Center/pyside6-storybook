@@ -8,7 +8,7 @@ from pyside6_storybook import BoolControl, StoryContext, TextControl, story
 
 
 @story(
-    "Buttons/Push Button",
+    "Buttons/Push Button/Default",
     controls=[TextControl("text", "Push me"), BoolControl("enabled", default=True), BoolControl("checkable", default=False)],
 )
 def push_button(ctx: StoryContext) -> QWidget:
@@ -17,6 +17,10 @@ def push_button(ctx: StoryContext) -> QWidget:
     button.setEnabled(ctx.args["enabled"])
     button.setCheckable(ctx.args["checkable"])
     return button
+
+
+push_button.variant("Disabled", args={"enabled": False})
+push_button.variant("Checkable", args={"checkable": True, "text": "Toggle me"})
 
 
 @story(

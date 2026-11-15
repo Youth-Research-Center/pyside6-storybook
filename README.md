@@ -75,6 +75,41 @@ pyside6-storybook stories
 - Discovery picks up every file named `*_story.py` or `*_stories.py` below a folder. Story files can import your application, and
   each other, like any module of your project.
 
+## Variants
+
+A variant is the same story with other starting values: it shares the story's function and controls, and shows up in the gallery as a
+story of its own. Call `.variant()` on the story that `@story` returned:
+
+```python
+from PySide6.QtWidgets import QPushButton, QWidget
+
+from pyside6_storybook import BoolControl, StoryContext, TextControl, story
+
+
+@story(
+    "Inputs/Push Button/Default",
+    controls=[TextControl("text", "Click me"), BoolControl("enabled", default=True)],
+)
+def push_button(ctx: StoryContext) -> QWidget:
+    """A push button."""
+    button = QPushButton(ctx.args["text"])
+    button.setEnabled(ctx.args["enabled"])
+    return button
+
+
+push_button.variant("Disabled", args={"enabled": False})
+push_button.variant("Long label", args={"text": "A button with a much longer label"})
+```
+
+- The variant's id is the story's component, which is its id without the last segment, plus the variant's name:
+  `Inputs/Push Button/Disabled`. Give a story that will have variants an id whose last segment names the story, such as
+  `"Inputs/Spin Box/Default"`; with `"Inputs/Spin Box"` the component would be `Inputs` and the variant `Inputs/Large`.
+- `args` replaces the defaults of some controls, by control name. Each value must be one its control accepts, and each key must be
+  a control of the story; otherwise `.variant()` raises a `ValueError` naming the variant and the key. The controls stay editable.
+- The name must not be blank, contain `/` or equal the story's own name. Call `.variant()` on the base story, not on a variant, and
+  only after `@story` registered it. A story whose id has no group (`"Button"`) cannot have variants.
+- Variants appear after their story, in the order you create them. Creating the same variant twice replaces the first one.
+
 ## Controls
 
 Each control is an argument of the story and an editor in the gallery's controls pane.

@@ -57,3 +57,22 @@ def test_the_pyproject_example_is_a_valid_configuration(tmp_path: Path, monkeypa
 
     assert resolved.targets == ("stories",)
     assert resolved.pythonpath == ((tmp_path / "src").resolve(),)
+
+
+def test_the_variants_example_registers_its_variants(qtbot, tmp_path: Path, stories: StoryRegistry) -> None:
+    (source,) = _code_blocks(_section("Variants"), "python")
+    write(tmp_path, "stories/button_stories.py", source)
+
+    result = load_stories(["stories"], cwd=tmp_path)
+
+    assert result.errors == ()
+    assert stories.ids() == ["Inputs/Push Button/Default", "Inputs/Push Button/Disabled", "Inputs/Push Button/Long label"]
+    disabled = stories.get("Inputs/Push Button/Disabled")
+    assert dict(disabled.args) == {"enabled": False}
+    assert disabled.default_args() == {"text": "Click me", "enabled": False}
+    long_label = stories.get("Inputs/Push Button/Long label")
+    assert long_label.variant_of is stories.get("Inputs/Push Button/Default")
+    widget = disabled(StoryContext(args=disabled.default_args()))
+    qtbot.addWidget(widget)
+    assert isinstance(widget, QPushButton)
+    assert not widget.isEnabled()

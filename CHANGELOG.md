@@ -5,6 +5,9 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Story variants: `Story.variant(name, *, args=None)` registers the same story with other starting values under the id
+  `<component>/<name>`, and `Story` gains `component`, `variant_of` and `args` (a read-only mapping). `Story.default_args()` uses a variant's
+  `args`, and the gallery shows variants as stories of their own.
 - Control options: `label` and `description` on every control (the form label and the editor's tooltip and accessible description),
   `TextControl(multiline=True)`, `IntControl(step=..., slider=True)` and `FloatControl(step=..., decimals=..., slider=True)`. Every control
   also has a read-only `display_label`, a `coerce(value)` method that returns the value in the control's type or raises `ValueError` or
@@ -33,6 +36,8 @@ All notable changes to this project are documented in this file.
   `pyside6-storybook --examples`.
 
 ### Changed
+- The example stories `Buttons/Push Button` and `Inputs/Line Edit` are now `Buttons/Push Button/Default` and `Inputs/Line Edit/Default`,
+  each with variants.
 - A control's default must have the control's value type: `BoolControl` takes only a `bool`, `IntControl` an `int` (not a `bool`),
   `FloatControl` an `int` or `float` (not a `bool`), `TextControl` and `ChoiceControl` a string. `Story.default_args()` returns each
   default passed through the control's `coerce`, so a `FloatControl` default given as `1` starts as `1.0`.

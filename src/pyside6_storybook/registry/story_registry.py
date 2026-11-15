@@ -18,7 +18,7 @@ class StoryRegistry:
     def register(self, story: Story) -> Story:
         """Add a story.
 
-        Registering an id again from the same module and qualified name (a module imported twice or reloaded) replaces the
+        The story remembers this registry, so that ``Story.variant`` can register variants here. Registering an id again from the same module and qualified name (a module imported twice or reloaded) replaces the
         earlier story and keeps its position.
 
         Args:
@@ -34,6 +34,7 @@ class StoryRegistry:
         if existing is not None and existing.origin != story.origin:
             raise ValueError(f"Story id {story.id!r} is already registered by {existing.origin}; cannot register it again from {story.origin}")
         self._stories[story.id] = story
+        story._registry = self
         return story
 
     def get(self, story_id: str) -> Story:

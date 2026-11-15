@@ -145,7 +145,7 @@ def test_no_targets_and_nothing_configured_opens_the_examples(
     assert cli.main([]) == 0
 
     ((ids, _theme),) = gallery.calls
-    assert "Buttons/Push Button" in ids
+    assert "Buttons/Push Button/Default" in ids
 
 
 def test_no_targets_opens_the_stories_configured_in_pyproject(project: Path, monkeypatch: pytest.MonkeyPatch, gallery: _RecordingRun) -> None:
@@ -204,7 +204,7 @@ def test_list_says_where_the_stories_came_from(project: Path, monkeypatch: pytes
 def test_examples_open_the_gallery_with_the_example_stories(stories: StoryRegistry, gallery: _RecordingRun) -> None:
     assert cli.main(["--examples"]) == 0
     ((ids, _theme),) = gallery.calls
-    assert "Buttons/Push Button" in ids
+    assert "Buttons/Push Button/Default" in ids
     assert all(story_id.split("/")[0] in {"Buttons", "Display", "Forms", "Inputs"} for story_id in ids)
 
 
@@ -212,13 +212,13 @@ def test_examples_combine_with_targets(project: Path, gallery: _RecordingRun) ->
     assert cli.main(["stories", "--examples"]) == 0
     ((ids, _theme),) = gallery.calls
     assert ids[:2] == ["Inputs/A", "Inputs/B"]
-    assert "Buttons/Push Button" in ids
+    assert "Buttons/Push Button/Default" in ids
 
 
 def test_list_examples_prints_the_example_ids(stories: StoryRegistry, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["--list", "--examples"]) == 0
     listed = capsys.readouterr().out.splitlines()
-    assert listed[0] == "Buttons/Push Button"
+    assert listed[0] == "Buttons/Push Button/Default"
     assert "Inputs/Slider" in listed
     assert gallery.calls == []
 
@@ -296,7 +296,7 @@ def test_examples_are_the_bundled_ones_even_next_to_a_folder_of_the_same_name(
 
     assert cli.main(["--list", "--examples"]) == 0
 
-    assert "Buttons/Push Button" in capsys.readouterr().out.splitlines()
+    assert "Buttons/Push Button/Default" in capsys.readouterr().out.splitlines()
 
 
 def test_pythonpath_folders_win_over_modules_at_the_project_root(

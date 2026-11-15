@@ -82,8 +82,8 @@ in the same pull request as the bump.
     derivation, `label`/`description` validation, the float step and decimals rules). Controls share no base class: each has
     `label`, `description`, `display_label` and `coerce`
   - `registry/` - the story model, one module per type: `story_context.py` (`StoryContext`, `StoryFunction`), `story_definition.py`
-    (`Story`, `StoryOrigin`) and `story_registry.py` (`StoryRegistry`); `__init__.py` re-exports them and holds `default_registry` and
-    the `@story` decorator
+    (`Story`, `StoryOrigin`; `Story.variant` registers a variant through the registry link that `StoryRegistry.register` sets) and
+    `story_registry.py` (`StoryRegistry`); `__init__.py` re-exports them and holds `default_registry` and the `@story` decorator
   - `discovery/` - story discovery: `loader.py` (`load_stories`, which imports story modules from folders, files and dotted module
     names, and collects errors), `file_search.py` (which files are stories), `module_import.py` (importing one file under the module
     name that keeps it a single module), `load_result.py` (`LoadResult`, `LoadError`), `sources.py` (`resolve_story_sources`: the command line's targets or the
