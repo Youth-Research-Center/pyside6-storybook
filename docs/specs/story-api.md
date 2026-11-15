@@ -335,7 +335,8 @@ Each returned decorator has a readable `__repr__` (`padding(24)`), used in error
 | `registry/story_definition.py` | `Story` with `component`, `variant_of`, `args`, `layout`, `decorators`, `variant()` |
 | `registry/layout.py` | `Layout` (#18) |
 | `registry/rendering.py` | `RenderedStory`, `StoryRenderError`, `render_story`, traceback trimming (#17) |
-| `decorators/` | the `Decorator` type, `padding.py`, `frame.py`, `fixed_size.py` (#17) |
+| `registry/story_context.py` | gains the `Decorator` type beside `StoryFunction` (#17); defining it in `decorators/` would be an import cycle |
+| `decorators/` | `padding.py`, `frame.py`, `fixed_size.py`; re-exports `Decorator` (#17) |
 | `gui/editors/` | one module per editor, plus `_wheel.py` for the wheel filter (#16, #15) |
 | `gui/controls_panel.py` | the form over the editors |
 | `gui/window.py` | scrollable controls section, scrolled preview with layout modes, `render_story` |
