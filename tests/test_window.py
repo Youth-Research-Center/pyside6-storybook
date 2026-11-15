@@ -214,6 +214,20 @@ def test_an_empty_registry_shows_an_empty_state(qtbot, themes: BuiltinThemes) ->
     assert window.current_preview_widget() is None
 
 
+def test_the_empty_state_sits_at_the_top_of_the_preview(qtbot, themes: BuiltinThemes) -> None:
+    window = _make_window(qtbot, StoryRegistry(), themes)
+    window.resize(900, 600)
+    window.show()
+    qtbot.waitExposed(window)
+    QApplication.processEvents()
+    empty_label = window.findChild(QLabel, "previewEmptyState")
+    assert empty_label is not None
+    surface = window.findChild(QWidget, "previewSurface")
+    assert surface is not None
+    assert empty_label.height() == empty_label.sizeHint().height()
+    assert empty_label.geometry().bottom() < surface.height() // 2
+
+
 def test_the_empty_state_is_hidden_when_there_are_stories(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
     window = _make_window(qtbot, registry, themes)
     window.show()

@@ -117,7 +117,7 @@ class GalleryWindow(QMainWindow):
         self._empty_label.setObjectName("previewEmptyState")
         self._empty_label.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         self._empty_label.setVisible(len(registry) == 0 and not self._load_errors)
-        self._preview_layout.addWidget(self._empty_label)
+        self._preview_layout.addWidget(self._empty_label, alignment=Qt.AlignmentFlag.AlignTop)
 
         preview_pane = QWidget(self)
         preview_layout = QVBoxLayout(preview_pane)
