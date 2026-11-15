@@ -87,7 +87,9 @@ in the same pull request as the bump.
   - `py.typed` - marks the package as typed
 - `tests/` - pytest suite (`pytest-qt`), one test module per source module; `conftest.py` holds the shared fixtures and `story_files.py` the
   helpers that write story modules for discovery and CLI tests
-- `docs/` - the roadmap
+- `docs/` - the roadmap, and `images/` with the README screenshot
+- `README.md` - user documentation; `tests/test_readme.py` loads its first story and checks its controls table and `pyproject.toml`
+  example, so keep the code in it runnable and update the test when the README's structure changes
 - `.github/` - CI workflow and Dependabot configuration
 
 ## Code conventions
