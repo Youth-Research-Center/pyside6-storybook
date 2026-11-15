@@ -119,7 +119,9 @@ class Story:
         if self._registry is None:
             raise RuntimeError(f"Story {self.id!r} is not registered, so it cannot have variants; register it first")
         if self.component is None:
-            raise ValueError(f"Story {self.id!r} has no component, so it cannot have variants; give it an id with a group, for example 'Button/Default'")
+            raise ValueError(
+                f"Story {self.id!r} has no component, so it cannot have variants; give it an id with a group, for example 'Button/Default'"
+            )
         if not name.strip() or "/" in name:
             raise ValueError(f"Invalid variant name {name!r} for story {self.id!r}: expected a non-blank name without '/'")
         if name == self.name:

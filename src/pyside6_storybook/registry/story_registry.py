@@ -18,8 +18,9 @@ class StoryRegistry:
     def register(self, story: Story) -> Story:
         """Add a story.
 
-        The story remembers this registry, so that ``Story.variant`` can register variants here. Registering an id again from the same module and qualified name (a module imported twice or reloaded) replaces the
-        earlier story and keeps its position.
+        Registering an id again from the same module and qualified name (a module imported twice or reloaded) replaces the
+        earlier story and keeps its position. The story remembers this registry, so that ``Story.variant`` can register variants
+        here.
 
         Args:
             story: The story to add.

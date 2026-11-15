@@ -217,7 +217,10 @@ def test_default_args_are_the_coerced_defaults() -> None:
 def _variant_registry() -> tuple[StoryRegistry, Story]:
     registry = StoryRegistry()
 
-    @registry.story("Inputs/Button/Default", controls=[TextControl("text", "Click"), BoolControl("enabled", default=True), FloatControl("ratio", 1, 0, 2)])
+    @registry.story(
+        "Inputs/Button/Default",
+        controls=[TextControl("text", "Click"), BoolControl("enabled", default=True), FloatControl("ratio", 1, 0, 2)],
+    )
     def button(ctx: StoryContext) -> QWidget:
         """A button."""
         return QLabel(str(ctx.args["text"]))
