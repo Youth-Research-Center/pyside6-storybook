@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 import shiboken6
-from PySide6.QtCore import QEvent, QSize, Qt
+from PySide6.QtCore import QEvent, QPoint, QSize, Qt
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -15,12 +15,14 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QVBoxLayout,
     QWidget,
 )
 from story_files import story_source, write
 
 from pyside6_storybook import BoolControl, FloatControl, IntControl, Layout, LoadError, StoryContext, StoryRegistry, load_stories
 from pyside6_storybook.cli import EXAMPLES_MODULE
+from pyside6_storybook.decorators import fixed_size, frame, padding
 from pyside6_storybook.gui.controls_panel import NO_CONTROLS_MESSAGE, ControlsPanel
 from pyside6_storybook.gui.error_panel import ErrorPanel
 from pyside6_storybook.gui.window import NO_STORIES_MESSAGE, GalleryWindow
@@ -825,3 +827,104 @@ def test_the_example_layouts_are_centered_for_push_buttons_fill_for_the_table_an
             assert layout is Layout.FILL
         else:
             assert layout is None, story_id
+
+
+def _wrap_in_frame(widget: QWidget, ctx: StoryContext) -> QWidget:
+    wrapper = QFrame()
+    wrapper.setObjectName("decoratorFrame")
+    layout = QVBoxLayout(wrapper)
+    layout.addWidget(widget)
+    return wrapper
+
+
+def test_current_preview_widget_is_the_undecorated_widget_inside_the_decorated_root(qtbot, themes: BuiltinThemes) -> None:
+    registry = StoryRegistry()
+    registry.decorators.append(_wrap_in_frame)
+    registry.story("Group/Story", decorators=[padding(10)])(lambda ctx: QLabel("inner"))
+    window = _make_window(qtbot, registry, themes)
+
+    preview = window.current_preview_widget()
+
+    assert isinstance(preview, QLabel)
+    assert preview.text() == "inner"
+    outer = window.findChild(QFrame, "decoratorFrame")
+    assert outer is not None
+    assert outer.parentWidget() is _surface(window)
+    assert outer.isAncestorOf(preview)
+    assert preview.parentWidget() is not outer
+
+
+def test_rebuilding_deletes_the_decorated_root_and_the_widget(qtbot, themes: BuiltinThemes, qapp: QApplication) -> None:
+    registry = StoryRegistry()
+    registry.story("Group/Story", decorators=[padding(10), frame()])(lambda ctx: QLabel("inner"))
+    window = _make_window(qtbot, registry, themes)
+    widget = window.current_preview_widget()
+    assert widget is not None
+    chain = []
+    parent = widget.parentWidget()
+    while parent is not None and parent is not _surface(window):
+        chain.append(parent)
+        parent = parent.parentWidget()
+    assert len(chain) == 2
+
+    window.set_theme("Dark")
+    qapp.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    assert [shiboken6.isValid(item) for item in (widget, *chain)] == [False, False, False]
+    assert window.current_preview_widget() is not widget
+
+
+def test_the_decorated_root_is_placed_with_the_stories_layout(qtbot, themes: BuiltinThemes) -> None:
+    registry = StoryRegistry()
+    registry.story("Group/Story", layout=Layout.CENTERED, decorators=[padding(24), fixed_size(320, 200)])(lambda ctx: QLabel("inner"))
+    window = _make_window(qtbot, registry, themes)
+    window.resize(900, 650)
+    window.show()
+    qtbot.waitExposed(window)
+    QApplication.processEvents()
+
+    widget = window.current_preview_widget()
+    assert widget is not None
+    root = widget.parentWidget()
+    assert root is not None
+    assert root.size() == QSize(368, 248)
+    assert widget.geometry().size() == QSize(320, 200)
+    assert widget.geometry().topLeft() == QPoint(24, 24)
+
+
+def test_a_decorator_that_raises_shows_an_error_panel_and_logs_it(qtbot, themes: BuiltinThemes, caplog: pytest.LogCaptureFixture) -> None:
+    def broken(widget: QWidget, ctx: StoryContext) -> QWidget:
+        raise RuntimeError("decorator boom")
+
+    stories = StoryRegistry()
+    stories.story("Good/One")(lambda ctx: QLabel("one"))
+    stories.story("Broken/Decorated", decorators=[broken])(lambda ctx: QLabel("x"))
+    window = _make_window(qtbot, stories, themes)
+    caplog.set_level(logging.ERROR)
+
+    with qtbot.capture_exceptions() as exceptions:
+        _sidebar(window).setCurrentRow(1)
+
+    assert exceptions == []
+    panel = _error_panel(window)
+    assert panel is not None
+    assert panel.title().startswith("Broken/Decorated: decorator <function ")
+    assert panel.title().endswith("raised RuntimeError: decorator boom")
+    assert "decorator boom" in panel.details()
+    assert "pyside6_storybook" not in panel.details()
+    assert window.current_preview_widget() is None
+    assert any("Broken/Decorated" in record.getMessage() and record.exc_info for record in caplog.records)
+
+
+def test_a_registry_decorator_that_fails_shows_an_error_for_every_story(qtbot, themes: BuiltinThemes) -> None:
+    def broken(widget: QWidget, ctx: StoryContext) -> QWidget:
+        return QLabel("dropped")
+
+    stories = StoryRegistry()
+    stories.decorators.append(broken)
+    stories.story("Group/Story")(lambda ctx: QLabel("x"))
+    window = _make_window(qtbot, stories, themes)
+
+    panel = _error_panel(window)
+    assert panel is not None
+    assert panel.title().endswith("returned a widget that does not contain the story's widget")

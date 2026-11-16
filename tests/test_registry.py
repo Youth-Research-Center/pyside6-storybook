@@ -493,3 +493,75 @@ def test_a_variant_inherits_the_base_layout_and_can_override_it() -> None:
     with pytest.raises(ValueError, match="Invalid layout"):
         base.variant("Bad", layout="nope")
     assert "A/B/Bad" not in registry
+
+
+def _identity(widget: QWidget, ctx: StoryContext) -> QWidget:
+    return widget
+
+
+def _other(widget: QWidget, ctx: StoryContext) -> QWidget:
+    return widget
+
+
+def test_a_story_keeps_its_decorators_as_a_tuple_in_order() -> None:
+    registry = StoryRegistry()
+    decorators = [_identity, _other]
+
+    declared = registry.story("A/B", decorators=decorators)(_plain)
+    undeclared = registry.story("A/C")(_plain)
+    decorators.append(_identity)
+
+    assert declared.decorators == (_identity, _other)
+    assert undeclared.decorators == ()
+
+
+def test_the_registry_has_a_plain_list_of_decorators_that_starts_empty() -> None:
+    registry = StoryRegistry()
+
+    assert registry.decorators == []
+    registry.decorators.append(_identity)
+    assert registry.decorators == [_identity]
+    assert StoryRegistry().decorators == []
+
+
+@pytest.mark.parametrize("invalid", [[_identity, "padding"], [None], [42]])
+def test_a_decorator_that_is_not_callable_raises_a_type_error_naming_the_story(invalid: list[object]) -> None:
+    registry = StoryRegistry()
+
+    with pytest.raises(TypeError, match=r"Story 'A/B'.*is not callable"):
+        registry.story("A/B", decorators=invalid)(_plain)  # ty: ignore[invalid-argument-type]
+    assert "A/B" not in registry
+
+
+def test_a_single_decorator_instead_of_a_list_raises_a_type_error_asking_for_a_list() -> None:
+    registry = StoryRegistry()
+
+    with pytest.raises(TypeError, match="list of decorators"):
+        registry.story("A/B", decorators=_identity)(_plain)  # ty: ignore[invalid-argument-type]
+
+
+def test_the_module_level_story_decorator_takes_decorators(monkeypatch: pytest.MonkeyPatch) -> None:
+    isolated = StoryRegistry()
+    monkeypatch.setattr(registry_module, "default_registry", isolated)
+
+    declared = story("A/B", decorators=[_identity])(_plain)
+
+    assert declared.decorators == (_identity,)
+    assert isolated.get("A/B") is declared
+
+
+def test_a_variant_inherits_the_base_decorators_and_a_list_replaces_them() -> None:
+    registry = StoryRegistry()
+    base = registry.story("A/B/Default", decorators=[_identity])(_plain)
+
+    inherited = base.variant("Same")
+    replaced = base.variant("Other", decorators=[_other])
+    cleared = base.variant("None", decorators=[])
+
+    assert inherited.decorators == (_identity,)
+    assert replaced.decorators == (_other,)
+    assert cleared.decorators == ()
+    assert base.decorators == (_identity,)
+    with pytest.raises(TypeError, match="is not callable"):
+        base.variant("Bad", decorators=[3])  # ty: ignore[invalid-argument-type]
+    assert "A/B/Bad" not in registry

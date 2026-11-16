@@ -14,6 +14,7 @@ def test_public_api_is_exported() -> None:
         "ChoiceControl",
         "ColorControl",
         "Control",
+        "Decorator",
         "EnumControl",
         "FileControl",
         "FloatControl",

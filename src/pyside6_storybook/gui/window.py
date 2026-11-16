@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import logging
-import traceback
 from collections.abc import Sequence
-from pathlib import Path
-from types import TracebackType
 
 from PySide6.QtCore import QSignalBlocker, QSize, Qt
 from PySide6.QtGui import QCloseEvent, QFont, QPalette
@@ -27,13 +24,12 @@ from pyside6_storybook.discovery import LoadError
 from pyside6_storybook.gui.controls_panel import ControlsPanel
 from pyside6_storybook.gui.error_panel import ErrorPanel
 from pyside6_storybook.registry import Layout, Story, StoryContext, StoryRegistry
+from pyside6_storybook.registry.rendering import StoryRenderError, render_story
 from pyside6_storybook.themes import BuiltinThemes
 
 NO_STORIES_MESSAGE = "No stories are registered."
 LOAD_ERRORS_HEADING = "Load errors"
 
-_PACKAGE_FOLDER = Path(__file__).resolve().parents[1]
-"""The ``pyside6_storybook`` package folder: frames from files below it are library code, trimmed from story tracebacks."""
 _ENTRY_KIND_ROLE = Qt.ItemDataRole.UserRole + 1
 _LOAD_ERRORS_ENTRY = "load-errors"
 
@@ -53,8 +49,8 @@ _SCROLLABLE_LAYOUTS = frozenset({Layout.PADDED, Layout.CENTERED})
 class GalleryWindow(QMainWindow):
     """Three panes in a splitter: the story list, the selected story's preview and the theme and controls pane.
 
-    The preview is rebuilt from scratch whenever a control value or the theme changes. A story that raises, or returns something
-    that is not a ``QWidget``, shows an ``ErrorPanel`` in the preview instead; nothing it raises reaches the Qt event loop. Story
+    The preview is rebuilt from scratch whenever a control value or the theme changes. A story or decorator that raises, or returns
+    something that is not a ``QWidget``, shows an ``ErrorPanel`` in the preview instead; nothing it raises reaches the Qt event loop. Story
     sources that failed to load are listed under a "Load errors" entry at the end of the story list. The chrome is drawn from
     palette roles, so it follows whatever palette the application has.
     """
@@ -84,6 +80,7 @@ class GalleryWindow(QMainWindow):
         self._current_story: Story | None = None
         self._controls_panel: ControlsPanel | None = None
         self._preview_widget: QWidget | None = None
+        self._preview_root: QWidget | None = None
         self._error_panel: ErrorPanel | None = None
 
         self._sidebar = QListWidget(self)
@@ -163,7 +160,7 @@ class GalleryWindow(QMainWindow):
             self._sidebar.setCurrentRow(0)
 
     def current_preview_widget(self) -> QWidget | None:
-        """Return the story widget currently shown in the preview, or ``None`` if there is none (also while an error is shown)."""
+        """Return the widget the story built, without its decorators, or ``None`` if there is none (also while an error is shown)."""
         return self._preview_widget
 
     def current_story_id(self) -> str | None:
@@ -238,7 +235,7 @@ class GalleryWindow(QMainWindow):
     def _rebuild_preview(self) -> None:
         """Build the selected story's widget with the current arguments and theme and show it in place of the previous one.
 
-        If the story raises, or returns something that is not a ``QWidget``, the error is logged and shown in an ``ErrorPanel``.
+        If the story or a decorator fails, the error is logged and shown in an ``ErrorPanel``.
         """
         story = self._current_story
         panel = self._controls_panel
@@ -246,17 +243,14 @@ class GalleryWindow(QMainWindow):
             return
         self._clear_preview()
         try:
-            widget = story(StoryContext(args=panel.values(), theme=self._themes.current))
-        except Exception as error:  # stories are user code: any error is logged and shown in the preview, never raised into Qt
-            self._logger.exception("Story %r raised while rendering", story.id)
-            self._show_error(f"{story.id} raised {type(error).__name__}: {error}", _story_traceback(error))
+            rendered = render_story(story, StoryContext(args=panel.values(), theme=self._themes.current), registry=self._registry)
+        except StoryRenderError as error:
+            self._logger.error("Story %r failed to render: %s", story.id, error.title, exc_info=error)
+            self._show_error(error.title, error.details)
             return
-        if not isinstance(widget, QWidget):
-            self._logger.error("Story %r returned %r, expected a QWidget", story.id, widget)
-            self._show_error(f"{story.id} returned {widget!r}, expected a QWidget", "A story function must return the widget it builds.")
-            return
-        self._preview_widget = widget
-        self._place_preview(widget, story.layout if story.layout is not None else self._registry.default_layout)
+        self._preview_widget = rendered.widget
+        self._preview_root = rendered.root
+        self._place_preview(rendered.root, story.layout if story.layout is not None else self._registry.default_layout)
 
     def _show_error(self, title: str, details: str) -> None:
         self._clear_preview()
@@ -293,12 +287,13 @@ class GalleryWindow(QMainWindow):
             self._preview_surface.setMinimumSize(natural + extra)
 
     def _clear_preview(self) -> None:
-        for widget in (self._preview_widget, self._error_panel):
+        for widget in (self._preview_root, self._error_panel):
             if widget is not None:
                 self._preview_layout.removeWidget(widget)
                 widget.hide()
                 widget.deleteLater()
         self._preview_widget = None
+        self._preview_root = None
         self._error_panel = None
 
     def _clear_controls(self) -> None:
@@ -308,18 +303,6 @@ class GalleryWindow(QMainWindow):
             self._controls_host_layout.removeWidget(panel)
             panel.hide()
             panel.deleteLater()
-
-
-def _story_traceback(error: BaseException) -> str:
-    """Format ``error``'s traceback starting at the story's own code, without the library frames that called it."""
-    frames: TracebackType | None = error.__traceback__
-    while frames is not None and frames.tb_next is not None and _is_library_file(frames.tb_frame.f_code.co_filename):
-        frames = frames.tb_next
-    return "".join(traceback.format_exception(type(error), error, frames))
-
-
-def _is_library_file(filename: str) -> bool:
-    return Path(filename).resolve().is_relative_to(_PACKAGE_FOLDER)
 
 
 def _load_errors_title(errors: Sequence[LoadError]) -> str:

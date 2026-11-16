@@ -148,6 +148,49 @@ def notes(ctx: StoryContext) -> QWidget:
   `default_registry.default_layout = Layout.CENTERED`. An invalid layout, in `layout=` or in `default_layout`, raises a `ValueError`.
 - The error shown for a story that fails, and the "Load errors" view, always fill the preview.
 
+### Decorators
+
+A decorator wraps the widget your story builds, to add padding, a border or a fixed size without changing the story. It is a function
+that receives the widget built so far and the `StoryContext`, and returns the widget to show. Pass a list with `decorators=`:
+
+```python
+from PySide6.QtWidgets import QGroupBox, QLabel, QVBoxLayout, QWidget
+
+from pyside6_storybook import StoryContext, story
+from pyside6_storybook.decorators import fixed_size, frame, padding
+
+
+def in_group_box(widget: QWidget, ctx: StoryContext) -> QWidget:
+    """Show the widget inside a group box titled with the active theme."""
+    box = QGroupBox(ctx.theme)
+    QVBoxLayout(box).addWidget(widget)
+    return box
+
+
+@story("Cards/Card/Default", decorators=[padding(24), fixed_size(320, 200)])
+def card(ctx: StoryContext) -> QWidget:
+    """A 320 by 200 label inside 24 pixels of padding."""
+    return QLabel("Card")
+
+
+card.variant("Framed", decorators=[frame(), in_group_box])
+```
+
+- The built-ins are in `pyside6_storybook.decorators`: `padding(horizontal, vertical=None)` adds transparent space (`vertical` defaults to
+  `horizontal`), `frame()` draws a panel border from the palette, and `fixed_size(width, height)` calls `setFixedSize` on the widget and
+  adds no wrapper. Sizes and padding must be ints; padding must not be negative and sizes must be positive.
+- The first decorator in a list is the outermost, like stacked Python `@decorators`: the last one is applied first, next to your widget. So
+  `decorators=[padding(24), fixed_size(320, 200)]` is a 320 by 200 widget inside 24 pixels of padding.
+- `StoryRegistry.decorators` is a plain list of decorators for every story of that registry, for example
+  `default_registry.decorators.append(padding(8))` in your stories package's `__init__.py`. They wrap the story's own decorators, the first
+  one outermost, and the list is read each time the preview is built.
+- A variant has its story's decorators unless it gives a list with `decorators=`, which replaces them (an empty list removes them).
+  Registry decorators always apply.
+- To write one, return the widget you received after configuring it, or a new widget that contains it as a descendant: put it in a layout
+  of the wrapper, as `in_group_box` does. A decorator that raises, returns something that is not a `QWidget`, or returns a widget that
+  does not contain the widget it received (with the story's widget inside), shows an error in the preview that names the decorator.
+- Decorators run on every rebuild, so keep them stateless, like stories. The `Decorator` type is exported for annotations.
+
 ## Controls
 
 Each control is an argument of the story and an editor in the gallery's controls pane.

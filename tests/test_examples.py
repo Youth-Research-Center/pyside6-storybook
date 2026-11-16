@@ -24,6 +24,7 @@ from pyside6_storybook import (
 )
 from pyside6_storybook.cli import EXAMPLES_MODULE
 from pyside6_storybook.gui import ErrorPanel, GalleryWindow
+from pyside6_storybook.registry.rendering import render_story
 from pyside6_storybook.themes import BUILTIN_THEME_NAMES, BuiltinThemes
 
 EXPECTED_IDS = [
@@ -142,3 +143,13 @@ def test_example_modules_are_story_files_that_import_only_pyside6_and_the_librar
         imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)}
         imported |= {alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names}
         assert {module.split(".")[0] for module in imported if module} <= {"__future__", "PySide6", "pyside6_storybook"}, name
+
+
+def test_the_sign_in_example_uses_a_decorator(qtbot, examples: StoryRegistry) -> None:
+    form = examples.get("Forms/Sign-in Form")
+
+    assert [repr(decorator) for decorator in form.decorators] == ["padding(24)"]
+    rendered = render_story(form, StoryContext(args=form.default_args()), registry=examples)
+    qtbot.addWidget(rendered.root)
+    assert rendered.root is not rendered.widget
+    assert rendered.root.isAncestorOf(rendered.widget)

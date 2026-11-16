@@ -13,6 +13,7 @@ from pyside6_storybook.controls import (
     IntControl,
     TextControl,
 )
+from pyside6_storybook.decorators import Decorator
 from pyside6_storybook.discovery import LoadError, LoadResult, load_stories
 from pyside6_storybook.registry import Layout, Story, StoryContext, StoryRegistry, default_registry, story
 
@@ -26,6 +27,7 @@ __all__ = [
     "ChoiceControl",
     "ColorControl",
     "Control",
+    "Decorator",
     "EnumControl",
     "FileControl",
     "FloatControl",
