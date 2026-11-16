@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import html
 import inspect
 import sys
@@ -177,6 +178,7 @@ class DocsPanel(QWidget):
         layout.setSpacing(_SECTION_SPACING)
         heading = QLabel(title, section)
         heading.setObjectName("docsHeading")
+        heading.setTextFormat(Qt.TextFormat.PlainText)
         font = heading.font()
         font.setBold(True)
         heading.setFont(font)
@@ -191,6 +193,7 @@ class DocsPanel(QWidget):
         label.setTextFormat(Qt.TextFormat.PlainText)
         label.setWordWrap(True)
         label.setTextInteractionFlags(_SELECTABLE_TEXT)
+        label.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         return label
 
     def _controls_body(self, story: Story, parent: QWidget) -> QWidget:
@@ -226,6 +229,8 @@ class DocsPanel(QWidget):
         table.resizeRowsToContents()
         height = header.height() + 2 * table.frameWidth() + sum(table.rowHeight(row) for row in range(len(rows)))
         table.setFixedHeight(height)
+        columns = sum(table.columnWidth(column) for column in range(len(CONTROLS_HEADERS)))
+        table.setMinimumWidth(columns + table.verticalHeader().width() + 2 * table.frameWidth())
         return table
 
     def _siblings_body(self, story: Story, siblings: list[Story], parent: QWidget) -> QWidget:
@@ -279,6 +284,8 @@ class DocsPanel(QWidget):
         point_size = QApplication.font().pointSizeF()
         if point_size > 0:
             font.setPointSizeF(point_size)
+        elif QApplication.font().pixelSize() > 0:
+            font.setPixelSize(QApplication.font().pixelSize())
         view.setFont(font)
         lines = min(max(source.count("\n") + 1, 1), _MAX_SOURCE_LINES)
         scroll_bar_height = view.horizontalScrollBar().sizeHint().height()
@@ -292,7 +299,15 @@ class DocsPanel(QWidget):
 
 
 def _module_doc(story: Story) -> str:
-    module = sys.modules.get(story.module)
+    """Return the docstring of the module the story function was defined in, or an empty string when there is no such module.
+
+    For a ``functools.partial`` the module is the one of the wrapped function, not ``functools``.
+    """
+    function = story.function
+    while isinstance(function, functools.partial):
+        function = function.func
+    name = getattr(function, "__module__", None)
+    module = sys.modules.get(name) if isinstance(name, str) else None
     return (inspect.getdoc(module) or "") if module is not None else ""
 
 
