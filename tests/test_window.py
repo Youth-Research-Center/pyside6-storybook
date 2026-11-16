@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QStackedWidget,
     QStyle,
     QStyleOptionButton,
     QTreeView,
@@ -627,7 +628,10 @@ def _small(ctx: StoryContext) -> QWidget:
 def test_the_preview_surface_is_the_widget_of_a_scroll_area_and_owns_the_preview(qtbot, themes: BuiltinThemes) -> None:
     window = _layout_window(qtbot, themes, _button, layout=None)
 
-    assert _scroll(window).widget() is _surface(window)
+    stack = _scroll(window).widget()
+    assert isinstance(stack, QStackedWidget)
+    assert stack.widget(0) is _surface(window)
+    assert stack.currentWidget() is _surface(window)
     assert _scroll(window).widgetResizable()
     assert _preview(window).parent() is _surface(window)
     assert _surface(window).backgroundRole() == _scroll(window).viewport().backgroundRole()

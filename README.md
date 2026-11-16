@@ -312,8 +312,8 @@ search brings back the branches you had expanded or collapsed.
 
 ### The canvas
 
-Above the preview, two menus change how a story is shown. Neither changes the story: it is built the same way and receives the same
-arguments.
+Above the preview, two menus and the zoom buttons change how a story is shown. None of them changes the story: it is built the same way
+and receives the same arguments.
 
 - **Background** is what the story sits on: "Window" (the default), "Base" or "Alternate Base" (a colour of the active theme, which a
   theme switch keeps up to date) or "Checkerboard" (8-pixel squares of the theme's Base and Mid colours, to judge transparency).
@@ -322,6 +322,12 @@ arguments.
   shows a Width and a Height field. With a size selected, the area the story is placed in is exactly that many pixels, so a `FILL`
   story is exactly that size and a `CENTERED` story is centred in it. The area is outlined, centred in the preview, and the preview
   scrolls when the window is smaller. The label at the right shows the size.
+
+- **Zoom** shows the preview at 50, 67, 100, 150, 200, 300 or 400%. The buttons below the menus step to the previous or next level
+  and reset to 100%; `Ctrl++` (or `Ctrl+=`), `Ctrl+-` and `Ctrl+0` do the same while focus is in the preview pane, and `Ctrl` with the
+  mouse wheel zooms one level per notch. At 100% the live widget is shown. At any other level the canvas shows an image of the
+  preview scaled without smoothing, so 400% turns a one-pixel line into four sharp pixels. A zoomed preview is not interactive: return
+  to 100% to click, type or open popups. The image is taken again when a control, the theme, the background or the size changes.
 
 The choices stay while you switch stories, switch themes or reload; they are not saved between runs.
 

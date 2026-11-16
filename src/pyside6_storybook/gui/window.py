@@ -84,7 +84,7 @@ class GalleryWindow(QMainWindow):
         self._heading.setObjectName("previewHeading")
         self._heading.setFont(self._bold_font(self._heading))
 
-        self._canvas = Canvas(self)
+        self._canvas = Canvas(self, icons=self._icons)
         self._canvas.set_size_presets(registry.size_presets)
         self._canvas.set_empty_message(NO_STORIES_MESSAGE if len(registry) == 0 and not self._load_errors else None)
 

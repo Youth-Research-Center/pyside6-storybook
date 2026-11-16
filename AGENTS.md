@@ -102,7 +102,7 @@ in the same pull request as the bump.
     command line's targets or the default sources from `pyproject.toml`, entry points or the examples) and `constants.py` (file-name
     patterns, names and messages)
   - `gui/` - the gallery's widgets, one module per widget: `window.py` (`GalleryWindow`), `canvas.py` (`Canvas`, the preview scroll area and
-    surface with the Background and Size controls above them, and `CanvasBackground`), `sidebar.py` (`StorySidebar`: the search field
+    surface with the Background, Size and zoom controls above them, and `CanvasBackground`), `sidebar.py` (`StorySidebar`: the search field
     and the tree of stories, with its filter model), `controls_panel.py` (`ControlsPanel`, the
     labelled form over the editors of a story's controls), `docs_panel.py` (`DocsPanel`, the Docs tab, and `controls_rows`, the pure
     function behind its controls table) and `error_panel.py` (`ErrorPanel`, which the window shows in the preview for a
