@@ -227,6 +227,21 @@ def test_float_control_coerce_rejects_non_finite_and_out_of_range_values(bad: fl
         FloatControl("x", 0.5, 0.0, 1.0).coerce(bad)
 
 
+def test_float_control_tolerates_only_floating_point_noise_when_checking_decimals() -> None:
+    assert FloatControl("x", 0.1 * 3, 0.0, 1.0).coerce(0.1 * 3) == 0.1 * 3
+    with pytest.raises(ValueError, match="decimals"):
+        FloatControl("x", 1e-16, 0.0, 1.0)
+    with pytest.raises(ValueError, match="decimals"):
+        FloatControl("x", 1000000000.0001, 0.0, 2e9, decimals=2)
+    with pytest.raises(ValueError, match="decimals"):
+        FloatControl("x", 0.5, 0.0, 2e9, decimals=2).coerce(1000000000.0001)
+
+
+def test_float_control_coerce_turns_an_int_too_large_for_a_float_into_a_value_error() -> None:
+    with pytest.raises(ValueError, match="too large for a float"):
+        FloatControl("x", 0.5, 0.0, 1.0).coerce(10**400)
+
+
 def test_float_control_coerce_rejects_values_finer_than_the_editor_shows() -> None:
     control = FloatControl("x", 0.5, 0.0, 1.0)
     assert control.effective_decimals == 2
