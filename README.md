@@ -333,7 +333,7 @@ and receives the same arguments.
 The choices stay while you switch stories, switch themes or reload; they are not saved between runs.
 
 To list sizes of your own, such as the screens your application supports, append `SizePreset` objects (a name, a width and a height in
-pixels) to `size_presets` of the registry. They follow the built-in sizes in the Size menu:
+pixels, each from 1 to 10 000) to `size_presets` of the registry. They follow the built-in sizes in the Size menu:
 
 ```python
 from pyside6_storybook import SizePreset, default_registry

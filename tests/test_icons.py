@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 import shiboken6
 from icon_testing import assert_tinted, strongest_pixel
+from PySide6.QtCore import QEvent, QSize
 from PySide6.QtGui import QAction, QColor, QIcon, QPalette
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 
@@ -103,12 +104,36 @@ def test_the_cache_is_keyed_on_colour_and_device_pixel_ratio(qapp: QApplication,
     build_icon("copy", "#00ff00")
     assert icons._render_pixmap.cache_info().misses == 2
 
-    monkeypatch.setattr(icons, "_device_pixel_ratio", lambda: 2.0)
+    monkeypatch.setattr(icons, "_device_pixel_ratios", lambda: (2.0,))
     pixmap = build_icon("copy", "#ff0000", size=16).pixmap(16, 16)
     assert icons._render_pixmap.cache_info().misses == 3
     assert icons._render_pixmap("copy", "#ff0000", 16, 2.0).devicePixelRatio() == 2.0
     assert icons._render_pixmap("copy", "#ff0000", 16, 2.0).width() == 32
     assert not pixmap.isNull()
+
+
+def test_an_icon_has_a_pixmap_for_every_screen_pixel_ratio(qapp: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(icons, "_device_pixel_ratios", lambda: (1.0, 2.0))
+
+    icon = build_icon("copy", "#ff0000", size=16)
+
+    assert icon.pixmap(QSize(16, 16), 2.0).width() == 32
+    assert icon.pixmap(QSize(16, 16), 1.0).width() == 16
+
+
+def test_the_pixel_ratios_are_the_distinct_ratios_of_the_screens(qapp: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Screen:
+        def __init__(self, ratio: float) -> None:
+            self._ratio = ratio
+
+        def devicePixelRatio(self) -> float:
+            return self._ratio
+
+    monkeypatch.setattr(icons.QGuiApplication, "screens", staticmethod(lambda: [_Screen(2.0), _Screen(1.0), _Screen(2.0)]))
+    assert icons._device_pixel_ratios() == (1.0, 2.0)
+
+    monkeypatch.setattr(icons.QGuiApplication, "screens", staticmethod(list))
+    assert icons._device_pixel_ratios() == (1.0,)
 
 
 def test_clear_icon_cache_forgets_the_renders(qapp: QApplication) -> None:
@@ -172,6 +197,39 @@ def test_retint_renders_bound_icons_again_from_the_new_palette(qtbot) -> None:
     registry.retint(_palette(active="#00ff00"))
     assert_tinted(strongest_pixel(button.icon()), "#00ff00")
     assert not action.icon().isNull()
+
+
+def test_bind_after_a_retint_uses_the_latest_palette(qtbot) -> None:
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    registry = ActionIcons()
+    registry.retint(_palette(active="#ff0000"))
+    button = QPushButton(parent)
+
+    registry.bind(button, "copy")
+
+    assert_tinted(strongest_pixel(button.icon()), "#ff0000")
+
+
+def test_a_destroyed_target_releases_its_binding(qtbot) -> None:
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    doomed = QPushButton(parent)
+    twice = QPushButton(parent)
+    kept = QPushButton(parent)
+    registry = ActionIcons()
+    registry.bind(doomed, "copy")
+    registry.bind(twice, "copy")
+    registry.bind(twice, "trash")
+    registry.bind(kept, "copy")
+    assert registry.binding_count() == 4
+
+    doomed.deleteLater()
+    twice.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    assert [binding.target for binding in registry._bound] == [kept]
+    assert registry.binding_count() == 1
 
 
 def test_bind_sets_the_icon_immediately_with_the_given_role(qtbot) -> None:
