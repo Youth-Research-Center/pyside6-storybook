@@ -5,6 +5,11 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Zoom: buttons for zoom out, zoom in and reset in the canvas toolbar, with the level (50, 67, 100, 150, 200, 300 and 400%) between them,
+  the shortcuts `Ctrl++`, `Ctrl+=`, `Ctrl+-` and `Ctrl+0` while focus is in the preview pane, and `Ctrl`+wheel, also over the story's
+  own widgets. A level that would need more than 64 million pixels is skipped. At 100% the live
+  widget is shown as before; at another level the preview is an image of the widget scaled without smoothing, which is not interactive,
+  and a line says so.
 - Canvas controls: a Background menu (Window, Base, Alternate Base or Checkerboard) and a Size menu (Fit, Phone portrait 320 by 480,
   Phone landscape 480 by 320, Dialog 800 by 600, the registry's presets, or a Custom width and height) above the preview. With a size
   selected, the area a story is placed in is exactly that size, and the preview scrolls when it does not fit. The choices stay while
