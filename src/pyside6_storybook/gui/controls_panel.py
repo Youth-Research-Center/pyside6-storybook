@@ -1,77 +1,74 @@
-"""The controls panel: one labelled editor per control, built from stock Qt widgets."""
+"""The controls panel: one labelled editor per control, built from the editors in ``gui.editors``."""
 
 from __future__ import annotations
 
-import math
-from collections.abc import Sequence
-from functools import partial
+from collections.abc import Mapping, Sequence
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
-    QDoubleSpinBox,
-    QFormLayout,
-    QLabel,
-    QLineEdit,
-    QSpinBox,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QFormLayout, QLabel, QVBoxLayout, QWidget
 
-from pyside6_storybook.controls import (
-    BoolControl,
-    ChoiceControl,
-    Control,
-    FloatControl,
-    IntControl,
-    TextControl,
-)
+from pyside6_storybook.controls import Control
+from pyside6_storybook.gui.editors import ControlEditor, create_editor
 
 NO_CONTROLS_MESSAGE = "No configurable properties for this component."
-
-_FLOAT_STEPS_PER_RANGE = 100
-_MIN_FLOAT_DECIMALS = 2
-_MAX_FLOAT_DECIMALS = 10
 
 
 class ControlsPanel(QWidget):
     """Renders one labelled editor per control and reports the live values.
 
-    When there are no controls, a short empty-state label is shown instead of an empty form.
+    Each row is a label, which is its editor's buddy, and the editor. When there are no controls, a short empty-state label is
+    shown instead of an empty form.
 
     Signals:
-        valuesChanged: Emitted once per edit with a copy of the current values by control name.
+        valuesChanged: Emitted once per edit with the current values by control name.
     """
 
     valuesChanged = Signal(dict)
 
-    def __init__(self, controls: Sequence[Control], parent: QWidget | None = None) -> None:
+    def __init__(self, controls: Sequence[Control], parent: QWidget | None = None, *, values: Mapping[str, object] | None = None) -> None:
         """Create the panel.
 
         Args:
             controls: The controls to render.
             parent: The owning widget.
+            values: The starting value of each control by name; a control missing from it starts at its default. Each value is
+                validated with the control's ``coerce``.
+
+        Raises:
+            ValueError: If ``values`` has a name that is not one of the controls, or a value that its control rejects.
+            TypeError: If a value in ``values`` has a type its control rejects.
         """
         super().__init__(parent)
-        self._values: dict[str, object] = {control.name: control.default for control in controls}
-        if not controls:
+        self._controls = tuple(controls)
+        self._editors: dict[str, ControlEditor] = {}
+        starting = dict(values) if values is not None else {}
+        unknown = sorted(set(starting) - {control.name for control in self._controls})
+        if unknown:
+            raise ValueError(f"values name {', '.join(repr(name) for name in unknown)}, which are not controls of this panel")
+        if not self._controls:
             self._build_empty_state()
             return
         form = QFormLayout(self)
         form.setContentsMargins(0, 0, 0, 0)
-        for control in controls:
-            label_text = control.name.replace("_", " ").title()
-            editor = self._build_editor(control)
-            editor.setAccessibleName(label_text)
-            label = QLabel(label_text, self)
+        for control in self._controls:
+            editor = create_editor(control, control.coerce(starting.get(control.name, control.default)), self)
+            editor.set_accessible_texts(control.display_label, control.description)
+            editor.valueChanged.connect(self._on_editor_changed)
+            label = QLabel(control.display_label, self)
             label.setBuddy(editor)
+            if control.description:
+                label.setToolTip(control.description)
+                editor.setToolTip(control.description)
             form.addRow(label, editor)
+            self._editors[control.name] = editor
 
     def values(self) -> dict[str, object]:
-        """Return a copy of the current value of every control, keyed by control name."""
-        return dict(self._values)
+        """Return the current value of every control, keyed by control name, each passed through the control's ``coerce``."""
+        return {control.name: control.coerce(self._editors[control.name].value()) for control in self._controls}
+
+    def _on_editor_changed(self, _value: object) -> None:
+        self.valuesChanged.emit(self.values())
 
     def _build_empty_state(self) -> None:
         layout = QVBoxLayout(self)
@@ -85,72 +82,6 @@ class ControlsPanel(QWidget):
         label.setFont(font)
         label.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         layout.addWidget(label)
-
-    def _build_editor(self, control: Control) -> QWidget:
-        if isinstance(control, TextControl):
-            line_edit = QLineEdit(control.default, self)
-            line_edit.textChanged.connect(partial(self._set_value, control.name))
-            return line_edit
-        if isinstance(control, BoolControl):
-            check_box = QCheckBox(self)
-            check_box.setChecked(control.default)
-            check_box.toggled.connect(partial(self._set_value, control.name))
-            return check_box
-        if isinstance(control, ChoiceControl):
-            combo = QComboBox(self)
-            combo.addItems(control.options)
-            combo.setCurrentIndex(control.options.index(control.default))
-            combo.currentIndexChanged.connect(partial(self._set_choice, control))
-            return combo
-        if isinstance(control, IntControl):
-            spin_box = QSpinBox(self)
-            spin_box.setRange(control.minimum, control.maximum)
-            spin_box.setValue(control.default)
-            spin_box.valueChanged.connect(partial(self._set_value, control.name))
-            return spin_box
-        if isinstance(control, FloatControl):
-            double_spin_box = QDoubleSpinBox(self)
-            step, decimals = _float_step_and_decimals(control)
-            double_spin_box.setDecimals(decimals)
-            double_spin_box.setRange(control.minimum, control.maximum)
-            double_spin_box.setSingleStep(step)
-            double_spin_box.setValue(control.default)
-            double_spin_box.valueChanged.connect(partial(self._set_value, control.name))
-            return double_spin_box
-        raise TypeError(f"Unsupported control type: {type(control)!r}")
-
-    def _set_value(self, name: str, value: object) -> None:
-        self._values[name] = value
-        self.valuesChanged.emit(self.values())
-
-    def _set_choice(self, control: ChoiceControl, index: int) -> None:
-        if index >= 0:
-            self._set_value(control.name, control.options[index])
-
-
-def _float_step_and_decimals(control: FloatControl) -> tuple[float, int]:
-    """Derive a spin box step (a power of ten near 1% of the range) and the decimals the editor shows.
-
-    The decimals cover the step, the default and both bounds, so the editor shows the exact default and cannot round a bound
-    (``QDoubleSpinBox`` rounds its range and value to its decimals). Values that need more than ``_MAX_FLOAT_DECIMALS`` decimals
-    are shown rounded.
-    """
-    span = control.maximum - control.minimum
-    if span <= 0:
-        step, step_decimals = 1.0, _MIN_FLOAT_DECIMALS
-    else:
-        exponent = round(math.log10(span / _FLOAT_STEPS_PER_RANGE))
-        step, step_decimals = 10.0**exponent, -exponent
-    value_decimals = max(_decimals_needed(value) for value in (control.default, control.minimum, control.maximum))
-    return step, max(_MIN_FLOAT_DECIMALS, step_decimals, value_decimals)
-
-
-def _decimals_needed(value: float) -> int:
-    """Return the fewest decimals (up to ``_MAX_FLOAT_DECIMALS``) that represent ``value`` without changing it."""
-    for decimals in range(_MAX_FLOAT_DECIMALS + 1):
-        if math.isclose(round(value, decimals), value, rel_tol=1e-12, abs_tol=1e-15):
-            return decimals
-    return _MAX_FLOAT_DECIMALS
 
 
 __all__ = ["NO_CONTROLS_MESSAGE", "ControlsPanel"]

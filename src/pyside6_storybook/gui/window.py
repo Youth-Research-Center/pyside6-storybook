@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QScrollArea,
     QSplitter,
     QVBoxLayout,
     QWidget,
@@ -124,14 +125,20 @@ class GalleryWindow(QMainWindow):
         self._controls_host = QWidget(self)
         self._controls_host_layout = QVBoxLayout(self._controls_host)
         self._controls_host_layout.setContentsMargins(0, 0, 0, 0)
+        self._controls_host_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._controls_scroll = QScrollArea(self)
+        self._controls_scroll.setObjectName("controlsScroll")
+        self._controls_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._controls_scroll.setWidgetResizable(True)
+        self._controls_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._controls_scroll.setWidget(self._controls_host)
 
         side_pane = QWidget(self)
         side_layout = QVBoxLayout(side_pane)
         side_layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
         side_layout.setSpacing(_SPACING * 2)
         side_layout.addWidget(self._build_section("Theme", self._theme_switch, side_pane))
-        side_layout.addWidget(self._build_section("Controls", self._controls_host, side_pane))
-        side_layout.addStretch(1)
+        side_layout.addWidget(self._build_section("Controls", self._controls_scroll, side_pane), stretch=1)
 
         splitter = QSplitter(self)
         splitter.addWidget(self._sidebar)
@@ -207,7 +214,7 @@ class GalleryWindow(QMainWindow):
         story = self._registry.get(current.data(Qt.ItemDataRole.UserRole))
         self._current_story = story
         self._heading.setText(story.id)
-        panel = ControlsPanel(story.controls, self._controls_host)
+        panel = ControlsPanel(story.controls, self._controls_host, values=story.default_args())
         panel.valuesChanged.connect(self._on_values_changed)
         self._controls_host_layout.addWidget(panel)
         self._controls_panel = panel

@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QPushButton,
+    QScrollArea,
     QStyle,
     QStyleOptionButton,
     QVBoxLayout,
@@ -20,7 +21,7 @@ from PySide6.QtWidgets import (
 )
 from story_files import story_source, write
 
-from pyside6_storybook import BoolControl, IntControl, LoadError, StoryContext, StoryRegistry, load_stories
+from pyside6_storybook import BoolControl, FloatControl, IntControl, LoadError, StoryContext, StoryRegistry, load_stories
 from pyside6_storybook.contrast import contrast_ratio
 from pyside6_storybook.gui.controls_panel import NO_CONTROLS_MESSAGE, ControlsPanel
 from pyside6_storybook.gui.error_panel import ErrorPanel
@@ -433,6 +434,57 @@ def test_the_traceback_starts_at_the_story_not_in_the_library(qtbot, themes: Bui
     assert "test_window.py" in details
     assert "_raising" in details
     assert "pyside6_storybook" not in details
+
+
+def test_the_controls_section_scrolls_when_there_are_many_controls(qtbot, themes: BuiltinThemes) -> None:
+    stories = StoryRegistry()
+
+    @stories.story("Many", controls=[IntControl(f"value_{index}", 0, 0, 9) for index in range(40)])
+    def many(ctx: StoryContext) -> QWidget:
+        return QLabel("many")
+
+    window = _make_window(qtbot, stories, themes)
+    window.resize(900, 400)
+    window.show()
+    qtbot.waitExposed(window)
+    scroll = window.findChild(QScrollArea, "controlsScroll")
+    assert scroll is not None
+    host = scroll.widget()
+    assert host is not None
+    panel = host.findChild(ControlsPanel)
+    assert panel is not None
+
+    vertical = scroll.verticalScrollBar()
+    qtbot.waitUntil(lambda: vertical.maximum() > 0)
+    assert scroll.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAsNeeded
+    assert scroll.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    assert scroll.widgetResizable()
+    assert panel.height() > scroll.viewport().height()
+
+
+def test_the_controls_section_does_not_scroll_for_a_few_controls(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+    window = _make_window(qtbot, registry, themes)
+    window.resize(900, 600)
+    window.show()
+    qtbot.waitExposed(window)
+    scroll = window.findChild(QScrollArea, "controlsScroll")
+    assert scroll is not None
+
+    assert scroll.verticalScrollBar().maximum() == 0
+
+
+def test_the_controls_panel_starts_from_the_stories_default_args(qtbot, themes: BuiltinThemes) -> None:
+    stories = StoryRegistry()
+
+    @stories.story("Ratio", controls=[FloatControl("ratio", 1, 0, 2)])
+    def ratio(ctx: StoryContext) -> QWidget:
+        return QLabel(repr(ctx.args["ratio"]))
+
+    window = _make_window(qtbot, stories, themes)
+
+    preview = window.current_preview_widget()
+    assert isinstance(preview, QLabel)
+    assert preview.text() == "1.0"
 
 
 def _inputs(_ctx: StoryContext) -> QWidget:

@@ -2,11 +2,12 @@ from typing import TypeVar
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QLabel, QLineEdit, QSpinBox, QWidget
+from PySide6.QtGui import QPalette, QTextCursor
+from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QLabel, QLineEdit, QPlainTextEdit, QSpinBox, QWidget
 
 from pyside6_storybook import BoolControl, ChoiceControl, FloatControl, IntControl, TextControl
 from pyside6_storybook.gui.controls_panel import NO_CONTROLS_MESSAGE, ControlsPanel
+from pyside6_storybook.gui.editors import ControlEditor
 
 _EditorT = TypeVar("_EditorT", bound=QWidget)
 
@@ -15,6 +16,13 @@ def _editor(panel: ControlsPanel, editor_type: type[_EditorT]) -> _EditorT:
     editor = panel.findChild(editor_type)
     assert editor is not None, editor_type.__name__
     return editor
+
+
+def _proxy(editor: QWidget | None) -> QWidget:
+    assert editor is not None
+    proxy = editor.focusProxy()
+    assert proxy is not None
+    return proxy
 
 
 def _emitted(panel: ControlsPanel) -> list[dict]:
@@ -154,19 +162,28 @@ def test_labels_are_derived_from_names_and_are_buddies_and_accessible_names(qtbo
     qtbot.addWidget(panel)
     labels = {label.text(): label for label in panel.findChildren(QLabel)}
     assert set(labels) == {"Tile Type", "Max Count"}
-    assert isinstance(labels["Tile Type"].buddy(), QLineEdit)
-    assert isinstance(labels["Max Count"].buddy(), QSpinBox)
-    assert labels["Tile Type"].buddy().accessibleName() == "Tile Type"
-    assert labels["Max Count"].buddy().accessibleName() == "Max Count"
+    tile_editor = labels["Tile Type"].buddy()
+    count_editor = labels["Max Count"].buddy()
+    assert isinstance(tile_editor, ControlEditor)
+    assert isinstance(count_editor, ControlEditor)
+    assert isinstance(tile_editor.focusProxy(), QLineEdit)
+    assert isinstance(count_editor.focusProxy(), QSpinBox)
+    assert _proxy(tile_editor).accessibleName() == "Tile Type"
+    assert _proxy(count_editor).accessibleName() == "Max Count"
 
 
 def test_every_editor_is_owned_by_the_panel(qtbot) -> None:
     panel = ControlsPanel([TextControl("a", ""), BoolControl("b", default=True), ChoiceControl("c", "x", ["x"]), IntControl("d", 1, 0, 2)])
     qtbot.addWidget(panel)
-    for editor_type in (QLineEdit, QCheckBox, QComboBox, QSpinBox):
-        editor = panel.findChild(editor_type)
-        assert editor is not None
+    editors = panel.findChildren(ControlEditor)
+    assert len(editors) == 4
+    for editor in editors:
         assert editor.parent() is panel
+    for editor_type in (QLineEdit, QCheckBox, QComboBox, QSpinBox):
+        input_widget = panel.findChild(editor_type)
+        assert input_widget is not None
+        assert isinstance(input_widget.parent(), ControlEditor)
+        assert input_widget.parent() in editors
 
 
 def test_no_controls_shows_empty_state_label(qtbot) -> None:
@@ -225,3 +242,87 @@ def test_float_editor_cannot_go_below_the_declared_minimum(qtbot) -> None:
     spin_box.setValue(0.0)
     assert spin_box.value() == 0.001
     assert panel.values()["x"] == 0.001
+
+
+def test_values_start_from_the_given_values_and_stay_editable(qtbot) -> None:
+    panel = ControlsPanel(
+        [TextControl("text", "a"), BoolControl("flag", default=False), IntControl("count", 1, 0, 9)],
+        values={"text": "given", "count": 7},
+    )
+    qtbot.addWidget(panel)
+    assert panel.values() == {"text": "given", "flag": False, "count": 7}
+
+    _editor(panel, QSpinBox).setValue(8)
+
+    assert panel.values() == {"text": "given", "flag": False, "count": 8}
+
+
+def test_values_are_validated_by_the_controls(qtbot) -> None:
+    controls = [IntControl("count", 1, 0, 9)]
+    with pytest.raises(ValueError, match="outside"):
+        ControlsPanel(controls, values={"count": 10})
+    with pytest.raises(TypeError, match="integer"):
+        ControlsPanel(controls, values={"count": True})
+    with pytest.raises(ValueError, match="'other'"):
+        ControlsPanel(controls, values={"other": 1})
+
+
+def test_labels_and_descriptions_come_from_the_controls(qtbot) -> None:
+    panel = ControlsPanel(
+        [
+            TextControl("text", "x", label="Caption", description="The text shown"),
+            IntControl("max_count", 1, 0, 5, slider=True, description="How many"),
+            BoolControl("flag", default=True),
+        ]
+    )
+    qtbot.addWidget(panel)
+    labels = {label.text(): label for label in panel.findChildren(QLabel)}
+    assert set(labels) == {"Caption", "Max Count", "Flag"}
+
+    caption = labels["Caption"]
+    assert caption.toolTip() == "The text shown"
+    assert caption.buddy().toolTip() == "The text shown"
+    assert _proxy(caption.buddy()).accessibleDescription() == "The text shown"
+    assert labels["Flag"].toolTip() == ""
+    assert _proxy(labels["Flag"].buddy()).accessibleDescription() == ""
+
+
+def test_the_label_is_the_buddy_of_its_editor_and_names_its_input(qtbot) -> None:
+    panel = ControlsPanel(
+        [
+            TextControl("t", "", label="Text"),
+            BoolControl("b", default=False, label="Bool"),
+            ChoiceControl("c", "x", ["x"], label="Choice"),
+            IntControl("i", 1, 0, 2, label="Int"),
+            FloatControl("f", 0.5, 0.0, 1.0, label="Float", slider=True),
+        ]
+    )
+    qtbot.addWidget(panel)
+    expected = {"Text": QLineEdit, "Bool": QCheckBox, "Choice": QComboBox, "Int": QSpinBox, "Float": QDoubleSpinBox}
+    for label in panel.findChildren(QLabel):
+        editor = label.buddy()
+        assert isinstance(editor, ControlEditor)
+        assert type(_proxy(editor)) is expected[label.text()]
+        assert _proxy(editor).accessibleName() == label.text()
+
+
+def test_values_are_coerced_on_every_call(qtbot) -> None:
+    panel = ControlsPanel([FloatControl("ratio", 1, 0, 2)])
+    qtbot.addWidget(panel)
+    values = panel.values()
+    assert values == {"ratio": 1.0}
+    assert isinstance(values["ratio"], float)
+
+
+def test_multiline_text_emits_per_edit_and_keeps_newlines(qtbot) -> None:
+    panel = ControlsPanel([TextControl("text", "a", multiline=True)])
+    qtbot.addWidget(panel)
+    emitted = _emitted(panel)
+    editor = _editor(panel, QPlainTextEdit)
+    editor.moveCursor(QTextCursor.MoveOperation.End)
+
+    qtbot.keyClick(editor, Qt.Key.Key_Return)
+    qtbot.keyClicks(editor, "b")
+
+    assert emitted == [{"text": "a\n"}, {"text": "a\nb"}]
+    assert panel.values() == {"text": "a\nb"}
