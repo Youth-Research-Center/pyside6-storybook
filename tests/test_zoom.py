@@ -335,7 +335,11 @@ def test_a_theme_switch_while_zoomed_grabs_again(qtbot, themes: BuiltinThemes) -
     window.set_theme("Dark" if themes.current == "Light" else "Light")
 
     qtbot.waitUntil(lambda: _shown_image(window) != before, timeout=5000)
-    label_color = _shown_image(window).pixelColor(30, 30)
+    label = window.current_preview_widget()
+    assert label is not None
+    # The label's bottom row, below the baseline of "Hello" (no descenders), so no glyph is sampled; the image is at 200%.
+    inside = label.mapTo(_canvas(window).surface, QPoint(label.width() // 2, label.height() - 1)) * 2
+    label_color = _shown_image(window).pixelColor(inside)
     assert label_color == _canvas(window).surface.palette().color(QPalette.ColorRole.Base)
     assert _canvas(window).zoom() == 200
 
