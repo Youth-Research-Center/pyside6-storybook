@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Control options: `label` and `description` on every control (the form label and the editor's tooltip and accessible description),
+  `TextControl(multiline=True)`, `IntControl(step=..., slider=True)` and `FloatControl(step=..., decimals=..., slider=True)`. Every control
+  also has a read-only `display_label`, a `coerce(value)` method that returns the value in the control's type or raises `ValueError` or
+  `TypeError` naming the control, and `FloatControl` has the read-only `effective_step`, `effective_decimals` and `slider_steps`.
+- In the gallery, spin boxes, sliders and combo boxes only react to the mouse wheel while they have keyboard focus, and the controls
+  pane scrolls when a story has many controls.
 - Story model: `story` decorator, `Story`, `StoryContext`, `StoryRegistry`, `default_registry` and the `TextControl`, `BoolControl`,
   `ChoiceControl`, `IntControl` and `FloatControl` controls.
 - Gallery window with a story list, a preview, a theme switch and a controls panel.
@@ -25,3 +31,9 @@ All notable changes to this project are documented in this file.
   error which source it used.
 - Example stories built from stock Qt widgets (buttons, inputs, display widgets, the active palette and a small form), shown by
   `pyside6-storybook --examples`.
+
+### Changed
+- A control's default must have the control's value type: `BoolControl` takes only a `bool`, `IntControl` an `int` (not a `bool`),
+  `FloatControl` an `int` or `float` (not a `bool`), `TextControl` and `ChoiceControl` a string. `Story.default_args()` returns each
+  default passed through the control's `coerce`, so a `FloatControl` default given as `1` starts as `1.0`.
+- `FloatControl` rejects a default or bound that needs more than 10 decimals, which the editor used to show rounded.

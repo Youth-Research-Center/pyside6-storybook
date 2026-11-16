@@ -78,8 +78,11 @@ class Story:
         return StoryOrigin(self.module, self.qualname)
 
     def default_args(self) -> dict[str, object]:
-        """Return the default value of every control, keyed by control name."""
-        return {control.name: control.default for control in self.controls}
+        """Return the value every control starts with, keyed by control name.
+
+        Each value is the control's default passed through its ``coerce``, so it has the type a story receives.
+        """
+        return {control.name: control.coerce(control.default) for control in self.controls}
 
     def __call__(self, ctx: StoryContext) -> QWidget:
         """Build the story's widget.

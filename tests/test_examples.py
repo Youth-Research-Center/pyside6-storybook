@@ -1,11 +1,13 @@
 import ast
+import dataclasses
+import typing
 from pathlib import Path
 
 import pytest
 from PySide6.QtWidgets import QApplication, QLabel, QListWidget, QWidget
 
 import pyside6_storybook.examples
-from pyside6_storybook import BoolControl, ChoiceControl, FloatControl, IntControl, StoryContext, StoryRegistry, TextControl, load_stories
+from pyside6_storybook import BoolControl, ChoiceControl, Control, FloatControl, IntControl, StoryContext, StoryRegistry, TextControl, load_stories
 from pyside6_storybook.cli import EXAMPLES_MODULE
 from pyside6_storybook.gui import ErrorPanel, GalleryWindow
 from pyside6_storybook.themes import BUILTIN_THEME_NAMES, BuiltinThemes
@@ -40,6 +42,19 @@ def test_the_examples_are_the_expected_stories(examples: StoryRegistry) -> None:
 def test_the_examples_use_every_control_type(examples: StoryRegistry) -> None:
     used = {type(control) for story in examples for control in story.controls}
     assert used == {TextControl, BoolControl, ChoiceControl, IntControl, FloatControl}
+
+
+def test_the_examples_use_every_control_option(examples: StoryRegistry) -> None:
+    options = {field.name: field.default for control_type in typing.get_args(Control) for field in dataclasses.fields(control_type) if field.kw_only}
+    assert {"label", "description", "multiline", "step", "decimals", "slider"} <= set(options)
+    used = {
+        name
+        for story in examples
+        for control in story.controls
+        for name, default in options.items()
+        if hasattr(control, name) and getattr(control, name) != default
+    }
+    assert used == set(options)
 
 
 def test_one_example_has_no_controls_and_shows_the_theme(qtbot, examples: StoryRegistry) -> None:

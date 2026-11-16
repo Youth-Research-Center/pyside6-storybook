@@ -4,7 +4,7 @@ import functools
 import pytest
 from PySide6.QtWidgets import QLabel, QPushButton, QWidget
 
-from pyside6_storybook import BoolControl, IntControl, Story, StoryContext, StoryRegistry, TextControl, default_registry, story
+from pyside6_storybook import BoolControl, FloatControl, IntControl, Story, StoryContext, StoryRegistry, TextControl, default_registry, story
 from pyside6_storybook import registry as registry_module
 from pyside6_storybook.registry import StoryOrigin
 
@@ -185,3 +185,16 @@ def test_a_callable_without_a_qualified_name_can_be_a_story() -> None:
     assert isinstance(widget, QLabel)
     assert widget.text() == "hi"
     widget.deleteLater()
+
+
+def test_default_args_are_the_coerced_defaults() -> None:
+    registry = StoryRegistry()
+
+    @registry.story("Numbers", controls=[FloatControl("ratio", 1, 0, 2), IntControl("count", 3, 0, 9)])
+    def numbers(ctx: StoryContext) -> QWidget:
+        return QWidget()
+
+    args = numbers.default_args()
+
+    assert args == {"ratio": 1.0, "count": 3}
+    assert isinstance(args["ratio"], float)
