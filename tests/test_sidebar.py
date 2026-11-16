@@ -268,6 +268,14 @@ def test_select_story_emits_and_set_registry_does_not(qtbot) -> None:
     assert recorder.selected == ["A/C"]
 
 
+def test_story_ids_lists_every_story_in_tree_order_including_the_ones_the_filter_hides(qtbot) -> None:
+    sidebar = _sidebar(qtbot, _registry("A/One", "B/One", "A/Two"))
+    _search(sidebar).setText("Two")
+
+    assert sidebar.visible_story_ids() == ["A/Two"]
+    assert sidebar.story_ids() == ["A/One", "A/Two", "B/One"]
+
+
 def test_set_registry_forgets_a_selection_that_no_longer_exists(qtbot) -> None:
     sidebar = _sidebar(qtbot, _registry("A/B", "A/C"))
     sidebar.select_story("A/C")
@@ -574,13 +582,13 @@ def test_window_set_registry_falls_back_to_defaults_when_a_value_is_rejected(qtb
     assert preview.text() == "size 3"
 
 
-def test_window_set_registry_selects_the_first_entry_when_the_story_is_gone(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_window_set_registry_selects_the_story_at_the_same_row_when_the_story_is_gone(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
     window, _ = _window(qtbot, registry, themes)
     window.select_story("Display/Label")
 
     window.set_registry(_registry("X/One", "X/Two"))
 
-    assert window.current_story_id() == "X/One"
+    assert window.current_story_id() == "X/Two"
     window.set_registry(StoryRegistry(), load_errors=(LoadError("a.py", "boom"),))
     assert window.current_story_id() is None
     heading = window.findChild(QLabel, "previewHeading")

@@ -82,7 +82,7 @@ def test_a_dotted_package_imports_only_its_story_modules(tmp_path: Path, stories
 
     assert result.errors == ()
     assert stories.ids() == ["Kit/A", "Kit/B"]
-    assert result.modules == ("kit.stories.a_story", "kit.stories.inner.b_stories")
+    assert result.modules == ("kit.stories", "kit.stories.a_story", "kit.stories.inner.b_stories")
     assert not {"kit.stories.__main__", "kit.stories.conftest", "kit.stories.test_kit", "kit.stories.helpers"} & set(sys.modules)
 
 

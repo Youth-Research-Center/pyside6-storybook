@@ -9,6 +9,7 @@ from story_files import story_source, write
 
 from pyside6_storybook import LoadError, StoryRegistry, __version__, cli
 from pyside6_storybook.discovery import sources
+from pyside6_storybook.discovery.reload import ReloadSession
 
 
 class _RecordingRun:
@@ -18,6 +19,7 @@ class _RecordingRun:
         self.exit_code = exit_code
         self.calls: list[tuple[list[str], str | None]] = []
         self.load_errors: list[tuple[LoadError, ...]] = []
+        self.reloads: list[ReloadSession | None] = []
 
     def __call__(
         self,
@@ -26,9 +28,11 @@ class _RecordingRun:
         *,
         theme: str | None = None,
         load_errors: tuple[LoadError, ...] = (),
+        reload: ReloadSession | None = None,
     ) -> int:
         self.calls.append((registry.ids(), theme))
         self.load_errors.append(load_errors)
+        self.reloads.append(reload)
         return self.exit_code
 
 
@@ -60,7 +64,7 @@ def test_help_describes_targets_and_options(capsys: pytest.CaptureFixture[str]) 
         cli.main(["--help"])
     assert exit_info.value.code == 0
     help_text = capsys.readouterr().out
-    for expected in ("TARGET", "--list", "--theme", "--version", "Light", "Dark"):
+    for expected in ("TARGET", "--list", "--no-reload", "--theme", "--version", "Light", "Dark"):
         assert expected in help_text
 
 
@@ -80,6 +84,28 @@ def test_targets_open_the_gallery_with_their_stories(project: Path, gallery: _Re
 def test_theme_is_passed_to_the_gallery(project: Path, gallery: _RecordingRun) -> None:
     cli.main(["--theme", "Dark", "stories"])
     assert gallery.calls == [(["Inputs/A", "Inputs/B"], "Dark")]
+
+
+def test_the_gallery_gets_a_reload_session_for_the_targets_and_the_first_load(project: Path, gallery: _RecordingRun) -> None:
+    assert cli.main(["stories"]) == 0
+
+    (session,) = gallery.reloads
+    assert session is not None
+    assert session.targets == ("stories",)
+    assert session.last_accepted.registry.ids() == ["Inputs/A", "Inputs/B"]
+
+
+def test_no_reload_passes_no_session(project: Path, gallery: _RecordingRun) -> None:
+    assert cli.main(["--no-reload", "stories"]) == 0
+    assert gallery.reloads == [None]
+
+
+def test_list_never_builds_a_reload_session(project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse(*args: object, **kwargs: object) -> ReloadSession:
+        raise AssertionError("--list must not build a reload session")
+
+    monkeypatch.setattr(cli, "ReloadSession", refuse)
+    assert cli.main(["--list", "stories"]) == 0
 
 
 def test_the_gallery_exit_code_is_returned(project: Path, monkeypatch: pytest.MonkeyPatch) -> None:

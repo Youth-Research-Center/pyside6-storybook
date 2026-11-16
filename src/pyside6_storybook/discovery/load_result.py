@@ -31,7 +31,9 @@ class LoadResult:
 
     Attributes:
         registry: The registry the loaded stories registered themselves in (the default registry).
-        modules: Names of the story modules that were imported or were already imported, in load order, without duplicates.
+        modules: Names of the story modules that were imported or were already imported, in load order, without duplicates. A target
+            given as a dotted name is listed too, whether it is a module or a package, so a package whose stories are in its
+            ``__init__.py`` is listed.
         errors: The sources that failed, in load order.
     """
 

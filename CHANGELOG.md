@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Hot reload: the gallery loads the stories again when a story file or a module of the project changes, so an edit shows without a restart.
+  It drops the project's modules and loads the targets into a fresh registry; a reload that finds no story, or in which a source fails
+  that was not already failing, is rejected and leaves the previous stories in place, with the errors in the preview. After a good reload
+  the selected story (or the one now at its position) and its control values stay, a status bar shows "Reloaded HH:MM:SS" or "Reload
+  failed HH:MM:SS: ...", and `LoadResult.modules` lists a dotted-name target itself, including a package. `--no-reload` turns it
+  off, and `--list` never reloads.
 - Actions panel: the side pane has "Controls" and "Actions" tabs. A story shows what happens to its widget with
   `ctx.log_signal(button.clicked)` (the signal's name, or `name=`) or `ctx.log("name", *args)`; each emission is a row with the time, the
   action and its arguments (`QPushButton.clicked` delivers none, `valueChanged` delivers the value), newest first, at most 500 rows, with

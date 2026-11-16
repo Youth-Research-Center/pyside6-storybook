@@ -121,8 +121,8 @@ class _Loader:
             return
         if file is not None:
             self._seen_files.add(file)
+        self._record_module(name)
         if not hasattr(module, "__path__"):
-            self._record_module(name)
             return
         for location in module.__path__:
             for story_file, submodule_name in story_modules_in_package(Path(location), name):

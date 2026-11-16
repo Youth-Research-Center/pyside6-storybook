@@ -15,6 +15,7 @@ from pyside6_storybook import __version__
 from pyside6_storybook.app import run
 from pyside6_storybook.discovery import LoadError, load_stories
 from pyside6_storybook.discovery.constants import EXAMPLES_MODULE
+from pyside6_storybook.discovery.reload import ReloadSession
 from pyside6_storybook.discovery.sources import StorySourcesError, put_on_sys_path, resolve_story_sources
 from pyside6_storybook.themes import BUILTIN_THEME_NAMES
 
@@ -26,7 +27,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Without targets the default sources are used: ``[tool.pyside6-storybook]`` in ``pyproject.toml``, then the
     ``pyside6_storybook.stories`` entry points, then the built-in examples (see ``discovery.sources``). ``--examples`` adds the
-    built-in example stories to the targets. With ``--list``, standard error says where the stories came from.
+    built-in example stories to the targets. With ``--list``, standard error says where the stories came from. The gallery loads the
+    targets again when a story file or a module of the project changes, unless ``--no-reload`` is given; ``--list`` never reloads.
 
     The ``QApplication`` is created before any story module is imported, so a module that creates a widget at import time works.
     With ``--list`` no window is opened, and the offscreen platform is used unless ``QT_QPA_PLATFORM`` says otherwise, so listing
@@ -65,7 +67,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         for story_id in result.registry.ids():
             print(story_id)
         return 1 if result.errors else 0
-    return run(result.registry, theme=arguments.theme, load_errors=result.errors)
+    session = None if arguments.no_reload else ReloadSession(targets, cwd=cwd, pythonpath=sources.pythonpath, initial=result)
+    return run(result.registry, theme=arguments.theme, load_errors=result.errors, reload=session)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -81,6 +84,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--examples", action="store_true", help="also load the built-in example stories, built from stock Qt widgets")
     parser.add_argument("--list", action="store_true", help="print the ids of the stories found, one per line, and exit without opening a window")
+    parser.add_argument("--no-reload", action="store_true", help="do not load the stories again when a story file or a module they import changes")
     parser.add_argument("--theme", choices=BUILTIN_THEME_NAMES, help=f"the theme to start in (default: {BUILTIN_THEME_NAMES[0]})")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser
