@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Keyboard navigation and accessibility: Tab follows reading order (search, tree, preview tabs, canvas controls, the preview, then the
+  theme switch, the side tabs and the controls), `F6` and `Shift+F6` move between the three panes and return to the widget that had
+  focus there, `Ctrl+Alt+Down` and `Ctrl+Alt+Up` open the next and previous story in the list, and `Ctrl+T` switches to the next
+  theme. A Help menu has "Keyboard shortcuts" (`F1`), a dialog that lists every shortcut of the window. The panes are named "Story
+  list", "Preview" and "Controls and actions", and the preview area "Preview of <story id>". A rebuilt preview never takes focus
+  from the control being edited, and when focus was inside the story's own widget it moves to the preview area.
 - Hot reload: the gallery loads the stories again when a story file or a module of the project changes, so an edit shows without a restart.
   It drops the project's modules and loads the targets into a fresh registry; a reload that finds no story, or in which a source fails
   that was not already failing, is rejected and leaves the previous stories in place, with the errors in the preview. After a good reload
@@ -80,6 +86,11 @@ All notable changes to this project are documented in this file.
   `pyside6-storybook --examples`.
 
 ### Changed
+- The Light theme's `Highlight` and `Accent` are `#1F5FC4` (was `#2A6FDB`). Fusion draws the focus ring in a colour derived from
+  `Highlight`, which was `#5391ED` and reached only 2.77:1 against the Light `Window`; the ring is now `#194C9D` (7.2:1), and
+  selected text on the highlight is 6.0:1. The Dark theme's ring was already above 3:1 and its colours are unchanged.
+- The Docs tab's controls table and source view get their height from their rows and lines instead of a fixed pixel height, so they
+  follow the application font.
 - The story list is no longer a flat list of ids: stories are grouped by the segments of their ids, and a component below the top level
   with a single story is shown as that story's row.
 - The error panel shows a warning icon beside its title. The gallery now bundles Phosphor Icons (MIT) and tints them from the active

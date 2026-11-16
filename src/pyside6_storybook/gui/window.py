@@ -2,20 +2,29 @@
 
 from __future__ import annotations
 
+import itertools
 import logging
 from collections.abc import Sequence
+from dataclasses import dataclass
 from enum import Enum
 
+import shiboken6
 from PySide6.QtCore import QEvent, QSignalBlocker, Qt
-from PySide6.QtGui import QCloseEvent, QFont, QKeySequence, QShortcut
+from PySide6.QtGui import QAction, QCloseEvent, QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFrame,
+    QHeaderView,
     QLabel,
     QMainWindow,
     QScrollArea,
     QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -43,6 +52,30 @@ NO_STORIES_FOUND_MESSAGE = "No stories were found"
 _MARGIN = 10
 _SPACING = 8
 _SECTION_SPACING = 6
+_HELP_KEYS = "F1"
+_HELP_DESCRIPTION = "Show the keyboard shortcuts"
+SHORTCUTS_HEADERS = ("Keys", "Action")
+
+
+@dataclass(frozen=True)
+class _Shortcut:
+    """One window shortcut: the keys, the line the Keyboard shortcuts dialog shows, and the name of the window method it calls."""
+
+    keys: str
+    description: str
+    handler: str
+
+
+_WINDOW_SHORTCUTS = (
+    _Shortcut("Ctrl+F", "Focus the search field", "_focus_search"),
+    _Shortcut("/", "Focus the search field, except while typing in a field", "_on_slash_shortcut"),
+    _Shortcut("Ctrl+Alt+Down", "Open the next story in the list", "_select_next_story"),
+    _Shortcut("Ctrl+Alt+Up", "Open the previous story in the list", "_select_previous_story"),
+    _Shortcut("Ctrl+T", "Switch to the next theme", "_select_next_theme"),
+    _Shortcut("F6", "Move focus to the next pane", "_focus_next_pane"),
+    _Shortcut("Shift+F6", "Move focus to the previous pane", "_focus_previous_pane"),
+)
+"""Every shortcut the window creates, and the rows of the Keyboard shortcuts dialog; the canvas lists its own through ``shortcut_help``."""
 
 
 class GalleryWindow(QMainWindow):
@@ -103,6 +136,7 @@ class GalleryWindow(QMainWindow):
         self._docs_panel = DocsPanel(self, icons=self._icons)
         self._docs_scroll = QScrollArea(self)
         self._docs_scroll.setObjectName("docsScroll")
+        self._docs_scroll.setAccessibleName("Docs")
         self._docs_scroll.setFrameShape(QFrame.Shape.StyledPanel)
         self._docs_scroll.setWidgetResizable(True)
         self._docs_scroll.setWidget(self._docs_panel)
@@ -111,12 +145,13 @@ class GalleryWindow(QMainWindow):
         # Document mode keeps the tab frame from taking width away from the preview.
         self._preview_tabs = QTabWidget(self)
         self._preview_tabs.setObjectName("previewTabs")
-        self._preview_tabs.setAccessibleName("Preview")
+        self._preview_tabs.tabBar().setAccessibleName("Preview tabs")
         self._preview_tabs.setDocumentMode(True)
         self._preview_tabs.addTab(self._canvas, "Canvas")
         self._preview_tabs.addTab(self._docs_scroll, "Docs")
 
         preview_pane = QWidget(self)
+        preview_pane.setAccessibleName("Preview")
         preview_layout = QVBoxLayout(preview_pane)
         preview_layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
         preview_layout.setSpacing(_SPACING)
@@ -136,6 +171,8 @@ class GalleryWindow(QMainWindow):
         self._controls_host_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self._controls_scroll = QScrollArea(self)
         self._controls_scroll.setObjectName("controlsScroll")
+        # The editors in it take focus and the scroll area follows them, so it is not a stop of its own.
+        self._controls_scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._controls_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._controls_scroll.setWidgetResizable(True)
         self._controls_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -144,18 +181,21 @@ class GalleryWindow(QMainWindow):
         self._actions_panel = ActionsPanel(self, icons=self._icons)
         self._side_tabs = QTabWidget(self)
         self._side_tabs.setObjectName("sideTabs")
-        self._side_tabs.setAccessibleName("Controls and actions")
+        self._side_tabs.tabBar().setAccessibleName("Controls and actions tabs")
         self._side_tabs.setDocumentMode(True)
         self._side_tabs.addTab(self._controls_scroll, "Controls")
         self._side_tabs.addTab(self._actions_panel, "Actions")
 
         side_pane = QWidget(self)
+        side_pane.setAccessibleName("Controls and actions")
         side_layout = QVBoxLayout(side_pane)
         side_layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
         side_layout.setSpacing(_SPACING * 2)
         side_layout.addWidget(self._build_section("Theme", self._theme_switch, side_pane))
         side_layout.addWidget(self._side_tabs, stretch=1)
 
+        self._preview_pane = preview_pane
+        self._side_pane = side_pane
         splitter = QSplitter(self)
         splitter.addWidget(self._sidebar)
         splitter.addWidget(preview_pane)
@@ -165,16 +205,20 @@ class GalleryWindow(QMainWindow):
 
         self._sidebar.storySelected.connect(self._on_story_selected)
         self._sidebar.loadErrorsSelected.connect(self._on_load_errors_selected)
-        self._search_shortcuts = (
-            QShortcut(QKeySequence("Ctrl+F"), self, self._sidebar.focus_search),
-            QShortcut(QKeySequence(Qt.Key.Key_Slash), self, self._on_slash_shortcut),
-        )
+        self._shortcuts = [QShortcut(QKeySequence(shortcut.keys), self, getattr(self, shortcut.handler)) for shortcut in _WINDOW_SHORTCUTS]
+        self._shortcuts_dialog: QDialog | None = None
+        self._last_focus: dict[QWidget, QWidget] = {}
+        self._build_help_menu()
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            app.focusChanged.connect(self._on_focus_changed)
         self._reload_status = ReloadStatus(self)
         self.statusBar().addWidget(self._reload_status, 1)
         self.statusBar().setVisible(reload is not None)
         if reload is not None:
             self._reload_watcher = ReloadWatcher(reload, self)
             self._reload_watcher.reloaded.connect(self._on_reloaded)
+        self._apply_tab_order()
         self._sidebar.select_first()
 
     def current_preview_widget(self) -> QWidget | None:
@@ -282,6 +326,161 @@ class GalleryWindow(QMainWindow):
             return
         self._sidebar.focus_search()
 
+    def _focus_search(self) -> None:
+        self._sidebar.focus_search()
+
+    def _step_story(self, step: int) -> None:
+        """Open the story ``step`` rows after the current one among the stories the search keeps; the ends do not wrap.
+
+        When the current story is hidden by the search, a step forward opens the first visible story and a step back the last.
+        """
+        ids = self._sidebar.visible_story_ids()
+        if not ids:
+            return
+        current = self.current_story_id()
+        if current in ids:
+            index = ids.index(current) + step
+        else:
+            index = 0 if step > 0 else len(ids) - 1
+        target = ids[max(0, min(index, len(ids) - 1))]
+        if target != current:
+            self.select_story(target)
+
+    def _select_next_story(self) -> None:
+        self._step_story(1)
+
+    def _select_previous_story(self) -> None:
+        self._step_story(-1)
+
+    def _select_next_theme(self) -> None:
+        names = self._themes.names
+        if len(names) > 1:
+            self.set_theme(names[(names.index(self._themes.current) + 1) % len(names)])
+
+    def _panes(self) -> tuple[QWidget, ...]:
+        return (self._sidebar, self._preview_pane, self._side_pane)
+
+    def _first_in_pane(self, pane: QWidget) -> QWidget:
+        if pane is self._sidebar:
+            return self._sidebar.focus_chain()[0]
+        return self._preview_tabs.tabBar() if pane is self._preview_pane else self._theme_switch
+
+    def _pane_of(self, widget: QWidget | None) -> QWidget | None:
+        if widget is None:
+            return None
+        return next((pane for pane in self._panes() if pane is widget or pane.isAncestorOf(widget)), None)
+
+    def _on_focus_changed(self, _old: QWidget | None, new: QWidget | None) -> None:
+        """Remember the last widget that had focus in each pane, for F6."""
+        if not shiboken6.isValid(self) or new is None:
+            return
+        pane = self._pane_of(new)
+        if pane is not None:
+            self._last_focus[pane] = new
+
+    def _move_to_pane(self, step: int) -> None:
+        """Focus the pane ``step`` places after the one with focus, at its last focused widget or else its first."""
+        panes = self._panes()
+        current = self._pane_of(QApplication.focusWidget())
+        index = panes.index(current) + step if current is not None else (0 if step > 0 else len(panes) - 1)
+        pane = panes[index % len(panes)]
+        remembered = self._last_focus.get(pane)
+        usable = (
+            remembered is not None
+            and shiboken6.isValid(remembered)
+            and remembered.isVisible()
+            and remembered.isEnabled()
+            and pane.isAncestorOf(remembered)
+        )
+        target = remembered if usable and remembered is not None else self._first_in_pane(pane)
+        target.setFocus(Qt.FocusReason.TabFocusReason)
+
+    def _focus_next_pane(self) -> None:
+        self._move_to_pane(1)
+
+    def _focus_previous_pane(self) -> None:
+        self._move_to_pane(-1)
+
+    def _build_help_menu(self) -> None:
+        menu = self.menuBar().addMenu("&Help")
+        action = QAction("&Keyboard shortcuts", menu)
+        action.setShortcut(QKeySequence(_HELP_KEYS))
+        action.triggered.connect(self._show_shortcuts_dialog)
+        menu.addAction(action)
+
+    def shortcut_rows(self) -> list[tuple[str, str]]:
+        """Return every shortcut the window has as ``(keys, description)`` pairs, in the order the Keyboard shortcuts dialog lists them.
+
+        The rows come from the tables that create the shortcuts, so a shortcut cannot be missing from the dialog.
+        """
+        native = QKeySequence.SequenceFormat.NativeText
+        rows = [(QKeySequence(shortcut.keys).toString(native), shortcut.description) for shortcut in _WINDOW_SHORTCUTS]
+        rows.extend(self._canvas.shortcut_help())
+        rows.append((QKeySequence(_HELP_KEYS).toString(native), _HELP_DESCRIPTION))
+        return rows
+
+    def _show_shortcuts_dialog(self) -> None:
+        """Open the Keyboard shortcuts dialog without blocking; it is deleted when it closes."""
+        existing = self._shortcuts_dialog
+        if existing is not None and shiboken6.isValid(existing):
+            existing.raise_()
+            existing.activateWindow()
+            return
+        dialog = QDialog(self)
+        dialog.setObjectName("shortcutsDialog")
+        dialog.setWindowTitle("Keyboard shortcuts")
+        rows = self.shortcut_rows()
+        table = QTableWidget(len(rows), len(SHORTCUTS_HEADERS), dialog)
+        table.setObjectName("shortcutsTable")
+        table.setAccessibleName("Keyboard shortcuts")
+        table.setHorizontalHeaderLabels(list(SHORTCUTS_HEADERS))
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        table.setSizeAdjustPolicy(QAbstractItemView.SizeAdjustPolicy.AdjustToContents)
+        table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setStretchLastSection(True)
+        for row, cells in enumerate(rows):
+            for column, text in enumerate(cells):
+                table.setItem(row, column, QTableWidgetItem(text))
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, dialog)
+        buttons.rejected.connect(dialog.reject)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
+        layout.setSpacing(_SPACING)
+        layout.addWidget(table)
+        layout.addWidget(buttons)
+        dialog.finished.connect(self._on_shortcuts_dialog_finished)
+        self._shortcuts_dialog = dialog
+        dialog.open()
+
+    def _on_shortcuts_dialog_finished(self) -> None:
+        dialog, self._shortcuts_dialog = self._shortcuts_dialog, None
+        if dialog is not None and shiboken6.isValid(dialog):
+            dialog.deleteLater()
+
+    def _apply_tab_order(self) -> None:
+        """Chain Tab through the window in reading order: search, tree, preview tabs, canvas controls, the preview, then the side pane.
+
+        Widgets are created over time (the story's widget, the controls, the docs), so Qt's creation order would put them last; this runs
+        again whenever they change. Hidden widgets stay in the chain and Tab skips them.
+        """
+        chain: list[QWidget] = [*self._sidebar.focus_chain(), self._preview_tabs, *self._canvas.focus_chain()]
+        placed = self._canvas.placed_widget()
+        if placed is not None:
+            chain.extend(_focus_targets(placed))
+        chain.append(self._docs_scroll)
+        chain.extend(_focus_targets(self._docs_panel, only_visible=True))
+        chain.extend([self._theme_switch, self._side_tabs])
+        if self._controls_panel is not None:
+            chain.extend(_focus_targets(self._controls_panel))
+        chain.extend(_focus_targets(self._actions_panel))
+        for first, second in itertools.pairwise(chain):
+            if first is not second:
+                QWidget.setTabOrder(first, second)
+
     def _on_story_selected(self, story_id: str) -> None:
         if self._current_story is not None and self._current_story.id == story_id and self._controls_panel is not None:
             return
@@ -301,6 +500,7 @@ class GalleryWindow(QMainWindow):
         self._heading.setText("")
         self._docs_panel.clear()
         self._canvas.clear()
+        self._canvas.set_preview_name(None)
 
     def _show_load_errors(self) -> None:
         self._show_nothing()
@@ -329,6 +529,7 @@ class GalleryWindow(QMainWindow):
         self._show_nothing(keep_actions=self._current_story is not None and self._current_story.id == story.id)
         self._current_story = story
         self._heading.setText(story.id)
+        self._canvas.set_preview_name(story.id)
         self._docs_panel.show_story(story, self._registry)
         panel = ControlsPanel(story.controls, self._controls_host, values=self._starting_values(story, values))
         panel.valuesChanged.connect(self._on_values_changed)
@@ -373,11 +574,13 @@ class GalleryWindow(QMainWindow):
         self._preview_widget = rendered.widget
         self._preview_root = rendered.root
         self._canvas.place(rendered.root, story.layout if story.layout is not None else self._registry.default_layout)
+        self._apply_tab_order()
 
     def _show_error(self, title: str, details: str) -> None:
         self._clear_preview()
         self._error_panel = ErrorPanel(title, details, self._canvas.surface)
         self._canvas.place(self._error_panel, Layout.FILL)
+        self._apply_tab_order()
 
     def _clear_preview(self) -> None:
         """Remove the preview, first stopping its widget's actions from being logged, including signals it emits while it is hidden."""
@@ -394,6 +597,43 @@ class GalleryWindow(QMainWindow):
             self._controls_host_layout.removeWidget(panel)
             panel.hide()
             panel.deleteLater()
+
+
+def _focus_targets(root: QWidget, *, only_visible: bool = False) -> list[QWidget]:
+    """Return the widgets in ``root`` (``root`` included) that Tab stops at, in creation order, which is reading order.
+
+    A compound widget, one whose focus proxy is one of its children (an editor, a tab widget), is returned as one entry and its
+    children are not searched: ``QWidget.setTabOrder`` moves it together with its inputs. A widget that forwards focus to its parent
+    (the line edit inside a spin box) is left to the parent.
+
+    Args:
+        root: The widget to search.
+        only_visible: Skip hidden widgets and everything inside them. A panel that deletes its content later keeps the old, hidden
+            widgets until then.
+
+    Returns:
+        The widgets, outermost first.
+    """
+    targets: list[QWidget] = []
+
+    def visit(widget: QWidget) -> None:
+        if only_visible and widget is not root and not widget.isVisibleTo(root):
+            return
+        if widget.focusPolicy() != Qt.FocusPolicy.NoFocus:
+            proxy = widget.focusProxy()
+            if proxy is None:
+                targets.append(widget)
+            elif widget.isAncestorOf(proxy):
+                targets.append(widget)
+                return
+            else:
+                return
+        for child in widget.children():
+            if isinstance(child, QWidget) and not child.isWindow():
+                visit(child)
+
+    visit(root)
+    return targets
 
 
 def _carried_values(story: Story, previous: dict[str, object]) -> dict[str, object]:
@@ -436,4 +676,4 @@ def _load_errors_details(errors: Sequence[LoadError]) -> str:
     return "\n\n".join(sections)
 
 
-__all__ = ["LOAD_ERRORS_HEADING", "NO_STORIES_FOUND_MESSAGE", "NO_STORIES_MESSAGE", "GalleryWindow"]
+__all__ = ["LOAD_ERRORS_HEADING", "NO_STORIES_FOUND_MESSAGE", "NO_STORIES_MESSAGE", "SHORTCUTS_HEADERS", "GalleryWindow"]

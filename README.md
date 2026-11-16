@@ -303,14 +303,30 @@ id contains what you type, ignoring case, together with the branches they are in
 the preview: a selected story that the search hides stays in the preview, and is shown selected again when it matches. Clearing the
 search brings back the branches you had expanded or collapsed.
 
+### Keyboard
+
+The whole window works from the keyboard. Tab visits the search field, the story tree, the preview tabs, the canvas controls, the
+preview, then the theme switch, the side pane tabs and the controls; Shift+Tab goes back. Every control has an accessible name, and
+the preview area is named "Preview of" followed by the story id. Choose "Keyboard shortcuts" in the Help menu, or press `F1`, to see
+this list in the window.
+
 | Keys | Action |
 | --- | --- |
-| `Ctrl+F` or `/` | Focus the search field and select its text. `/` types a slash while a text field has focus. |
+| `Ctrl+F` or `/` | Focus the search field and select its text. `/` types a slash while a text field, spin box or editable combo box has focus. |
+| `Ctrl+Alt+Down` and `Ctrl+Alt+Up` | Open the next or previous story in the list. Stories the search hides are skipped, and the branch of the story is expanded. |
+| `Ctrl+T` | Switch to the next theme. |
+| `F6` and `Shift+F6` | Move focus to the next or previous pane (story list, preview, side pane), at the widget that had focus there last. |
+| `Ctrl++` (or `Ctrl+=`), `Ctrl+-` and `Ctrl+0` | Zoom in, zoom out and reset the zoom, while focus is in the preview pane. |
+| `F1` | Show the keyboard shortcuts. |
 | Down in the search field | Select the first story the search keeps. |
 | Enter in the search field | Open the first story the search keeps. |
 | Escape in the search field | Clear the search; when it is empty, move focus to the tree. |
 | Escape in the tree | Clear the search. |
 | Left and Right in the tree | Collapse and expand a branch. |
+
+`Alt+Down` is not a window shortcut: it opens a combo box's popup, as it does in any Qt application. Rebuilding the preview, after a
+control edit or a theme switch, never takes focus from the control you are using. If the focus was inside the story's own widget, it
+moves to the preview area instead.
 
 ### The canvas
 

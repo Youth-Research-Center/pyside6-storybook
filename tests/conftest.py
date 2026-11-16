@@ -7,7 +7,7 @@ from collections.abc import Iterator
 
 import pytest
 from PySide6.QtCore import QEvent, QTimer
-from PySide6.QtGui import QPalette
+from PySide6.QtGui import QFont, QPalette
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 
 import pyside6_storybook
@@ -18,9 +18,10 @@ from pyside6_storybook.themes import BuiltinThemes
 
 @pytest.fixture
 def restore_application_look(qapp: QApplication) -> Iterator[None]:
-    """Put the application's style, palette and style sheet back after a test that changes them."""
+    """Put the application's style, palette, font and style sheet back after a test that changes them."""
     style_name = qapp.style().objectName()
     palette = QPalette(qapp.palette())
+    font = QFont(qapp.font())
     style_sheet = qapp.styleSheet()
     try:
         yield
@@ -28,6 +29,8 @@ def restore_application_look(qapp: QApplication) -> Iterator[None]:
         if qapp.style().objectName() != style_name:
             qapp.setStyle(style_name)
         qapp.setPalette(palette)
+        if qapp.font() != font:
+            qapp.setFont(font)
         qapp.setStyleSheet(style_sheet)
 
 

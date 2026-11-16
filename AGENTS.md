@@ -203,6 +203,31 @@ Icons are bundled Phosphor SVGs, never downloaded at runtime, and the gallery im
 - Exceptions raised in a slot are printed and swallowed by Qt. Tests assert on them with `qtbot.capture_exceptions()`. Anything a story
   raises is caught by the window and shown in an `ErrorPanel`; a test for story errors asserts that `capture_exceptions()` stays empty.
 
+## Keyboard and accessibility
+- **A shortcut is added to one table.** The window's shortcuts come from `_WINDOW_SHORTCUTS` in `gui/window.py` and the canvas's from
+  `_ZOOM_SHORTCUTS` in `gui/canvas.py`; the Keyboard shortcuts dialog is built from the same tables, so a new shortcut shows up in it. A
+  test compares the dialog with every `QShortcut` of the window.
+- **`/` is a `QShortcut`, and it is not delivered to a text field.** Qt does not deliver a `QShortcut` on a printable key to a focused
+  `QLineEdit`, spin box or editable combo box, which claim it through `ShortcutOverride`, so typing a slash stays typing. A
+  `keyPressEvent` fallback does not work: the tree and the actions list consume printable keys for keyboard search. Every other shortcut
+  uses a modifier.
+- **Do not take a key a widget already uses.** `Alt+Down` opens a combo box's popup, so story navigation is `Ctrl+Alt+Down`. When you add
+  a shortcut, test that the widgets that would receive the key without it still do.
+- **Order Tab explicitly.** Qt orders Tab by creation, and the story's widget, the controls and the docs are created last, so
+  `GalleryWindow._apply_tab_order` chains the window again whenever they change. `QWidget.setTabOrder` moves a compound widget (a focus
+  proxy that is a child: an editor, a tab widget) as one entry, but ignores a widget whose policy is `NoFocus`, so `ControlsPanel` gives
+  each editor its input's policy. Walk the order with real Tab key clicks, and include the wrap from the last widget to the first.
+- **A shortcut or Tab test needs an active window.** Use the `restore_window_activation` fixture and `show_active`. A widget that was
+  just added is not visible until the event loop has run, and Tab skips it until then.
+- **Keep focus when the preview is rebuilt.** The canvas gives focus to its scroll area before it hides a widget that has focus, or Qt
+  moves focus to the next widget in the chain. A control edit never moves focus.
+- **Name every focusable chrome widget.** A test walks them all, outside the story's widget, and fails on an empty accessible name.
+- **Check contrast on what is drawn.** Fusion draws the focus ring in a colour derived from `Highlight` (darker when the value is at most
+  200, else a fixed lightness), not in `Highlight`. The tests grab a widget after Tab and measure the ring. White text and 3:1 against
+  the Dark `Window` cannot both hold for one `Highlight`, which is why Dark's colours are unchanged.
+- **No fixed pixel heights in the chrome.** Use size policies and `sizeHint`, so the window follows the application font. A test sets a
+  24 pt font and checks that no label is clipped and no widget has equal minimum and maximum heights.
+
 ## Test rules
 - Every bug fix comes with a regression test that fails without the fix. Assert behaviour (values, objects, call counts), not a marker.
 - Tests build their own `StoryRegistry`; none may register a story in `default_registry`, and a test that must touch it restores it

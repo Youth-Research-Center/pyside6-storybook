@@ -626,3 +626,24 @@ def test_a_partial_story_without_a_real_module_has_no_component_description(qtbo
 
     assert panel.findChild(QLabel, "docsModuleDoc") is None
     assert "Component description" not in _headings(panel)
+
+
+def test_the_controls_table_and_the_source_view_are_as_tall_as_their_rows_and_lines_without_a_fixed_height(qtbot) -> None:
+    registry = StoryRegistry()
+    story = _register(registry, "Box/Default", controls=[IntControl("size", 1, 0, 9), BoolControl("on", default=False)])
+    panel = _panel(qtbot, story, registry)
+    panel.resize(700, 800)
+    panel.show()
+    qtbot.waitUntil(panel.isVisible, timeout=5000)
+    table = panel.findChild(QTableWidget, "docsControlsTable")
+    view = panel.findChild(QPlainTextEdit, "docsSource")
+    assert table is not None
+    assert view is not None
+
+    rows_height = table.horizontalHeader().height() + sum(table.rowHeight(row) for row in range(table.rowCount()))
+    lines = len(panel.source_text().splitlines())
+    assert table.height() >= rows_height
+    assert view.height() >= view.fontMetrics().lineSpacing() * lines
+    for widget in (table, view):
+        assert widget.minimumHeight() != widget.maximumHeight()
+        assert widget.verticalScrollBar().maximum() == 0

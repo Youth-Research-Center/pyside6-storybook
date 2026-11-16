@@ -47,6 +47,7 @@ _ZOOM_NOTE = "Zoomed previews are images; return to 100% to interact."
 _LIVE_PAGE = 0
 _ZOOM_PAGE = 1
 _ZOOM_SHORTCUTS = {"Ctrl++": "in", "Ctrl+=": "in", "Ctrl+-": "out", "Ctrl+0": "reset"}
+_ZOOM_DESCRIPTIONS = {"in": "Zoom in", "out": "Zoom out", "reset": "Reset zoom to 100%"}
 _FIT = "fit"
 _CUSTOM = "custom"
 _SIZE_SEPARATOR = " × "
@@ -218,6 +219,8 @@ class Canvas(QWidget):
 
         self._scroll = QScrollArea(self)
         self._scroll.setObjectName("previewScroll")
+        self._scroll.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.set_preview_name(None)
         self._scroll.setFrameShape(QFrame.Shape.StyledPanel)
         self._scroll.setWidgetResizable(True)
         self._scroll.viewport().setBackgroundRole(QPalette.ColorRole.Window)
@@ -271,6 +274,45 @@ class Canvas(QWidget):
     def surface(self) -> QFrame:
         """The frame a previewed widget must be a child of."""
         return self._surface
+
+    def set_preview_name(self, story_id: str | None) -> None:
+        """Name the focusable preview area for assistive technology: "Preview of <story id>", or "Preview" without a story.
+
+        Args:
+            story_id: The id of the story shown, or ``None``.
+        """
+        self._scroll.setAccessibleName("Preview" if story_id is None else f"Preview of {story_id}")
+
+    def placed_widget(self) -> QWidget | None:
+        """Return the widget placed in the surface, or ``None`` when there is none."""
+        return self._placed
+
+    def focus_chain(self) -> list[QWidget]:
+        """Return the widgets Tab visits in the canvas, in order: the toolbar's controls, then the preview area.
+
+        A control that is hidden or disabled is in the list and skipped by Tab. The previewed widget's own widgets are not in it.
+        """
+        return [
+            self._background_combo,
+            self._size_combo,
+            self._width_spin,
+            self._height_spin,
+            self._zoom_out_button,
+            self._zoom_in_button,
+            self._zoom_reset_button,
+            self._scroll,
+        ]
+
+    def shortcut_help(self) -> list[tuple[str, str]]:
+        """Return the canvas's shortcuts as ``(keys, description)`` pairs, the keys of one action joined with " or ".
+
+        Returns:
+            One pair per action, built from the table that creates the shortcuts.
+        """
+        grouped: dict[str, list[str]] = {}
+        for keys, action in _ZOOM_SHORTCUTS.items():
+            grouped.setdefault(action, []).append(QKeySequence(keys).toString(QKeySequence.SequenceFormat.NativeText))
+        return [(" or ".join(keys), _ZOOM_DESCRIPTIONS[action]) for action, keys in grouped.items()]
 
     def background(self) -> CanvasBackground:
         """Return the selected background."""
@@ -424,11 +466,21 @@ class Canvas(QWidget):
         widget = self._placed
         self._placed = None
         if widget is not None:
+            self._keep_focus_in_canvas(widget)
             self._layout.removeWidget(widget)
             widget.hide()
             widget.deleteLater()
         self._layout_kind = Layout.FILL
         self._apply_geometry()
+
+    def _keep_focus_in_canvas(self, leaving: QWidget) -> None:
+        """Give focus to the preview area when it is inside ``leaving``, which is about to be hidden.
+
+        Without this Qt moves focus to the next widget in the tab chain, which is outside the preview.
+        """
+        focus = QApplication.focusWidget()
+        if focus is not None and (focus is leaving or leaving.isAncestorOf(focus)):
+            self._scroll.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _build_zoom_button(self, name: str, accessible_name: str, tooltip: str, icon: str) -> QToolButton:
         button = QToolButton(self._toolbar)
@@ -636,6 +688,7 @@ class Canvas(QWidget):
             self._apply_scrolling()
             return
         surface = self._surface
+        self._keep_focus_in_canvas(surface)
         self._constrain_surface()
         surface.ensurePolished()
         viewport = self._scroll.viewport().size()
