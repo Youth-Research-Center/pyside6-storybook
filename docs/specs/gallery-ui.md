@@ -291,6 +291,14 @@ minimum length to keep it small.
   "Reset zoom" (`arrow-counter-clockwise`), all in the canvas toolbar.
 - The shortcuts `Ctrl++` (also `Ctrl+=`), `Ctrl+-` and `Ctrl+0` work while focus is in the preview pane. `Ctrl`+wheel over the
   canvas zooms one level per 120 units of accumulated `angleDelta().y()`, keeping the remainder.
+  - **Ctrl+wheel reaches the canvas first.** A filter on the viewport alone never sees a wheel event that a story widget (a
+    `QSpinBox`, a `QSlider`) accepts. The canvas installs an application-level event filter while it is shown, and handles a
+    `Ctrl`+wheel event whose target is the canvas or one of its descendants: it maps the position into viewport coordinates, zooms
+    and consumes the event. Every other wheel event passes through untouched.
+- **Pixel budget.** A custom size can reach 10 000 × 10 000, which at 400% and a device pixel ratio of 2 would need gigabytes
+  for the scaled image. Before grabbing and before scaling, the canvas checks the result against a budget of 64 million device
+  pixels. A level that would exceed it is disabled for the current size, and the zoom-in button and shortcut stop at the last
+  level within the budget.
 
 ## 6. Actions panel (#22)
 
@@ -348,19 +356,26 @@ issue's example. Follow-up: #66.
        modules), excluding files under the library's package and paths whose part *relative to that root* is named
        `site-packages`, `dist-packages`, `.venv`, `venv`, `node_modules`, or starts with `.` (relative, so a project that itself
        lives under a dot folder still reloads).
+     `LoadResult.modules` includes every imported dotted-name target itself (`_Loader._load_dotted_name` records the package), so an
+     entry-point package whose stories live only in its `__init__.py` is dropped and watched too.
   2. **Snapshot** those entries and both bindings of the default registry: `pyside6_storybook.registry.default_registry` (which
      `@story` reads) and `pyside6_storybook.default_registry` (which a project's `__init__` imports to append decorators or size
      presets). The `stories` test fixture is extended to isolate both bindings too.
   3. **Reset.** Remove the entries from `sys.modules`, set both bindings to one new `StoryRegistry()`, call
-     `importlib.invalidate_caches()`, and run `load_stories(targets, cwd=cwd)`.
+     `importlib.invalidate_caches()`, delete the cached bytecode of every dropped module with a source file
+     (`importlib.util.cache_from_source`; timestamp-based `.pyc` files would otherwise serve old code after a same-length edit
+     within the same second), and run `load_stories(targets, cwd=cwd)`.
   4. **Decide.** The reload is accepted when it found at least one story and every source in the new result's errors was also
-     failing in the last accepted result. Otherwise it is rejected: the snapshot is restored (modules and both registry
-     bindings), and the result is returned with `accepted=False`.
+     failing in the last accepted result. Otherwise it is rejected: every reload-managed module the attempt imported is removed
+     from `sys.modules`, so a retry imports it again; then the snapshot is restored (modules and both registry bindings), and the
+     result is returned with `accepted=False`.
 - **Return value.** `ReloadResult(load: LoadResult, accepted: bool, new_errors: tuple[LoadError, ...])`.
 
 **Watching** (`gui/reload_watcher.py`, `ReloadWatcher(QObject)`)
-- A `QFileSystemWatcher` on the files of the dropped modules (step 1), plus every folder below each folder target, because folder
-  watches are not recursive.
+- A `QFileSystemWatcher` on the files of the dropped modules (step 1), on every story source the targets name (file targets, and
+  the story files below folder targets) whether or not it imported, so a broken story file that is then fixed triggers a reload,
+  plus every folder below each folder target, because folder watches are not recursive. Story sources stay watched after a
+  rejected reload.
 - A `directoryChanged` event triggers a reload only if the set of story files below the folder targets changed. Editors write
   swap and backup files that would otherwise fire a reload on every keystroke.
 - After every event, and after every accepted reload, it re-collects the paths: it re-adds those that still exist, because

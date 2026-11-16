@@ -255,7 +255,9 @@ the Docs content refreshes after `set_registry`.
   - the pixmap cleared before returning to 100%;
   - the "zoomed previews are images" line.
 - `Ctrl++`, `Ctrl+=`, `Ctrl+-` and `Ctrl+0` as `QShortcut`s with `WidgetWithChildrenShortcut` context on the preview pane.
-- Ctrl+wheel in an event filter on the scroll area's viewport, accumulating `angleDelta().y()`.
+- Ctrl+wheel in an application-level event filter installed while the canvas is shown, handling events aimed at the canvas or
+  its descendants (a story's `QSpinBox` would otherwise take them), accumulating `angleDelta().y()`.
+- A 64-million-device-pixel budget for the zoomed image; levels beyond it are disabled for the current size.
 
 **Tests** (`tests/test_zoom.py`)
 - Each action moves one level and stops at the ends.
@@ -354,6 +356,9 @@ PR 4's fixed-size tests keep passing because the fixed size moves to the stack.
   - a syntax error is rejected with the old registry restored, then the fix is accepted;
   - `--examples` stories survive a reload;
   - a package `__init__` that appends a decorator ends with exactly one decorator in the new registry;
+  - a package target whose stories live only in its `__init__.py` reloads;
+  - a same-length edit within the same modification-time second is picked up (stale bytecode removed);
+  - a rejected reload that added a new story module, then a fixed retry, registers that module's stories;
   - zero stories is rejected.
 - **Window:** the selected story and its control values are kept; an enum control is matched by name; a removed story falls
   back to the nearest; theme and canvas settings are untouched; the status text; a rejected reload shows the error panel and
@@ -361,6 +366,7 @@ PR 4's fixed-size tests keep passing because the fixed size moves to the stack.
 - **Watcher:**
   - a rename-save is re-added;
   - a new story file in a subfolder triggers a reload;
+  - an initially broken story file, fixed on disk, triggers a reload;
   - a swap file does not;
   - a burst is debounced into one reload;
   - one real edit is picked up through `qtbot.waitUntil(timeout=5000)`, with `os.utime` bumping times.
