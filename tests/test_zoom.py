@@ -3,7 +3,7 @@ from conftest import show_active
 from icon_testing import strongest_pixel
 from PySide6.QtCore import QPoint, QPointF, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPaintEvent, QPalette, QWheelEvent
-from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QLineEdit, QScrollArea, QStackedWidget, QToolButton, QWidget
+from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QLineEdit, QScrollArea, QSpinBox, QStackedWidget, QToolButton, QWidget
 
 from pyside6_storybook import Layout, StoryContext, StoryRegistry, TextControl
 from pyside6_storybook.gui.canvas import ZOOM_LEVELS, Canvas
@@ -119,12 +119,12 @@ def _shown_image(window: QWidget) -> QImage:
     return _image_label(window).pixmap().toImage()
 
 
-def _wheel(window: QWidget, delta: int, *, ctrl: bool = True) -> None:
+def _wheel(window: QWidget, delta: int, *, ctrl: bool = True, at: QPoint = QPoint(20, 20)) -> None:  # noqa: B008 - QPoint is immutable
     viewport = _scroll(window).viewport()
     modifiers = Qt.KeyboardModifier.ControlModifier if ctrl else Qt.KeyboardModifier.NoModifier
     event = QWheelEvent(
-        QPointF(20, 20),
-        QPointF(viewport.mapToGlobal(QPoint(20, 20))),
+        QPointF(at),
+        QPointF(viewport.mapToGlobal(at)),
         QPoint(0, 0),
         QPoint(0, delta),
         Qt.MouseButton.NoButton,
@@ -482,3 +482,79 @@ def test_the_zoom_stays_when_the_story_changes_and_is_grabbed_for_the_new_story(
 
     assert _canvas(window).zoom() == 200
     assert _shown_image(window) != before
+
+
+class _Fixed(QWidget):
+    def sizeHint(self) -> QSize:
+        return QSize(200, 100)
+
+
+def _centered(ctx: StoryContext) -> QWidget:
+    return _Fixed()
+
+
+def _anchor_window(qtbot, themes: BuiltinThemes) -> GalleryWindow:
+    registry = StoryRegistry()
+    registry.story("Zoom/Centered", layout=Layout.CENTERED)(_centered)
+    window = GalleryWindow(registry, themes)
+    qtbot.addWidget(window)
+    window.resize(900, 600)
+    window.show()
+    qtbot.waitExposed(window)
+    QApplication.processEvents()
+    return window
+
+
+def test_zooming_keeps_a_centred_widget_in_view(qtbot, themes: BuiltinThemes) -> None:
+    window = _anchor_window(qtbot, themes)
+    preview = window.current_preview_widget()
+    assert preview is not None
+    centre = preview.geometry().center()
+
+    _canvas(window).set_zoom(300)
+    QApplication.processEvents()
+
+    viewport = _scroll(window).viewport()
+    on_viewport = _stack(window).mapTo(viewport, QPoint(centre.x() * 3, centre.y() * 3))
+    assert viewport.rect().contains(on_viewport)
+    assert _scroll(window).horizontalScrollBar().maximum() > 0
+
+
+def test_zooming_in_then_out_returns_to_the_same_scroll_values(qtbot, themes: BuiltinThemes) -> None:
+    window = _make_window(qtbot, themes)
+    _choose_size(window, "Custom")
+    for name, value in (("canvasWidth", 1600), ("canvasHeight", 1200)):
+        spin = window.findChild(QSpinBox, name)
+        assert spin is not None
+        spin.setValue(value)
+    QApplication.processEvents()
+    horizontal = _scroll(window).horizontalScrollBar()
+    vertical = _scroll(window).verticalScrollBar()
+    horizontal.setValue(150)
+    vertical.setValue(120)
+    start = (horizontal.value(), vertical.value())
+    assert start == (150, 120)
+
+    _canvas(window).set_zoom(200)
+    QApplication.processEvents()
+    assert (horizontal.value(), vertical.value()) != start
+    _canvas(window).set_zoom(100)
+    QApplication.processEvents()
+
+    assert abs(horizontal.value() - start[0]) <= 1
+    assert abs(vertical.value() - start[1]) <= 1
+
+
+def test_ctrl_wheel_keeps_the_content_under_the_cursor(qtbot, themes: BuiltinThemes) -> None:
+    window = _make_window(qtbot, themes, width=700, height=500)
+    _choose_size(window, "Dialog")
+    viewport = _scroll(window).viewport()
+    cursor = QPoint(100, 80)
+    before = _stack(window).mapFrom(viewport, cursor)
+
+    _wheel(window, 120, at=cursor)
+
+    assert _canvas(window).zoom() == 150
+    after = _stack(window).mapTo(viewport, QPoint(round(before.x() * 1.5), round(before.y() * 1.5)))
+    assert abs(after.x() - cursor.x()) <= 2
+    assert abs(after.y() - cursor.y()) <= 2

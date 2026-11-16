@@ -6,7 +6,7 @@ import math
 from collections.abc import Sequence
 from enum import Enum
 
-from PySide6.QtCore import QEvent, QObject, QSignalBlocker, QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QSignalBlocker, QSize, Qt, QTimer
 from PySide6.QtGui import QKeySequence, QPainter, QPaintEvent, QPalette, QPixmap, QShortcut, QWheelEvent
 from PySide6.QtWidgets import (
     QComboBox,
@@ -140,6 +140,11 @@ class Canvas(QWidget):
         self._wheel_remainder = 0
         self._sized_surface: QSize | None = None
         self._grab_viewport = QSize()
+        self._anchor: tuple[QPointF, QPoint | None, float] | None = None
+        self._anchor_timer = QTimer(self)
+        self._anchor_timer.setSingleShot(True)
+        self._anchor_timer.setInterval(0)
+        self._anchor_timer.timeout.connect(self._finish_anchor)
         self._regrab_timer = QTimer(self)
         self._regrab_timer.setSingleShot(True)
         self._regrab_timer.setInterval(0)
@@ -250,6 +255,8 @@ class Canvas(QWidget):
         self._zoom_reset_button.clicked.connect(self.reset_zoom)
         self._shortcuts = [self._build_shortcut(keys, action) for keys, action in _ZOOM_SHORTCUTS.items()]
         self._scroll.viewport().installEventFilter(self)
+        self._scroll.horizontalScrollBar().rangeChanged.connect(self._apply_anchor)
+        self._scroll.verticalScrollBar().rangeChanged.connect(self._apply_anchor)
         self._update_zoom_controls()
 
     @property
@@ -274,11 +281,12 @@ class Canvas(QWidget):
         """Return the zoom level in percent, one of ``ZOOM_LEVELS``."""
         return self._zoom
 
-    def set_zoom(self, percent: int) -> None:
-        """Show the preview at a zoom level.
+    def set_zoom(self, percent: int, *, anchor: QPoint | None = None) -> None:
+        """Show the preview at a zoom level, keeping the content under a viewport point where it is.
 
         Args:
             percent: One of ``ZOOM_LEVELS``.
+            anchor: The point of the scroll area's viewport that stays over the same content; the viewport's centre when omitted.
 
         Raises:
             ValueError: If ``percent`` is not a zoom level.
@@ -286,9 +294,18 @@ class Canvas(QWidget):
         if percent not in ZOOM_LEVELS:
             message = f"{percent} is not a zoom level; the levels are {ZOOM_LEVELS}."
             raise ValueError(message)
-        if percent != self._zoom:
-            self._zoom = percent
-            self._apply_geometry()
+        if percent == self._zoom:
+            return
+        viewport = self._scroll.viewport()
+        point = viewport.rect().center() if anchor is None else anchor
+        on_stack = self._stack.mapFrom(viewport, point)
+        old_scale = self._zoom / 100
+        content = QPointF(on_stack.x() / old_scale, on_stack.y() / old_scale)
+        self._zoom = percent
+        self._apply_geometry()
+        self._anchor = (content, anchor, percent / 100)
+        self._apply_anchor()
+        self._anchor_timer.start()
 
     def zoom_in(self) -> None:
         """Step to the next zoom level; nothing happens at the largest."""
@@ -309,7 +326,7 @@ class Canvas(QWidget):
                 self._wheel_remainder += event.angleDelta().y()
                 steps = int(self._wheel_remainder / _WHEEL_STEP)
                 self._wheel_remainder -= steps * _WHEEL_STEP
-                self._step_zoom(steps)
+                self._step_zoom(steps, anchor=event.position().toPoint())
                 event.accept()
                 return True
             if (
@@ -402,9 +419,27 @@ class Canvas(QWidget):
         shortcut.activated.connect(handlers[action])
         return shortcut
 
-    def _step_zoom(self, steps: int) -> None:
+    def _step_zoom(self, steps: int, *, anchor: QPoint | None = None) -> None:
         index = ZOOM_LEVELS.index(self._zoom) + steps
-        self.set_zoom(ZOOM_LEVELS[max(0, min(index, len(ZOOM_LEVELS) - 1))])
+        self.set_zoom(ZOOM_LEVELS[max(0, min(index, len(ZOOM_LEVELS) - 1))], anchor=anchor)
+
+    def _apply_anchor(self) -> None:
+        """Scroll so that the anchored content point is under its viewport point again, as far as the scroll ranges allow."""
+        if self._anchor is None:
+            return
+        content, anchor, scale = self._anchor
+        viewport = self._scroll.viewport()
+        # The viewport can change size as the zoom note appears or the scroll bars come and go, so its centre is read when applying.
+        point = viewport.rect().center() if anchor is None else anchor
+        now = self._stack.mapTo(viewport, QPoint(round(content.x() * scale), round(content.y() * scale)))
+        horizontal = self._scroll.horizontalScrollBar()
+        vertical = self._scroll.verticalScrollBar()
+        horizontal.setValue(horizontal.value() + now.x() - point.x())
+        vertical.setValue(vertical.value() + now.y() - point.y())
+
+    def _finish_anchor(self) -> None:
+        self._apply_anchor()
+        self._anchor = None
 
     def _update_zoom_controls(self) -> None:
         self._zoom_level_label.setText(f"{self._zoom}%")
