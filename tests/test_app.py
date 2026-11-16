@@ -1,10 +1,11 @@
 import pytest
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QListWidget
+from PySide6.QtWidgets import QApplication, QComboBox, QLabel
 
 from pyside6_storybook import LoadError, StoryRegistry
 from pyside6_storybook.app import run
+from pyside6_storybook.gui.sidebar import StorySidebar
 from pyside6_storybook.gui.window import GalleryWindow
 from pyside6_storybook.themes import DARK_THEME
 
@@ -51,9 +52,8 @@ def test_run_starts_in_the_requested_theme_and_restores_the_palette(
     def inspect_and_quit() -> None:
         (window,) = [widget for widget in qapp.topLevelWidgets() if isinstance(widget, GalleryWindow)]
         switch = window.findChild(QComboBox, "themeSwitch")
-        sidebar = window.findChild(QListWidget, "storySidebar")
-        assert switch is not None and sidebar is not None
-        sidebar.setCurrentRow(1)
+        assert switch is not None
+        assert window.select_story("Display/Label")
         preview = window.current_preview_widget()
         assert isinstance(preview, QLabel)
         seen["switch"] = switch.currentText()
@@ -93,9 +93,9 @@ def test_run_lists_load_errors_in_the_gallery(qapp: QApplication, restore_applic
 
     def inspect_and_quit() -> None:
         (window,) = [widget for widget in qapp.topLevelWidgets() if isinstance(widget, GalleryWindow)]
-        sidebar = window.findChild(QListWidget, "storySidebar")
+        sidebar = window.findChild(StorySidebar)
         assert sidebar is not None
-        seen["entries"] = [sidebar.item(row).text() for row in range(sidebar.count())]
+        seen["entries"] = [*sidebar.visible_story_ids(), sidebar.load_errors_label()]
         qapp.quit()
 
     QTimer.singleShot(0, inspect_and_quit)

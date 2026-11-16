@@ -6,13 +6,12 @@ import logging
 from collections.abc import Sequence
 
 from PySide6.QtCore import QEvent, QSignalBlocker, QSize, Qt
-from PySide6.QtGui import QCloseEvent, QFont, QPalette
+from PySide6.QtGui import QCloseEvent, QFont, QKeySequence, QPalette, QShortcut
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QFrame,
     QLabel,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
     QScrollArea,
     QSplitter,
@@ -24,15 +23,12 @@ from pyside6_storybook.discovery import LoadError
 from pyside6_storybook.gui.controls_panel import ControlsPanel
 from pyside6_storybook.gui.error_panel import ErrorPanel
 from pyside6_storybook.gui.icons import ActionIcons
+from pyside6_storybook.gui.sidebar import LOAD_ERRORS_HEADING, StorySidebar
 from pyside6_storybook.registry import Layout, Story, StoryContext, StoryRegistry
 from pyside6_storybook.registry.rendering import StoryRenderError, render_story
 from pyside6_storybook.themes import BuiltinThemes
 
 NO_STORIES_MESSAGE = "No stories are registered."
-LOAD_ERRORS_HEADING = "Load errors"
-
-_ENTRY_KIND_ROLE = Qt.ItemDataRole.UserRole + 1
-_LOAD_ERRORS_ENTRY = "load-errors"
 
 _MARGIN = 10
 _SPACING = 8
@@ -85,15 +81,9 @@ class GalleryWindow(QMainWindow):
         self._error_panel: ErrorPanel | None = None
         self._icons = ActionIcons()
 
-        self._sidebar = QListWidget(self)
+        self._sidebar = StorySidebar(self, icons=self._icons)
         self._sidebar.setObjectName("storySidebar")
-        self._sidebar.setAccessibleName("Stories")
-        for story in registry:
-            item = QListWidgetItem(story.id, self._sidebar)
-            item.setData(Qt.ItemDataRole.UserRole, story.id)
-        if self._load_errors:
-            errors_item = QListWidgetItem(f"{LOAD_ERRORS_HEADING} ({len(self._load_errors)})", self._sidebar)
-            errors_item.setData(_ENTRY_KIND_ROLE, _LOAD_ERRORS_ENTRY)
+        self._sidebar.set_registry(registry, load_errors=self._load_errors)
 
         self._heading = QLabel("", self)
         self._heading.setObjectName("previewHeading")
@@ -159,9 +149,13 @@ class GalleryWindow(QMainWindow):
         splitter.setSizes([200, 500, 300])
         self.setCentralWidget(splitter)
 
-        self._sidebar.currentItemChanged.connect(self._on_story_selected)
-        if self._sidebar.count():
-            self._sidebar.setCurrentRow(0)
+        self._sidebar.storySelected.connect(self._on_story_selected)
+        self._sidebar.loadErrorsSelected.connect(self._on_load_errors_selected)
+        self._search_shortcuts = (
+            QShortcut(QKeySequence("Ctrl+F"), self, self._sidebar.focus_search),
+            QShortcut(QKeySequence(Qt.Key.Key_Slash), self, self._on_slash_shortcut),
+        )
+        self._sidebar.select_first()
 
     def current_preview_widget(self) -> QWidget | None:
         """Return the widget the story built, without its decorators, or ``None`` if there is none (also while an error is shown)."""
@@ -170,6 +164,41 @@ class GalleryWindow(QMainWindow):
     def current_story_id(self) -> str | None:
         """Return the id of the selected story, or ``None`` if there is none."""
         return self._current_story.id if self._current_story is not None else None
+
+    def select_story(self, story_id: str) -> bool:
+        """Select a story in the sidebar, clearing the search if it hides the story, and show it.
+
+        Args:
+            story_id: The id of the story.
+
+        Returns:
+            ``False`` if there is no story with this id, else ``True``.
+        """
+        return self._sidebar.select_story(story_id)
+
+    def set_registry(self, registry: StoryRegistry, *, load_errors: Sequence[LoadError] = ()) -> None:
+        """Show another set of stories and render the selected one again, once.
+
+        The selected story stays selected if the new registry still has its id. Its controls start at the story's own values, and each
+        control the story still has keeps its previous value when it accepts it. When the story is gone, the first entry is selected.
+
+        Args:
+            registry: The stories to show.
+            load_errors: Story sources that failed to load, shown under a "Load errors" entry when there are any.
+        """
+        previous_id = self.current_story_id()
+        previous_values = self._controls_panel.values() if self._controls_panel is not None else {}
+        showing_errors = self._sidebar.load_errors_selected()
+        self._registry = registry
+        self._load_errors = tuple(load_errors)
+        self._empty_label.setVisible(len(registry) == 0 and not self._load_errors)
+        self._sidebar.set_registry(registry, load_errors=self._load_errors)
+        if previous_id is not None and self._sidebar.selected_story_id() == previous_id:
+            self._show_story(registry.get(previous_id), previous_values)
+        elif showing_errors and self._sidebar.load_errors_selected():
+            self._show_load_errors()
+        elif not self._sidebar.select_first():
+            self._show_nothing()
 
     def set_theme(self, name: str) -> None:
         """Switch the theme and rebuild the preview.
@@ -217,27 +246,58 @@ class GalleryWindow(QMainWindow):
         if index >= 0:
             self.set_theme(self._theme_switch.itemText(index))
 
-    def _on_story_selected(self, current: QListWidgetItem | None, _previous: QListWidgetItem | None) -> None:
+    def _on_slash_shortcut(self) -> None:
+        focus = QApplication.focusWidget()
+        if isinstance(focus, QComboBox) and not focus.isEditable():
+            return
+        self._sidebar.focus_search()
+
+    def _on_story_selected(self, story_id: str) -> None:
+        if self._current_story is not None and self._current_story.id == story_id and self._controls_panel is not None:
+            return
+        self._show_story(self._registry.get(story_id), {})
+
+    def _on_load_errors_selected(self) -> None:
+        if self._current_story is None and self._heading.text() == LOAD_ERRORS_HEADING:
+            return
+        self._show_load_errors()
+
+    def _show_nothing(self) -> None:
         self._clear_preview()
         self._clear_controls()
-        if current is None:
-            self._current_story = None
-            self._heading.setText("")
-            self._place_preview(None, Layout.FILL)
-            return
-        if current.data(_ENTRY_KIND_ROLE) == _LOAD_ERRORS_ENTRY:
-            self._current_story = None
-            self._heading.setText(LOAD_ERRORS_HEADING)
-            self._show_error(_load_errors_title(self._load_errors), _load_errors_details(self._load_errors))
-            return
-        story = self._registry.get(current.data(Qt.ItemDataRole.UserRole))
+        self._current_story = None
+        self._heading.setText("")
+        self._place_preview(None, Layout.FILL)
+
+    def _show_load_errors(self) -> None:
+        self._show_nothing()
+        self._heading.setText(LOAD_ERRORS_HEADING)
+        self._show_error(_load_errors_title(self._load_errors), _load_errors_details(self._load_errors))
+
+    def _show_story(self, story: Story, values: dict[str, object]) -> None:
+        """Show a story with its controls.
+
+        Each control starts at the story's value for it, or at its value in ``values`` when ``values`` has one that the control accepts.
+        """
+        self._show_nothing()
         self._current_story = story
         self._heading.setText(story.id)
-        panel = ControlsPanel(story.controls, self._controls_host, values=story.default_args())
+        panel = ControlsPanel(story.controls, self._controls_host, values=self._starting_values(story, values))
         panel.valuesChanged.connect(self._on_values_changed)
         self._controls_host_layout.addWidget(panel)
         self._controls_panel = panel
         self._rebuild_preview()
+
+    def _starting_values(self, story: Story, previous: dict[str, object]) -> dict[str, object]:
+        starting = story.default_args()
+        for control in story.controls:
+            if control.name not in previous:
+                continue
+            try:
+                starting[control.name] = control.coerce(previous[control.name])
+            except (TypeError, ValueError):
+                self._logger.debug("Control %r of story %r rejected its previous value", control.name, story.id)
+        return starting
 
     def _on_values_changed(self, _values: dict[str, object]) -> None:
         self._rebuild_preview()

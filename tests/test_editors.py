@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import TypeVar
 
 import pytest
-from PySide6.QtCore import QEvent, QPoint, QPointF, Qt, QTimer
+from PySide6.QtCore import QPoint, QPointF, Qt
 from PySide6.QtGui import QColor, QPalette, QTextCursor, QWheelEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -24,21 +24,11 @@ from pyside6_storybook import BoolControl, ChoiceControl, ColorControl, EnumCont
 from pyside6_storybook.controls import Control
 from pyside6_storybook.gui.editors import EDITORS, ControlEditor, color_editor, create_editor, file_editor
 
+pytestmark = pytest.mark.usefixtures("restore_window_activation")
+
 _WidgetT = TypeVar("_WidgetT", bound=QWidget)
 _HOSTS: list[QWidget] = []
 """The windows of the editors under test, kept alive until the test ends (``qtbot`` holds its widgets weakly)."""
-
-
-@pytest.fixture(autouse=True, scope="module")
-def _platform_gives_focus(qapp: QApplication) -> None:
-    """Let the platform activate windows again after an earlier test ended the event loop (``run()`` does, in ``test_app.py``).
-
-    The offscreen platform ignores activation requests once an event loop has quit, until the next loop runs, and a window an earlier
-    test closed keeps the platform's focus until it is deleted. Both are cleared by deleting what is pending and running a loop.
-    """
-    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    QTimer.singleShot(0, qapp.quit)
-    qapp.exec()
 
 
 @pytest.fixture(autouse=True)

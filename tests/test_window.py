@@ -11,12 +11,12 @@ from PySide6.QtWidgets import (
     QFrame,
     QLabel,
     QLineEdit,
-    QListWidget,
     QPushButton,
     QScrollArea,
     QSizePolicy,
     QStyle,
     QStyleOptionButton,
+    QTreeView,
     QVBoxLayout,
     QWidget,
 )
@@ -28,6 +28,7 @@ from pyside6_storybook.contrast import contrast_ratio
 from pyside6_storybook.decorators import fixed_size, frame, padding
 from pyside6_storybook.gui.controls_panel import NO_CONTROLS_MESSAGE, ControlsPanel
 from pyside6_storybook.gui.error_panel import ErrorPanel
+from pyside6_storybook.gui.sidebar import StorySidebar
 from pyside6_storybook.gui.window import NO_STORIES_MESSAGE, GalleryWindow
 from pyside6_storybook.themes import BuiltinThemes
 
@@ -38,15 +39,20 @@ def _make_window(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> Galle
     return window
 
 
-def _sidebar(window: GalleryWindow) -> QListWidget:
-    sidebar = window.findChild(QListWidget, "storySidebar")
+def _sidebar(window: GalleryWindow) -> StorySidebar:
+    sidebar = window.findChild(StorySidebar)
     assert sidebar is not None
     return sidebar
 
 
+def _tree(window: GalleryWindow) -> QTreeView:
+    tree = _sidebar(window).findChild(QTreeView)
+    assert tree is not None
+    return tree
+
+
 def _sidebar_ids(window: GalleryWindow) -> list[str]:
-    sidebar = _sidebar(window)
-    return [sidebar.item(i).text() for i in range(sidebar.count())]
+    return _sidebar(window).visible_story_ids()
 
 
 def test_sidebar_lists_every_story_in_registration_order(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
@@ -57,7 +63,7 @@ def test_sidebar_lists_every_story_in_registration_order(qtbot, registry: StoryR
 def test_first_story_is_selected_and_previewed_on_start(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
     window = _make_window(qtbot, registry, themes)
 
-    assert _sidebar(window).currentRow() == 0
+    assert _sidebar(window).selected_story_id() == "Inputs/Button"
     assert window.current_story_id() == "Inputs/Button"
     heading = window.findChild(QLabel, "previewHeading")
     assert heading is not None
@@ -74,7 +80,7 @@ def test_selecting_a_story_updates_heading_preview_and_controls(qtbot, registry:
     window = _make_window(qtbot, registry, themes)
     first_preview = window.current_preview_widget()
 
-    _sidebar(window).setCurrentRow(1)
+    window.select_story("Display/Label")
 
     heading = window.findChild(QLabel, "previewHeading")
     assert heading is not None
@@ -88,7 +94,7 @@ def test_selecting_a_story_updates_heading_preview_and_controls(qtbot, registry:
 def test_a_story_without_controls_shows_the_empty_state(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
     window = _make_window(qtbot, registry, themes)
 
-    _sidebar(window).setCurrentRow(2)
+    window.select_story("Display/Plain")
 
     panels = [panel for panel in window.findChildren(ControlsPanel) if panel.isVisibleTo(window)]
     assert len(panels) == 1
@@ -101,7 +107,10 @@ def test_changing_a_control_rebuilds_the_preview(qtbot, registry: StoryRegistry,
     window = _make_window(qtbot, registry, themes)
     window.show()
     first = window.current_preview_widget()
-    editor = next(e for e in window.findChildren(QLineEdit) if e.isVisibleTo(window))
+    panel = window.findChild(ControlsPanel)
+    assert panel is not None
+    editor = panel.findChild(QLineEdit)
+    assert editor is not None
 
     editor.selectAll()
     qtbot.keyClicks(editor, "Save")
@@ -114,7 +123,7 @@ def test_changing_a_control_rebuilds_the_preview(qtbot, registry: StoryRegistry,
 
 def test_switching_theme_rebuilds_the_preview_and_changes_the_palette(qtbot, registry: StoryRegistry, themes: BuiltinThemes, qapp) -> None:
     window = _make_window(qtbot, registry, themes)
-    _sidebar(window).setCurrentRow(1)
+    window.select_story("Display/Label")
     first = window.current_preview_widget()
     window_color = qapp.palette().window().color().name()
     switch = window.findChild(QComboBox, "themeSwitch")
@@ -208,7 +217,8 @@ def test_an_empty_registry_shows_an_empty_state(qtbot, themes: BuiltinThemes) ->
     window = _make_window(qtbot, StoryRegistry(), themes)
     window.show()
 
-    assert _sidebar(window).count() == 0
+    assert _sidebar_ids(window) == []
+    assert _sidebar(window).load_errors_label() is None
     assert window.current_preview_widget() is None
     assert window.current_story_id() is None
     empty_label = window.findChild(QLabel, "previewEmptyState")
@@ -251,7 +261,7 @@ def test_the_chrome_uses_no_fixed_colors(qtbot, registry: StoryRegistry, themes:
 
 def test_every_widget_has_an_owner(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
     window = _make_window(qtbot, registry, themes)
-    _sidebar(window).setCurrentRow(2)
+    window.select_story("Display/Plain")
     for widget in window.findChildren(QWidget):
         assert widget.parent() is not None, widget
 
@@ -260,7 +270,7 @@ def test_the_story_list_and_theme_switch_have_accessible_names(qtbot, registry: 
     window = _make_window(qtbot, registry, themes)
     switch = window.findChild(QComboBox, "themeSwitch")
     assert switch is not None
-    assert _sidebar(window).accessibleName() == "Stories"
+    assert _tree(window).accessibleName() == "Stories"
     assert switch.accessibleName() == "Theme"
 
 
@@ -282,7 +292,7 @@ def test_a_story_that_raises_shows_an_error_panel_and_logs_it(qtbot, themes: Bui
     caplog.set_level(logging.ERROR)
 
     with qtbot.capture_exceptions() as exceptions:
-        _sidebar(window).setCurrentRow(1)
+        window.select_story("Broken/Raises")
 
     assert exceptions == []
     panel = _error_panel(window)
@@ -301,7 +311,7 @@ def test_a_story_that_returns_a_non_widget_shows_an_error_panel(qtbot, themes: B
     window = _make_window(qtbot, stories, themes)
 
     with qtbot.capture_exceptions() as exceptions:
-        _sidebar(window).setCurrentRow(1)
+        window.select_story("Broken/None")
 
     assert exceptions == []
     panel = _error_panel(window)
@@ -317,7 +327,7 @@ def test_the_next_story_renders_after_an_error(qtbot, themes: BuiltinThemes) -> 
     window = _make_window(qtbot, stories, themes)
     assert _error_panel(window) is not None
 
-    _sidebar(window).setCurrentRow(1)
+    window.select_story("Good/One")
 
     assert _error_panel(window) is None
     preview = window.current_preview_widget()
@@ -377,7 +387,8 @@ def test_load_errors_get_a_sidebar_entry_after_the_stories(qtbot, registry: Stor
     window = GalleryWindow(registry, themes, load_errors=_load_errors())
     qtbot.addWidget(window)
 
-    assert _sidebar_ids(window) == ["Inputs/Button", "Display/Label", "Display/Plain", "Load errors (2)"]
+    assert _sidebar_ids(window) == ["Inputs/Button", "Display/Label", "Display/Plain"]
+    assert _sidebar(window).load_errors_label() == "Load errors (2)"
     assert window.current_story_id() == "Inputs/Button"
 
 
@@ -385,7 +396,7 @@ def test_selecting_the_load_errors_entry_shows_every_error(qtbot, registry: Stor
     window = GalleryWindow(registry, themes, load_errors=_load_errors())
     qtbot.addWidget(window)
 
-    _sidebar(window).setCurrentRow(3)
+    assert _sidebar(window).select_load_errors()
 
     heading = window.findChild(QLabel, "previewHeading")
     assert heading is not None
@@ -399,7 +410,7 @@ def test_selecting_the_load_errors_entry_shows_every_error(qtbot, registry: Stor
         assert expected in panel.details()
     assert [p for p in window.findChildren(ControlsPanel) if p.isVisibleTo(window)] == []
 
-    _sidebar(window).setCurrentRow(0)
+    assert window.select_story("Inputs/Button")
     assert _error_panel(window) is None
     assert isinstance(window.current_preview_widget(), QPushButton)
 
@@ -409,7 +420,8 @@ def test_with_only_load_errors_the_errors_are_shown_on_start(qtbot, themes: Buil
     qtbot.addWidget(window)
     window.show()
 
-    assert _sidebar_ids(window) == ["Load errors (1)"]
+    assert _sidebar_ids(window) == []
+    assert _sidebar(window).load_errors_label() == "Load errors (1)"
     panel = _error_panel(window)
     assert panel is not None
     assert panel.title() == "1 story source failed to load"
@@ -429,16 +441,17 @@ def test_one_broken_and_two_working_story_modules(qtbot, tmp_path: Path, stories
         window = GalleryWindow(result.registry, themes, load_errors=result.errors)
         qtbot.addWidget(window)
         rendered = []
-        for row in range(2):
-            _sidebar(window).setCurrentRow(row)
+        for story_id in ("Working/A", "Working/B"):
+            window.select_story(story_id)
             preview = window.current_preview_widget()
             assert isinstance(preview, QLabel)
             rendered.append(preview.text())
-        _sidebar(window).setCurrentRow(2)
+        _sidebar(window).select_load_errors()
 
     assert exceptions == []
     assert rendered == ["a", "b"]
-    assert _sidebar_ids(window) == ["Working/A", "Working/B", "Load errors (1)"]
+    assert _sidebar_ids(window) == ["Working/A", "Working/B"]
+    assert _sidebar(window).load_errors_label() == "Load errors (1)"
     panel = _error_panel(window)
     assert panel is not None
     assert "SyntaxError" in panel.details()
@@ -519,7 +532,7 @@ def test_a_variants_panel_starts_at_its_args_and_stays_editable(qtbot, themes: B
     window = _make_window(qtbot, stories, themes)
     window.show()
 
-    _sidebar(window).setCurrentRow(1)
+    window.select_story("Inputs/Label/Loud")
 
     assert window.current_story_id() == "Inputs/Label/Loud"
     preview = window.current_preview_widget()
@@ -745,7 +758,7 @@ def test_switching_from_a_scrolling_story_to_fill_resets_the_surface_minimum(qtb
     QApplication.processEvents()
     assert _surface(window).minimumSize() == QSize(820, 620)
 
-    _sidebar(window).setCurrentRow(1)
+    window.select_story("B/Fill")
     QApplication.processEvents()
 
     assert _surface(window).minimumSize() == QSize(0, 0)
@@ -774,7 +787,7 @@ def test_the_load_errors_view_uses_fill(qtbot, registry: StoryRegistry, themes: 
     window.show()
     qtbot.waitExposed(window)
 
-    _sidebar(window).setCurrentRow(_sidebar(window).count() - 1)
+    _sidebar(window).select_load_errors()
     QApplication.processEvents()
 
     panel = _error_panel(window)
@@ -794,8 +807,8 @@ def test_a_word_wrapped_label_wraps_in_a_narrow_window_without_a_horizontal_scro
     qtbot.waitExposed(window)
     QApplication.processEvents()
 
-    for row in (0, 1):
-        _sidebar(window).setCurrentRow(row)
+    for story_id in ("Display/Padded", "Display/Centered"):
+        window.select_story(story_id)
         window.resize(500, 300)
         QApplication.processEvents()
         scroll = _scroll(window)
@@ -814,8 +827,7 @@ def test_the_label_example_wraps_in_a_narrow_window(qtbot, stories: StoryRegistr
     window.resize(560, 400)
     window.show()
     qtbot.waitExposed(window)
-    sidebar = _sidebar(window)
-    sidebar.setCurrentRow(_sidebar_ids(window).index("Display/Label"))
+    window.select_story("Display/Label")
     QApplication.processEvents()
 
     assert _scroll(window).horizontalScrollBar().maximum() == 0
@@ -910,7 +922,7 @@ def test_a_decorator_that_raises_shows_an_error_panel_and_logs_it(qtbot, themes:
     caplog.set_level(logging.ERROR)
 
     with qtbot.capture_exceptions() as exceptions:
-        _sidebar(window).setCurrentRow(1)
+        window.select_story("Broken/Decorated")
 
     assert exceptions == []
     panel = _error_panel(window)

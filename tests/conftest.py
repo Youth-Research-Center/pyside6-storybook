@@ -6,6 +6,7 @@ import sys
 from collections.abc import Iterator
 
 import pytest
+from PySide6.QtCore import QEvent, QTimer
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 
@@ -74,3 +75,23 @@ def stories(monkeypatch: pytest.MonkeyPatch) -> Iterator[StoryRegistry]:
     finally:
         for name in set(sys.modules) - modules_before:
             del sys.modules[name]
+
+
+@pytest.fixture(scope="module")
+def restore_window_activation(qapp: QApplication) -> None:
+    """Let the platform activate windows again after an earlier test ended the event loop (``run()`` does, in ``test_app.py``).
+
+    The offscreen platform ignores activation requests once an event loop has quit, until the next loop runs, and a window an earlier
+    test closed keeps the platform's focus until it is deleted. Both are cleared by deleting what is pending and running a loop. A test
+    module that drives shortcuts or asserts focus uses it, together with ``show_active``.
+    """
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    QTimer.singleShot(0, qapp.quit)
+    qapp.exec()
+
+
+def show_active(qtbot, window: QWidget) -> None:
+    """Show a window and wait until the platform made it the active one, so shortcuts and focus behave as for a user."""
+    window.show()
+    window.activateWindow()
+    qtbot.waitUntil(lambda: QApplication.activeWindow() is window, timeout=5000)

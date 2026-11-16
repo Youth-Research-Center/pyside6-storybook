@@ -286,6 +286,30 @@ pyside6-storybook [TARGET ...]        open the gallery with the stories in these
 `python -m pyside6_storybook` takes the same arguments. With `--list`, standard error also says which source the stories came
 from, and the exit code is 1 if any story module failed to load.
 
+## The gallery window
+
+The window has three panes: the story list on the left, the preview of the selected story in the middle, and the theme switch and
+the story's controls on the right.
+
+The story list is a tree built from the story ids. Each `/`-separated segment but the last is a branch, and the stories are leaves,
+in the order they were registered. A component below the top level that has only one story, such as
+`Forms/Sign-in Form/Default`, is shown as that story's row. When both `A/B` and `A/B/C` are stories, `B` is a story row with `C`
+listed under it. Source files that failed to load are listed in a "Load errors (N)" row at the end.
+
+Selecting a story, with the mouse or the Up and Down keys, opens it at once. The search field above the tree keeps the stories whose
+id contains what you type, ignoring case, together with the branches they are in, which it expands. Typing never changes the story in
+the preview: a selected story that the search hides stays in the preview, and is shown selected again when it matches. Clearing the
+search brings back the branches you had expanded or collapsed.
+
+| Keys | Action |
+| --- | --- |
+| `Ctrl+F` or `/` | Focus the search field and select its text. `/` types a slash while a text field has focus. |
+| Down in the search field | Select the first story the search keeps. |
+| Enter in the search field | Open the first story the search keeps. |
+| Escape in the search field | Clear the search; when it is empty, move focus to the tree. |
+| Escape in the tree | Clear the search. |
+| Left and Right in the tree | Collapse and expand a branch. |
+
 ## Themes
 
 The gallery switches between two built-in themes, Light and Dark: the Fusion style with an explicit palette, so a widget looks
