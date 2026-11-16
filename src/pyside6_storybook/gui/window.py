@@ -197,8 +197,8 @@ class GalleryWindow(QMainWindow):
     def set_registry(self, registry: StoryRegistry, *, load_errors: Sequence[LoadError] = ()) -> None:
         """Show another set of stories and render the selected one again, once.
 
-        The selected story stays selected if the new registry still has its id, and keeps its control values when each control still
-        accepts its value; otherwise the controls start at their defaults. When the story is gone, the first entry is selected.
+        The selected story stays selected if the new registry still has its id. Its controls start at the story's own values, and each
+        control the story still has keeps its previous value when it accepts it. When the story is gone, the first entry is selected.
 
         Args:
             registry: The stories to show.
@@ -294,19 +294,30 @@ class GalleryWindow(QMainWindow):
         self._show_error(_load_errors_title(self._load_errors), _load_errors_details(self._load_errors))
 
     def _show_story(self, story: Story, values: dict[str, object]) -> None:
-        """Show a story with its controls, starting each control at its value in ``values`` if every control accepts it."""
+        """Show a story with its controls.
+
+        Each control starts at the story's value for it, or at its value in ``values`` when ``values`` has one that the control accepts.
+        """
         self._show_nothing()
         self._current_story = story
         self._heading.setText(story.id)
         self._docs_panel.show_story(story, self._registry)
-        try:
-            panel = ControlsPanel(story.controls, self._controls_host, values=values or story.default_args())
-        except (TypeError, ValueError):
-            panel = ControlsPanel(story.controls, self._controls_host, values=story.default_args())
+        panel = ControlsPanel(story.controls, self._controls_host, values=self._starting_values(story, values))
         panel.valuesChanged.connect(self._on_values_changed)
         self._controls_host_layout.addWidget(panel)
         self._controls_panel = panel
         self._rebuild_preview()
+
+    def _starting_values(self, story: Story, previous: dict[str, object]) -> dict[str, object]:
+        starting = story.default_args()
+        for control in story.controls:
+            if control.name not in previous:
+                continue
+            try:
+                starting[control.name] = control.coerce(previous[control.name])
+            except (TypeError, ValueError):
+                self._logger.debug("Control %r of story %r rejected its previous value", control.name, story.id)
+        return starting
 
     def _on_values_changed(self, _values: dict[str, object]) -> None:
         self._rebuild_preview()
