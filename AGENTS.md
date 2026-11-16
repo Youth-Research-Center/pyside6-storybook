@@ -56,7 +56,8 @@ CI runs in two workflows:
   before a release, after a dependency or Python bump, and for changes to platform-dependent code (paths, themes, the command line).
 
 ## Code quality
-Two gates run in CI: `ruff check` (rules `E`, `F`, `B`, `Q`, `I`, `FBT`, 150-character lines; there is no `ruff format` step) and the
+Two gates run in CI: `ruff check` (ruff's default rules `E4`, `E7`, `E9` and `F`, plus `E501` for 150-character lines, `B`, `Q`, `I` and
+`FBT`; there is no `ruff format` step) and the
 [`ty`](https://github.com/astral-sh/ty) type checker, which must report no diagnostics in `src/` or `tests/`. Run both and the tests for
 the code you touched before every push. `W` rules are not selected, so check whitespace on the files you changed:
 
@@ -77,10 +78,10 @@ in the same pull request as the bump.
   - `__main__.py` - `python -m pyside6_storybook`, which runs `cli.main`
   - `cli.py` - the `pyside6-storybook` command line (`main`): loads the targets and opens the gallery, or lists the stories
   - `controls/` - control dataclasses, one module per type (`text_control.py`, `bool_control.py`, `choice_control.py`,
-    `int_control.py`, `float_control.py`, `color_control.py`, `enum_control.py`, `file_control.py`); `__init__.py` re-exports them and defines the `Control` union, `_range.py` holds
-    the range check shared by the int and float controls, and `_options.py` holds the functions every control uses (label
-    derivation, `label`/`description` validation, the float step and decimals rules). Controls share no base class: each has
-    `label`, `description`, `display_label` and `coerce`
+    `int_control.py`, `float_control.py`, `color_control.py`, `enum_control.py`, `file_control.py`); `__init__.py` re-exports them
+    and defines the `Control` union, `_range.py` holds the range check shared by the int and float controls, and `_options.py` holds
+    the functions every control uses (label derivation, `label`/`description` validation, the float step and decimals rules). Controls
+    share no base class: each has `label`, `description`, `display_label` and `coerce`
   - `registry/` - the story model, one module per type:
     - `story_context.py`: `StoryContext`, `StoryFunction`, `Decorator`;
     - `story_definition.py`: `Story`, `StoryOrigin`; `Story.variant` registers a variant through the registry link that
@@ -95,19 +96,21 @@ in the same pull request as the bump.
     because `registry` needs it and defining it here would be an import cycle
   - `discovery/` - story discovery: `loader.py` (`load_stories`, which imports story modules from folders, files and dotted module
     names, and collects errors), `file_search.py` (which files are stories), `module_import.py` (importing one file under the module
-    name that keeps it a single module), `load_result.py` (`LoadResult`, `LoadError`), `sources.py` (`resolve_story_sources`: the command line's targets or the
-    default sources from `pyproject.toml`, entry points or the examples) and `constants.py` (file-name patterns, names and messages)
+    name that keeps it a single module), `load_result.py` (`LoadResult`, `LoadError`), `sources.py` (`resolve_story_sources`: the
+    command line's targets or the default sources from `pyproject.toml`, entry points or the examples) and `constants.py` (file-name
+    patterns, names and messages)
   - `gui/` - the gallery's widgets, one module per widget: `window.py` (`GalleryWindow`), `controls_panel.py` (`ControlsPanel`, the
     labelled form over the editors of a story's controls) and `error_panel.py` (`ErrorPanel`, which the window shows in the preview for a
     story that fails and for the load errors). New gallery widgets go here, not at the package root.
     - `gui/editors/` - one module per editor (`text_editor.py`, `bool_editor.py`, `choice_editor.py`, `int_editor.py`,
-      `float_editor.py`, `color_editor.py`, `enum_editor.py`, `file_editor.py`), all `ControlEditor` subclasses (`control_editor.py`: `valueChanged` and `value()`). `__init__.py` maps each
-      control type to its editor in `EDITORS` and has `create_editor`; `_wheel.py` holds the wheel filter that ignores the wheel on an
-      editor without focus. The colour and file editors open their dialogs through the module-level `_ask_color` and `_ask_file`,
-      which tests replace.
+      `float_editor.py`, `color_editor.py`, `enum_editor.py`, `file_editor.py`), all `ControlEditor` subclasses (`control_editor.py`:
+      `valueChanged` and `value()`). `__init__.py` maps each control type to its editor in `EDITORS` and has `create_editor`; `_wheel.py`
+      holds the wheel filter that ignores the wheel on an editor without focus. The colour and file editors open their dialogs through
+      the module-level `_ask_color` and `_ask_file`, which tests replace.
   - `examples/` - the example stories `--examples` shows, built from stock Qt widgets, in `*_stories.py` modules loaded by discovery
     like any project's stories. They import only PySide6 and this package, every story has a docstring, and together they use every
-    control type and every control option; `tests/test_examples.py` checks all three. They are copied as first stories, so keep them idiomatic.
+    control type and every control option; `tests/test_examples.py` checks all three. They are copied as first stories, so keep them
+    idiomatic.
   - `themes/` - the built-in themes: `theme_definition.py` (`ThemeDefinition`: name, colour scheme and palette colours), one module
     per theme (`light_theme.py`, `dark_theme.py`) and `builtin_themes.py` (`BuiltinThemes`, which applies them)
   - `contrast.py` - WCAG contrast helpers

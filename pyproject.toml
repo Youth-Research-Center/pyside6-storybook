@@ -32,7 +32,7 @@ packages = ["src/pyside6_storybook"]
 line-length = 150
 
 [tool.ruff.lint]
-extend-select = ["B", "Q", "I", "FBT"]
+extend-select = ["E501", "B", "Q", "I", "FBT"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

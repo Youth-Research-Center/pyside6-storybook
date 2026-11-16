@@ -364,7 +364,11 @@ def test_switching_theme_on_a_broken_story_keeps_the_window_usable(qtbot, themes
 
 def _load_errors() -> list[LoadError]:
     return [
-        LoadError("stories/broken_story.py", "Importing stories/broken_story.py failed: invalid syntax", "Traceback ...\nSyntaxError: invalid syntax"),
+        LoadError(
+            "stories/broken_story.py",
+            "Importing stories/broken_story.py failed: invalid syntax",
+            "Traceback ...\nSyntaxError: invalid syntax",
+        ),
         LoadError("stories/raising_story.py", "Importing stories/raising_story.py failed: boom", "Traceback ...\nRuntimeError: boom"),
     ]
 

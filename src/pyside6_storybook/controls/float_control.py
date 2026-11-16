@@ -85,7 +85,8 @@ class FloatControl:
         if self.minimum == self.maximum:
             raise ValueError(f"control {self.name!r} has a zero-width range, so it does not accept a step")
         if not 0 < self.step <= self.maximum - self.minimum:
-            raise ValueError(f"step {self.step!r} of control {self.name!r} must be greater than 0 and at most the range {self.maximum - self.minimum!r}")
+            span = self.maximum - self.minimum
+            raise ValueError(f"step {self.step!r} of control {self.name!r} must be greater than 0 and at most the range {span!r}")
 
     def _validate_decimals(self) -> None:
         if self.decimals is not None:
