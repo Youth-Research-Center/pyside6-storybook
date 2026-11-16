@@ -51,14 +51,17 @@ def create_editor(control: Control, value: object, parent: QWidget | None = None
     Returns:
         The editor.
 
+    The editor is looked up by the control's type and then its base classes, so a subclass of a built-in control gets that
+    control's editor unless ``EDITORS`` has its own entry.
+
     Raises:
-        TypeError: If there is no editor for the type of ``control``.
+        TypeError: If there is no editor for the type of ``control`` or any of its base classes.
     """
-    try:
-        editor_type = EDITORS[type(control)]
-    except KeyError:
-        raise TypeError(f"Unsupported control type: {type(control)!r}") from None
-    return editor_type(control, value, parent)
+    for control_type in type(control).__mro__:
+        editor_type = EDITORS.get(control_type)
+        if editor_type is not None:
+            return editor_type(control, value, parent)
+    raise TypeError(f"Unsupported control type: {type(control)!r}")
 
 
 __all__ = ["EDITORS", "ControlEditor", "create_editor"]

@@ -246,7 +246,7 @@ def test_a_variant_has_the_components_id_and_shares_the_base_function_controls_a
     assert Story("Solo", _widget).component is None
 
 
-def test_variant_args_are_the_starting_values_and_reach_the_render_function() -> None:
+def test_variant_args_are_the_starting_values_and_reach_the_render_function(qtbot) -> None:
     _registry, button = _variant_registry()
 
     variant = button.variant("Quiet", args={"enabled": False, "ratio": 2})
@@ -259,6 +259,18 @@ def test_variant_args_are_the_starting_values_and_reach_the_render_function() ->
     assert isinstance(label, QLabel)
     assert label.text() == "Click"
     label.deleteLater()
+
+
+@pytest.mark.parametrize("attribute", ["component", "args", "variant_of"])
+def test_variant_attributes_cannot_be_reassigned(attribute: str) -> None:
+    _registry, button = _variant_registry()
+    variant = button.variant("Quiet", args={"enabled": False})
+
+    with pytest.raises(AttributeError):
+        setattr(variant, attribute, None)
+    assert variant.variant_of is button
+    assert dict(variant.args) == {"enabled": False}
+    assert variant.component == "Inputs/Button"
 
 
 def test_variant_args_are_read_only_and_default_args_are_fresh_each_call() -> None:
@@ -299,6 +311,7 @@ def test_variants_register_after_their_base_in_order() -> None:
         ({"enabled": 1}, r"Inputs/Button/Bad.*invalid value for 'enabled'.*'enabled'"),
         ({"ratio": 5}, r"Inputs/Button/Bad.*invalid value for 'ratio'"),
         ({"text": 3}, r"Inputs/Button/Bad.*invalid value for 'text'"),
+        ({"ratio": 10**400}, r"Inputs/Button/Bad.*invalid value for 'ratio'.*too large for a float"),
     ],
 )
 def test_invalid_variant_args_raise_a_value_error_naming_the_variant_and_key(args: dict[str, object], message: str) -> None:

@@ -10,6 +10,8 @@ MAX_FLOAT_DECIMALS = 10
 """The most decimals a float editor can show, derived or explicit."""
 
 _FLOAT_STEPS_PER_RANGE = 100
+_FLOAT_NOISE = 1e-15
+"""Relative difference treated as floating-point noise (a few units in the last place), not as a change of value."""
 
 
 def derive_label(name: str) -> str:
@@ -66,8 +68,12 @@ def is_number(value: object) -> bool:
 
 
 def fits_decimals(value: float, decimals: int) -> bool:
-    """Return whether ``value`` survives rounding to ``decimals`` decimals, which is what a ``QDoubleSpinBox`` does to it."""
-    return math.isclose(round(value, decimals), value, rel_tol=1e-12, abs_tol=1e-15)
+    """Return whether ``value`` survives rounding to ``decimals`` decimals, which is what a ``QDoubleSpinBox`` does to it.
+
+    Only floating-point noise is tolerated (``0.1 * 3`` fits one decimal); any real change, however small or at whatever magnitude
+    (``1e-16`` or ``1000000000.0001`` with two decimals), does not fit.
+    """
+    return math.isclose(round(value, decimals), value, rel_tol=_FLOAT_NOISE, abs_tol=0.0)
 
 
 def decimals_needed(value: float) -> int:

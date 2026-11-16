@@ -39,7 +39,7 @@ class FloatControl:
         decimals: Decimals the editor shows, ``0..10``; ``None`` derives the fewest (at least 2) that represent the step, the
             default and both bounds exactly.
         slider: Show a slider beside the spin box. Its positions are ``0..slider_steps``; position ``i`` means
-            ``min(minimum + i * effective_step, maximum)``.
+            ``min(minimum + i * effective_step, maximum)``, and the last position is always exactly ``maximum``.
 
     Raises:
         TypeError: If a value is not a number, ``decimals`` is not an integer, ``slider`` is not a bool, or ``label`` or
@@ -137,11 +137,15 @@ class FloatControl:
 
         Raises:
             TypeError: If ``value`` is not an ``int`` or ``float``.
-            ValueError: If ``value`` is not finite, is outside the range, or needs more decimals than the editor shows.
+            ValueError: If ``value`` is too large for a float, is not finite, is outside the range, or needs more decimals than the
+                editor shows.
         """
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise TypeError(f"value {value!r} of control {self.name!r} must be a number")
-        number = float(value)
+        try:
+            number = float(value)
+        except OverflowError:
+            raise ValueError(f"value {value!r} of control {self.name!r} is too large for a float") from None
         if not math.isfinite(number):
             raise ValueError(f"value {value!r} of control {self.name!r} must be finite")
         if not self.minimum <= number <= self.maximum:
