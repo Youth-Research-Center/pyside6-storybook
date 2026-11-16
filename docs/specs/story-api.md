@@ -98,17 +98,22 @@ call means each call returns fresh objects.
   - The editor's decimals, exposed as the property `effective_decimals`: an explicit `decimals` (`0..10`), or, when `None`, the
     fewest decimals (at least 2, at most 10) that represent the step, the default and both bounds exactly (today's rule).
   - An explicit `decimals` too small for the step, the default or a bound is a `ValueError` at construction.
-  - `coerce` rejects a value for which `round(value, effective_decimals)` is not close to `value`, so a variant's `args` can
+  - `coerce` rejects a value for which `round(value, effective_decimals)` differs from `value` by more than floating-point noise
+    (a relative `1e-15`, so `0.1 * 3` fits one decimal but `1e-16` or `1000000000.0001` do not fit two), so a variant's `args` can
     never be silently rounded by the editor (`QDoubleSpinBox.setValue(0.123)` with 2 decimals reads back `0.12`). The message
     suggests `decimals=`. This also rejects defaults and bounds that need more than 10 decimals (`1e-12`), which milestone 1
     showed rounded; the changelog lists it under `### Changed`.
   - On a zero-width range (`minimum == maximum`) the derived step is `1.0`, and an explicit `step` is always a `ValueError`.
 - `slider=True` on `IntControl` / `FloatControl`: a `QSlider` beside the spin box.
   - Integers: the slider's range is `minimum..maximum` with the same `step`.
-  - Floats: the slider has positions `0..n` with `n = ceil((maximum - minimum) / step - 1e-9)`; position `i` means
-    `min(minimum + i * step, maximum)`, so the last position always reaches `maximum`. The tolerance absorbs floating-point error:
-    without it `(0, 0.07, step=0.01)` gets 8 positions instead of 7, the last two both meaning `0.07`. A range needing more than 10 000 positions
-    is a `ValueError` at construction suggesting a larger `step`.
+  - Floats: the slider has positions `0..n` with `n = ceil((maximum - minimum) / step - 1e-9)`. Position `n` is exactly
+    `maximum`, and any other position `i` means `min(minimum + i * step, maximum)`. The tolerance absorbs floating-point error:
+    without it `(0, 0.07, step=0.01)` gets 8 positions instead of 7, the last two both meaning `0.07`. Mapping the last position
+    explicitly keeps the guarantee when the tolerance drops a tiny final interval (`0..1.0000000001` with step `1.0` has one step,
+    whose end is `1.0000000001`). A range needing more than 10 000 positions is a `ValueError` at construction suggesting a larger
+    `step`.
+  - The spin box moves the slider to the position whose value is nearest, comparing the positions on either side by their actual
+    values, because the last interval can be shorter than a step (`1.0` in `0..1` with step `0.3` is position 4, not 3).
   - The two editors mirror each other inside `QSignalBlocker`, so one user edit emits exactly one `valuesChanged`. Moving the
     slider sets the spin box to that position's value; editing the spin box moves the slider to the nearest position and keeps the
     spin box's exact value.
@@ -305,10 +310,13 @@ def render_story(story: Story, ctx: StoryContext, *, registry: StoryRegistry) ->
 - calls the story function;
 - checks the result is a `QWidget`;
 - applies the story's decorators, then `registry.decorators`, in the order of 4.2;
-- after each decorator, checks that it returned a `QWidget` that is, or contains, the story widget.
+- after each decorator, checks that it returned a `QWidget` that is, or contains, both the story widget and the widget the
+  decorator received, so a decorator cannot drop an earlier decoration and leave its wrapper outside the root.
 
 Failures raise `StoryRenderError(title, details) from error`. On every failure path, `render_story` first hides and calls
-`deleteLater()` on every widget it created or received that is still alive and not owned by another, so nothing leaks. The
+`deleteLater()` on the story's widget and on every widget created during the render that is still alive, each with its topmost
+ancestor that was also created during the render, so nothing leaks. It never deletes a widget that existed before the render (an
+application window a decorator reparented into), which it knows from a snapshot of `QApplication.allWidgets()`. The
 titles keep milestone 1's wording exactly, which `tests/test_window.py` asserts:
 
 | Failure | Title |
@@ -318,6 +326,7 @@ titles keep milestone 1's wording exactly, which `tests/test_window.py` asserts:
 | A decorator raises | `"<id>: decorator <repr> raised <Type>: <message>"` |
 | A decorator returns a non-widget | `"<id>: decorator <repr> returned <repr>, expected a QWidget"` |
 | A decorator drops the widget | `"<id>: decorator <repr> returned a widget that does not contain the story's widget"` |
+| A decorator drops what it received | `"<id>: decorator <repr> returned a widget that does not contain the widget it received"` |
 
 The details are the traceback with the library's own leading frames trimmed. Today's `_story_traceback` moves from
 `gui/window.py` into this module.
@@ -384,7 +393,7 @@ Each PR adds tests next to the code it changes and keeps `tests/test_examples.py
 - **Decorators:**
   - application order with story and registry decorators, including #17's 320×200 inside 24 px example;
   - each built-in's geometry;
-  - the five failure titles;
+  - the six failure titles;
   - no widget left alive after a rebuild or a failure (`shiboken6.isValid` after processing deferred deletes);
   - `current_preview_widget()` is the undecorated widget;
   - the five-line `QGroupBox` decorator from the issue works as written.
