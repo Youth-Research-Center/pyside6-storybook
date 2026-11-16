@@ -146,3 +146,33 @@ def test_the_size_preset_example_adds_presets_to_the_registry(monkeypatch: pytes
     exec(compile(source, "README.md", "exec"), {"__name__": "readme_example"})  # noqa: S102 - runs the repository's own README
 
     assert isolated.size_presets == [SizePreset("Tablet", 768, 1024), SizePreset("Small laptop", 1280, 720)]
+
+
+def test_the_logging_example_logs_actions_and_does_nothing_without_a_sink(qtbot, tmp_path: Path, stories: StoryRegistry) -> None:
+    (source,) = _code_blocks(_section("Logging actions"), "python")
+    write(tmp_path, "stories/counter_stories.py", source)
+
+    result = load_stories(["stories"], cwd=tmp_path)
+
+    assert result.errors == ()
+    counter = stories.get("Buttons/Counter")
+    plain = render_story(counter, StoryContext(args={}), registry=stories)
+    qtbot.addWidget(plain.root)
+    assert isinstance(plain.widget, QPushButton)
+    plain.widget.click()
+
+    recorded = _RecordingSink()
+    logged = render_story(counter, StoryContext(args={}, actions=recorded), registry=stories)
+    qtbot.addWidget(logged.root)
+    assert isinstance(logged.widget, QPushButton)
+    logged.widget.setCheckable(True)
+    logged.widget.click()
+    assert recorded.entries == [("toggle", (True,)), ("clicked", ()), ("custom", ("any", 1))]
+
+
+class _RecordingSink:
+    def __init__(self) -> None:
+        self.entries: list[tuple[str, tuple[object, ...]]] = []
+
+    def record(self, name: str, args: tuple[object, ...]) -> None:
+        self.entries.append((name, args))

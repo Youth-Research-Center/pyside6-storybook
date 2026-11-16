@@ -4,7 +4,8 @@ import importlib
 import sys
 
 import pytest
-from PySide6.QtWidgets import QLabel, QPushButton, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QLabel, QPushButton, QSpinBox, QWidget
 from story_files import write
 
 from pyside6_storybook import (
@@ -565,3 +566,81 @@ def test_a_variant_inherits_the_base_decorators_and_a_list_replaces_them() -> No
     with pytest.raises(TypeError, match="is not callable"):
         base.variant("Bad", decorators=[3])  # ty: ignore[invalid-argument-type]
     assert "A/B/Bad" not in registry
+
+
+class _Sink:
+    def __init__(self) -> None:
+        self.entries: list[tuple[str, tuple[object, ...]]] = []
+
+    def record(self, name: str, args: tuple[object, ...]) -> None:
+        self.entries.append((name, args))
+
+
+def test_log_records_the_name_and_arguments_in_the_sink() -> None:
+    sink = _Sink()
+    ctx = StoryContext(args={}, actions=sink)
+
+    ctx.log("saved", "a.txt", 3)
+    ctx.log("closed")
+
+    assert sink.entries == [("saved", ("a.txt", 3)), ("closed", ())]
+
+
+def test_log_signal_records_each_emission_under_the_signals_name_or_the_given_name(qtbot) -> None:
+    sink = _Sink()
+    ctx = StoryContext(args={}, actions=sink)
+    box = QSpinBox()
+    qtbot.addWidget(box)
+
+    assert ctx.log_signal(box.valueChanged) is None
+    ctx.log_signal(box.textChanged, name="text")
+    box.setValue(5)
+
+    assert sorted(sink.entries) == [("text", ("5",)), ("valueChanged", (5,))]
+
+
+def test_log_signal_of_a_button_click_delivers_no_arguments(qtbot) -> None:
+    sink = _Sink()
+    button = QPushButton()
+    qtbot.addWidget(button)
+    StoryContext(args={}, actions=sink).log_signal(button.clicked)
+
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+    assert sink.entries == [("clicked", ())]
+
+
+def test_log_and_log_signal_do_nothing_without_a_sink(qtbot) -> None:
+    ctx = StoryContext(args={})
+    button = QPushButton()
+    qtbot.addWidget(button)
+
+    ctx.log("saved", 1)
+    ctx.log_signal(button.clicked)
+    ctx.log_signal(button.clicked, name="again")
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+    assert ctx.actions is None
+
+
+def test_log_signal_asks_for_a_name_when_the_signals_repr_has_none() -> None:
+    class _Signal:
+        def __repr__(self) -> str:
+            return "<something else>"
+
+        def connect(self, slot: object) -> None:
+            raise AssertionError("must not connect")
+
+    ctx = StoryContext(args={}, actions=_Sink())
+
+    with pytest.raises(TypeError, match=r"name="):
+        ctx.log_signal(_Signal())  # ty: ignore[invalid-argument-type]
+
+
+def test_the_actions_field_is_keyword_only_and_not_part_of_equality_or_repr() -> None:
+    sink = _Sink()
+
+    assert StoryContext(args={"a": 1}, actions=sink) == StoryContext(args={"a": 1})
+    assert "actions" not in repr(StoryContext(args={}, actions=sink))
+    assert [field.name for field in dataclasses.fields(StoryContext)][-1] == "actions"
+    assert dataclasses.fields(StoryContext)[-1].kw_only

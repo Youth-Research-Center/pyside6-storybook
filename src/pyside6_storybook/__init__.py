@@ -15,7 +15,7 @@ from pyside6_storybook.controls import (
 )
 from pyside6_storybook.decorators import Decorator
 from pyside6_storybook.discovery import LoadError, LoadResult, load_stories
-from pyside6_storybook.registry import Layout, SizePreset, Story, StoryContext, StoryRegistry, default_registry, story
+from pyside6_storybook.registry import ActionSink, Layout, SizePreset, Story, StoryContext, StoryRegistry, default_registry, story
 
 try:
     __version__ = version("pyside6-storybook")
@@ -23,6 +23,7 @@ except PackageNotFoundError:
     __version__ = "0+unknown"
 
 __all__ = [
+    "ActionSink",
     "BoolControl",
     "ChoiceControl",
     "ColorControl",

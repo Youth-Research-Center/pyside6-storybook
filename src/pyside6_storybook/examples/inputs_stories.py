@@ -75,10 +75,11 @@ def combo_box(ctx: StoryContext) -> QWidget:
 
 @story("Inputs/Slider", controls=[IntControl("value", 50, 0, 100), ChoiceControl("orientation", "Horizontal", tuple(_ORIENTATIONS))])
 def slider(ctx: StoryContext) -> QWidget:
-    """A ``QSlider`` from 0 to 100, lying down or standing up."""
+    """A ``QSlider`` from 0 to 100, lying down or standing up. Moving it logs ``valueChanged`` in the Actions tab."""
     widget = QSlider(_ORIENTATIONS[ctx.args["orientation"]])
     widget.setRange(0, 100)
     widget.setValue(ctx.args["value"])
+    ctx.log_signal(widget.valueChanged)
     return widget
 
 

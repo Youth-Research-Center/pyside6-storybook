@@ -11,7 +11,7 @@ from collections.abc import Callable, Iterable
 from pyside6_storybook.controls import Control
 from pyside6_storybook.registry.layout import Layout
 from pyside6_storybook.registry.size_preset import SizePreset
-from pyside6_storybook.registry.story_context import Decorator, StoryContext, StoryFunction
+from pyside6_storybook.registry.story_context import ActionSink, Decorator, StoryContext, StoryFunction
 from pyside6_storybook.registry.story_definition import Story, StoryOrigin
 from pyside6_storybook.registry.story_registry import StoryRegistry
 
@@ -45,6 +45,7 @@ def story(
 
 
 __all__ = [
+    "ActionSink",
     "Decorator",
     "Layout",
     "SizePreset",

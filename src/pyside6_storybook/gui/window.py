@@ -1,4 +1,4 @@
-"""The gallery window: story list, preview and docs tabs, and a side pane with the theme switch and the controls."""
+"""The gallery window: story list, preview and docs tabs, and a side pane with the theme switch, the controls and the actions log."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from pyside6_storybook.discovery import LoadError
+from pyside6_storybook.gui.actions_panel import ActionsPanel
 from pyside6_storybook.gui.canvas import Canvas
 from pyside6_storybook.gui.controls_panel import ControlsPanel
 from pyside6_storybook.gui.docs_panel import DocsPanel
@@ -39,7 +40,9 @@ _SECTION_SPACING = 6
 
 
 class GalleryWindow(QMainWindow):
-    """Three panes in a splitter: the story list, the selected story's preview and docs (in tabs), and the theme and controls pane.
+    """Three panes in a splitter: the story list, the selected story's preview and docs (in tabs), and the side pane.
+
+    The side pane is the theme switch over Controls and Actions tabs.
 
     The preview is rebuilt from scratch whenever a control value or the theme changes. A story or decorator that raises, or returns
     something that is not a ``QWidget``, shows an ``ErrorPanel`` in the preview instead; nothing it raises reaches the Qt event loop. Story
@@ -129,12 +132,20 @@ class GalleryWindow(QMainWindow):
         self._controls_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._controls_scroll.setWidget(self._controls_host)
 
+        self._actions_panel = ActionsPanel(self, icons=self._icons)
+        self._side_tabs = QTabWidget(self)
+        self._side_tabs.setObjectName("sideTabs")
+        self._side_tabs.setAccessibleName("Controls and actions")
+        self._side_tabs.setDocumentMode(True)
+        self._side_tabs.addTab(self._controls_scroll, "Controls")
+        self._side_tabs.addTab(self._actions_panel, "Actions")
+
         side_pane = QWidget(self)
         side_layout = QVBoxLayout(side_pane)
         side_layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
         side_layout.setSpacing(_SPACING * 2)
         side_layout.addWidget(self._build_section("Theme", self._theme_switch, side_pane))
-        side_layout.addWidget(self._build_section("Controls", self._controls_scroll, side_pane), stretch=1)
+        side_layout.addWidget(self._side_tabs, stretch=1)
 
         splitter = QSplitter(self)
         splitter.addWidget(self._sidebar)
@@ -257,8 +268,10 @@ class GalleryWindow(QMainWindow):
             return
         self._show_load_errors()
 
-    def _show_nothing(self) -> None:
+    def _show_nothing(self, *, keep_actions: bool = False) -> None:
         self._clear_preview()
+        if not keep_actions:
+            self._actions_panel.clear()
         self._clear_controls()
         self._current_story = None
         self._heading.setText("")
@@ -275,7 +288,7 @@ class GalleryWindow(QMainWindow):
 
         Each control starts at the story's value for it, or at its value in ``values`` when ``values`` has one that the control accepts.
         """
-        self._show_nothing()
+        self._show_nothing(keep_actions=self._current_story is not None and self._current_story.id == story.id)
         self._current_story = story
         self._heading.setText(story.id)
         self._docs_panel.show_story(story, self._registry)
@@ -310,7 +323,11 @@ class GalleryWindow(QMainWindow):
             return
         self._clear_preview()
         try:
-            rendered = render_story(story, StoryContext(args=panel.values(), theme=self._themes.current), registry=self._registry)
+            rendered = render_story(
+                story,
+                StoryContext(args=panel.values(), theme=self._themes.current, actions=self._actions_panel.new_sink()),
+                registry=self._registry,
+            )
         except StoryRenderError as error:
             self._logger.error("Story %r failed to render: %s", story.id, error.title, exc_info=error)
             self._show_error(error.title, error.details)
@@ -325,6 +342,8 @@ class GalleryWindow(QMainWindow):
         self._canvas.place(self._error_panel, Layout.FILL)
 
     def _clear_preview(self) -> None:
+        """Remove the preview, first stopping its widget's actions from being logged, including signals it emits while it is hidden."""
+        self._actions_panel.invalidate()
         self._canvas.clear()
         self._preview_widget = None
         self._preview_root = None

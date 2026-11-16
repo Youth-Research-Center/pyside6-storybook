@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Actions panel: the side pane has "Controls" and "Actions" tabs. A story shows what happens to its widget with
+  `ctx.log_signal(button.clicked)` (the signal's name, or `name=`) or `ctx.log("name", *args)`; each emission is a row with the time, the
+  action and its arguments (`QPushButton.clicked` delivers none, `valueChanged` delivers the value), newest first, at most 500 rows, with
+  a Clear button and an "N actions logged" count that is announced to assistive technology. The log clears when another story is
+  selected and stays when the same story is built again. Both methods do nothing under a plain `StoryContext`. New public `ActionSink`
+  (the protocol behind `StoryContext.actions`), exported from the package; `StoryContext` gains the keyword-only `actions` field, which
+  does not take part in equality or `repr`. The push button and slider examples log their signals.
 - Zoom: buttons for zoom out, zoom in and reset in the canvas toolbar, with the level (50, 67, 100, 150, 200, 300 and 400%) between them,
   the shortcuts `Ctrl++`, `Ctrl+=`, `Ctrl+-` and `Ctrl+0` while focus is in the preview pane, and `Ctrl`+wheel, also over the story's
   own widgets. A level that would need more than 64 million pixels is skipped. At 100% the live
