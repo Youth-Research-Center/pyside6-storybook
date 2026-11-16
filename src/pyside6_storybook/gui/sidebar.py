@@ -21,6 +21,7 @@ _STORY_ID_ROLE = Qt.ItemDataRole.UserRole
 _ENTRY_KIND_ROLE = Qt.ItemDataRole.UserRole + 1
 _PATH_ROLE = Qt.ItemDataRole.UserRole + 2
 _LOAD_ERRORS_ENTRY = "load-errors"
+_LOAD_ERRORS_KEY = ""
 _MARGIN = 10
 _SPACING = 8
 
@@ -83,13 +84,18 @@ class _StoryFilterModel(QSortFilterProxyModel):
         self.refilter()
 
     def refilter(self) -> None:
-        """Evaluate every row again, with the API that replaced ``invalidateFilter`` in Qt 6.10 when there is one."""
+        """Evaluate every row again, with the API that replaced ``invalidateFilter`` in Qt 6.10 when this Qt has all of it.
+
+        ``beginFilterChange`` exists since Qt 6.9, but ``endFilterChange`` and the ``Direction`` enum only since Qt 6.10.
+        """
         begin = getattr(self, "beginFilterChange", None)
-        if begin is None:
+        end = getattr(self, "endFilterChange", None)
+        direction = getattr(QSortFilterProxyModel, "Direction", None)
+        if begin is None or end is None or direction is None:
             self.invalidateFilter()
             return
         begin()
-        self.endFilterChange(QSortFilterProxyModel.Direction.Rows)
+        end(direction.Rows)
 
     def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex | QPersistentModelIndex) -> bool:
         """Accept every row without a search, else the story rows whose id contains the search text."""
@@ -237,12 +243,15 @@ class StorySidebar(QWidget):
         return True
 
     def select_first(self) -> bool:
-        """Select the first row that opens something, the first story or else the "Load errors" row, and emit for it.
+        """Select the first row that opens something, and emit for it.
+
+        That is the first story the filter keeps, else the first story of the whole tree (``select_story`` then clears the search),
+        else the "Load errors" row.
 
         Returns:
             ``False`` if the tree has no such row.
         """
-        ids = self.visible_story_ids()
+        ids = self.visible_story_ids() or self._all_story_ids()
         if ids:
             return self.select_story(ids[0])
         if self._errors_item is not None:
@@ -260,7 +269,7 @@ class StorySidebar(QWidget):
             return False
         if not self._proxy.mapFromSource(self._errors_item.index()).isValid():
             self._search.clear()
-        self._select_key(_LOAD_ERRORS_ENTRY)
+        self._select_key(_LOAD_ERRORS_KEY)
         self.loadErrorsSelected.emit()
         return True
 
@@ -270,7 +279,7 @@ class StorySidebar(QWidget):
 
     def load_errors_selected(self) -> bool:
         """Return whether the "Load errors" row is the selected one."""
-        return self._selected_key == _LOAD_ERRORS_ENTRY and self._errors_item is not None
+        return self._selected_key == _LOAD_ERRORS_KEY and self._errors_item is not None
 
     def visible_story_ids(self) -> list[str]:
         """Return the ids of the story rows the filter keeps, in tree order, whether or not their branch is expanded."""
@@ -334,7 +343,19 @@ class StorySidebar(QWidget):
             self._append(item, child, depth=depth + 1)
 
     def _item_for_key(self, key: str) -> QStandardItem | None:
-        return self._errors_item if key == _LOAD_ERRORS_ENTRY else self._story_items.get(key)
+        return self._errors_item if key == _LOAD_ERRORS_KEY else self._story_items.get(key)
+
+    def _all_story_ids(self, parent: QStandardItem | None = None) -> list[str]:
+        """Return the ids of every story row below ``parent`` (the root by default) in tree order, whatever the filter hides."""
+        parent = parent if parent is not None else self._model.invisibleRootItem()
+        ids: list[str] = []
+        for row in range(parent.rowCount()):
+            child = parent.child(row)
+            story_id = child.data(_STORY_ID_ROLE)
+            if isinstance(story_id, str):
+                ids.append(story_id)
+            ids.extend(self._all_story_ids(child))
+        return ids
 
     def _walk(self, parent: QModelIndex) -> Iterator[QModelIndex]:
         for row in range(self._proxy.rowCount(parent)):
@@ -357,24 +378,31 @@ class StorySidebar(QWidget):
         self._selected_key = key
         self._filtering = True
         try:
-            self._restore_current()
+            self._restore_current(reveal=True)
         finally:
             self._filtering = False
 
-    def _restore_current(self) -> None:
-        """Show the selected row as current, or clear the current row while the filter hides the selected one."""
+    def _restore_current(self, *, reveal: bool = False) -> None:
+        """Show the selected row as current, or clear the current row while the filter hides the selected one.
+
+        Args:
+            reveal: Whether to expand the row's ancestors and scroll to it. Only an explicit selection does; restoring the current row
+                after a filter or registry change leaves the branches as the user left them.
+        """
         selection = self._tree.selectionModel()
         item = self._item_for_key(self._selected_key) if self._selected_key is not None else None
         index = self._proxy.mapFromSource(item.index()) if item is not None else QModelIndex()
         if not index.isValid():
             selection.clear()
             return
-        parent = index.parent()
-        while parent.isValid():
-            self._tree.expand(parent)
-            parent = parent.parent()
+        if reveal:
+            parent = index.parent()
+            while parent.isValid():
+                self._tree.expand(parent)
+                parent = parent.parent()
         selection.setCurrentIndex(index, QItemSelectionModel.SelectionFlag.ClearAndSelect)
-        self._tree.scrollTo(index)
+        if reveal:
+            self._tree.scrollTo(index)
 
     def _on_search_changed(self, text: str) -> None:
         searching = bool(text.strip())
@@ -420,7 +448,7 @@ class StorySidebar(QWidget):
             self._selected_key = story_id
             self.storySelected.emit(story_id)
         elif index.data(_ENTRY_KIND_ROLE) == _LOAD_ERRORS_ENTRY:
-            self._selected_key = _LOAD_ERRORS_ENTRY
+            self._selected_key = _LOAD_ERRORS_KEY
             self.loadErrorsSelected.emit()
 
 

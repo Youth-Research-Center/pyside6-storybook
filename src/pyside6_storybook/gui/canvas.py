@@ -7,8 +7,9 @@ from collections.abc import Sequence
 from enum import Enum
 
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QSignalBlocker, QSize, Qt, QTimer
-from PySide6.QtGui import QKeySequence, QPainter, QPaintEvent, QPalette, QPixmap, QShortcut, QWheelEvent
+from PySide6.QtGui import QHideEvent, QKeySequence, QPainter, QPaintEvent, QPalette, QPixmap, QShortcut, QShowEvent, QWheelEvent
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QFrame,
     QHBoxLayout,
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from pyside6_storybook.gui.icons import ActionIcons
 from pyside6_storybook.registry import Layout, SizePreset
+from pyside6_storybook.registry.size_preset import MAX_SIZE
 
 _MARGIN = 10
 _ROW_SPACING = 6
@@ -31,7 +33,6 @@ _CONTROL_SPACING = 8
 _LABEL_SPACING = 4
 _CHECKER_SQUARE = 8
 _POPUP_PADDING = 24
-_MAX_SIZE = 10_000
 _WIDGET_SIZE_LIMIT = 16_777_215
 _COMBO_MINIMUM_LENGTH = 7
 _SIZE_COMBO_MINIMUM_LENGTH = 7
@@ -39,6 +40,8 @@ _DEFAULT_CUSTOM_SIZE = (400, 300)
 ZOOM_LEVELS = (50, 67, 100, 150, 200, 300, 400)
 """The zoom levels in percent, in the order the zoom buttons step through them."""
 _DEFAULT_ZOOM = 100
+PIXEL_BUDGET = 64_000_000
+"""The most device pixels a zoomed preview may grab or show; a zoom level that would exceed it is not available for the current size."""
 _WHEEL_STEP = 120
 _ZOOM_NOTE = "Zoomed previews are images; return to 100% to interact."
 _LIVE_PAGE = 0
@@ -121,7 +124,12 @@ class Canvas(QWidget):
 
     The scroll area's widget is a ``QStackedWidget`` named ``previewStack``: page 0 is the live surface and page 1 a label. At 100% the
     surface is shown as it is. At any other zoom level the canvas grabs the surface, scales the image without smoothing and shows it
-    on the label, so a zoomed preview is not interactive.
+    on the label, so a zoomed preview is not interactive. A level whose image would have more than ``PIXEL_BUDGET`` device pixels
+    (the surface's size times the pixel ratio squared times the zoom squared, and at least the unscaled grab) is not available: the
+    zoom buttons and shortcuts skip it, ``set_zoom`` clamps to the nearest available level and a size change that makes the current
+    level unavailable lowers the zoom to the nearest level that is.
+
+    While the canvas is shown, Ctrl+wheel over the canvas or any widget inside it, a story's widgets included, zooms.
     """
 
     def __init__(self, parent: QWidget | None = None, *, icons: ActionIcons | None = None) -> None:
@@ -285,7 +293,8 @@ class Canvas(QWidget):
         """Show the preview at a zoom level, keeping the content under a viewport point where it is.
 
         Args:
-            percent: One of ``ZOOM_LEVELS``.
+            percent: One of ``ZOOM_LEVELS``. A level beyond the pixel budget of the current size is replaced by the nearest available
+                level on the way to 100%.
             anchor: The point of the scroll area's viewport that stays over the same content; the viewport's centre when omitted.
 
         Raises:
@@ -294,6 +303,7 @@ class Canvas(QWidget):
         if percent not in ZOOM_LEVELS:
             message = f"{percent} is not a zoom level; the levels are {ZOOM_LEVELS}."
             raise ValueError(message)
+        percent = self._nearest_available(percent)
         if percent == self._zoom:
             return
         viewport = self._scroll.viewport()
@@ -320,23 +330,40 @@ class Canvas(QWidget):
         self.set_zoom(_DEFAULT_ZOOM)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        """Zoom on Ctrl+wheel over the preview, and grab the surface again when the viewport is resized in Fit mode while zoomed."""
-        if watched is self._scroll.viewport():
-            if event.type() == QEvent.Type.Wheel and isinstance(event, QWheelEvent) and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        """Zoom on Ctrl+wheel over the canvas or a widget inside it, and grab the surface again when the viewport is resized in Fit mode."""
+        if event.type() == QEvent.Type.Wheel:
+            if isinstance(event, QWheelEvent) and isinstance(watched, QWidget) and self._zooms_on_wheel(watched, event):
+                viewport = self._scroll.viewport()
                 self._wheel_remainder += event.angleDelta().y()
                 steps = int(self._wheel_remainder / _WHEEL_STEP)
                 self._wheel_remainder -= steps * _WHEEL_STEP
-                self._step_zoom(steps, anchor=event.position().toPoint())
+                self._step_zoom(steps, anchor=viewport.mapFromGlobal(event.globalPosition().toPoint()))
                 event.accept()
                 return True
-            if (
-                event.type() == QEvent.Type.Resize
-                and self._zoom != _DEFAULT_ZOOM
-                and self.active_size() is None
-                and self._scroll.viewport().size() != self._grab_viewport
-            ):
-                self._refresh_zoom()
+            return super().eventFilter(watched, event)
+        if (
+            watched is self._scroll.viewport()
+            and event.type() == QEvent.Type.Resize
+            and self._zoom != _DEFAULT_ZOOM
+            and self.active_size() is None
+            and self._scroll.viewport().size() != self._grab_viewport
+        ):
+            self._refresh_zoom()
         return super().eventFilter(watched, event)
+
+    def showEvent(self, event: QShowEvent) -> None:
+        """Start watching the application's wheel events, so Ctrl+wheel over a story's widgets zooms."""
+        super().showEvent(event)
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
+
+    def hideEvent(self, event: QHideEvent) -> None:
+        """Stop watching the application's wheel events. Qt also removes the filter when the canvas is deleted."""
+        super().hideEvent(event)
+        app = QApplication.instance()
+        if app is not None:
+            app.removeEventFilter(self)
 
     def changeEvent(self, event: QEvent) -> None:
         """On a palette change, render the icons again if the canvas keeps them, and grab the surface again while zoomed."""
@@ -419,9 +446,43 @@ class Canvas(QWidget):
         shortcut.activated.connect(handlers[action])
         return shortcut
 
+    def _zooms_on_wheel(self, widget: QWidget, event: QWheelEvent) -> bool:
+        """Return whether a wheel event is a Ctrl+wheel over the canvas or one of its descendants."""
+        if not event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            return False
+        return widget is self or self.isAncestorOf(widget)
+
+    def _surface_pixels(self) -> int:
+        """Return the number of device pixels of the surface as it would be grabbed at this size, before scaling."""
+        size = self._sized_surface if self._sized_surface is not None else self._scroll.viewport().size()
+        ratio = self.devicePixelRatio()
+        return round(size.width() * size.height() * ratio * ratio)
+
+    def _is_available(self, percent: int) -> bool:
+        """Return whether a zoom level is within the pixel budget for the current size; 100% shows the live surface and always is."""
+        if percent == _DEFAULT_ZOOM:
+            return True
+        scale = max(1.0, percent / 100)
+        return self._surface_pixels() * scale * scale <= PIXEL_BUDGET
+
+    def _available_levels(self) -> list[int]:
+        return [level for level in ZOOM_LEVELS if self._is_available(level)]
+
+    def _nearest_available(self, percent: int) -> int:
+        """Return ``percent`` if it is available, else the nearest available level between it and 100%."""
+        if self._is_available(percent):
+            return percent
+        levels = self._available_levels()
+        if percent > _DEFAULT_ZOOM:
+            return max(level for level in levels if level < percent)
+        return min(level for level in levels if level > percent)
+
     def _step_zoom(self, steps: int, *, anchor: QPoint | None = None) -> None:
-        index = ZOOM_LEVELS.index(self._zoom) + steps
-        self.set_zoom(ZOOM_LEVELS[max(0, min(index, len(ZOOM_LEVELS) - 1))], anchor=anchor)
+        levels = self._available_levels()
+        if self._zoom not in levels:
+            levels = sorted({*levels, self._zoom})
+        index = levels.index(self._zoom) + steps
+        self.set_zoom(levels[max(0, min(index, len(levels) - 1))], anchor=anchor)
 
     def _apply_anchor(self) -> None:
         """Scroll so that the anchored content point is under its viewport point again, as far as the scroll ranges allow."""
@@ -442,9 +503,10 @@ class Canvas(QWidget):
         self._anchor = None
 
     def _update_zoom_controls(self) -> None:
+        levels = self._available_levels()
         self._zoom_level_label.setText(f"{self._zoom}%")
-        self._zoom_out_button.setEnabled(self._zoom > ZOOM_LEVELS[0])
-        self._zoom_in_button.setEnabled(self._zoom < ZOOM_LEVELS[-1])
+        self._zoom_out_button.setEnabled(any(level < self._zoom for level in levels))
+        self._zoom_in_button.setEnabled(any(level > self._zoom for level in levels))
         self._zoom_note.setVisible(self._zoom != _DEFAULT_ZOOM)
 
     def _build_combo(self, name: str, accessible_name: str, minimum_length: int) -> QComboBox:
@@ -459,7 +521,7 @@ class Canvas(QWidget):
         spin = QSpinBox(self._toolbar)
         spin.setObjectName(name)
         spin.setAccessibleName(accessible_name)
-        spin.setRange(1, _MAX_SIZE)
+        spin.setRange(1, MAX_SIZE)
         spin.setValue(value)
         spin.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         return spin
@@ -560,7 +622,9 @@ class Canvas(QWidget):
             surface.setMinimumSize(natural + extra)
 
     def _refresh_zoom(self) -> None:
-        """Show the live surface at 100%, or grab it and show the scaled image at another level."""
+        """Show the live surface at 100%, or grab it and show the scaled image at another level within the pixel budget."""
+        self._constrain_surface()
+        self._zoom = self._nearest_available(self._zoom)
         self._update_zoom_controls()
         if self._zoom == _DEFAULT_ZOOM:
             # The pixmap goes first: it would keep the stack's minimum size large, and the live preview would get scroll bars.
