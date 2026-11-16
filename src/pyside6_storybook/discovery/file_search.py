@@ -24,6 +24,16 @@ def story_files_below(folder: Path) -> Iterator[Path]:
                 yield here / name
 
 
+def folders_below(folder: Path) -> Iterator[Path]:
+    """Yield ``folder`` and every folder below it, skipping the folders ``story_files_below`` skips."""
+    yield folder
+    for directory, subdirectories, _files in os.walk(folder):
+        here = Path(directory)
+        subdirectories[:] = sorted(name for name in subdirectories if _is_searched_folder(here / name))
+        for name in subdirectories:
+            yield here / name
+
+
 def story_modules_in_package(folder: Path, package: str) -> Iterator[tuple[Path, str]]:
     """Yield the story files of a package folder and its regular subpackages, with their dotted module names.
 
@@ -43,4 +53,4 @@ def _is_searched_folder(folder: Path) -> bool:
     return not folder.name.startswith(".") and folder.name != CACHE_FOLDER_NAME and not (folder / VIRTUAL_ENVIRONMENT_MARKER).exists()
 
 
-__all__ = ["is_story_file_name", "story_files_below", "story_modules_in_package"]
+__all__ = ["folders_below", "is_story_file_name", "story_files_below", "story_modules_in_package"]

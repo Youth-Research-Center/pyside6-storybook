@@ -285,6 +285,10 @@ class StorySidebar(QWidget):
         """Return the ids of the story rows the filter keeps, in tree order, whether or not their branch is expanded."""
         return [str(story_id) for story_id in (index.data(_STORY_ID_ROLE) for index in self._walk(QModelIndex())) if story_id is not None]
 
+    def story_ids(self) -> list[str]:
+        """Return the ids of every story row in tree order, including the ones the filter hides."""
+        return list(self._story_items)
+
     def load_errors_label(self) -> str | None:
         """Return the text of the "Load errors (N)" row, or ``None`` when there is no such row."""
         return self._errors_item.text() if self._errors_item is not None else None

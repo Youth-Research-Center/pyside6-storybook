@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from PySide6.QtWidgets import QApplication
 
 from pyside6_storybook.discovery import LoadError
+from pyside6_storybook.discovery.reload import ReloadSession
 from pyside6_storybook.gui.window import GalleryWindow
 from pyside6_storybook.registry import StoryRegistry, default_registry
 from pyside6_storybook.themes import BuiltinThemes
@@ -21,6 +22,7 @@ def run(
     *,
     theme: str | None = None,
     load_errors: Sequence[LoadError] = (),
+    reload: ReloadSession | None = None,
 ) -> int:
     """Open the gallery window and run the event loop until it closes.
 
@@ -32,6 +34,7 @@ def run(
         argv: Command-line arguments for ``QApplication``. Defaults to ``sys.argv``.
         theme: The built-in theme to start in. Defaults to the first one.
         load_errors: Story sources that failed to load, listed in the gallery under "Load errors".
+        reload: What to load again when a story file changes; the command line passes it. Internal. Without it, nothing is reloaded.
 
     Returns:
         The exit code of the event loop.
@@ -46,7 +49,7 @@ def run(
         themes.set_theme(theme)
     themes.activate(app)
     try:
-        window = GalleryWindow(default_registry if registry is None else registry, themes, load_errors=load_errors)
+        window = GalleryWindow(default_registry if registry is None else registry, themes, load_errors=load_errors, reload=reload)
         window.resize(*_WINDOW_SIZE)
         window.show()
         exit_code = app.exec()

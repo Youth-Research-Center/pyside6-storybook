@@ -97,17 +97,20 @@ in the same pull request as the bump.
     argument checks they share); `__init__.py` re-exports them and the `Decorator` type, which is defined in `registry/story_context.py`
     because `registry` needs it and defining it here would be an import cycle
   - `discovery/` - story discovery: `loader.py` (`load_stories`, which imports story modules from folders, files and dotted module
-    names, and collects errors), `file_search.py` (which files are stories), `module_import.py` (importing one file under the module
-    name that keeps it a single module), `load_result.py` (`LoadResult`, `LoadError`), `sources.py` (`resolve_story_sources`: the
-    command line's targets or the default sources from `pyproject.toml`, entry points or the examples) and `constants.py` (file-name
-    patterns, names and messages)
+    names, and collects errors), `reload.py` (internal, Qt-free: `ReloadSession` and `ReloadResult`, which drop the project's modules,
+    load the targets into a fresh registry and accept or roll back the result), `file_search.py` (which files are stories),
+    `module_import.py` (importing one file under the module name that keeps it a single module), `load_result.py` (`LoadResult`,
+    `LoadError`), `sources.py` (`resolve_story_sources`: the command line's targets or the default sources from `pyproject.toml`, entry
+    points or the examples) and `constants.py` (file-name patterns, names and messages)
   - `gui/` - the gallery's widgets, one module per widget: `window.py` (`GalleryWindow`), `canvas.py` (`Canvas`, the preview scroll area and
     surface with the Background, Size and zoom controls above them, and `CanvasBackground`), `sidebar.py` (`StorySidebar`: the search field
     and the tree of stories, with its filter model), `controls_panel.py` (`ControlsPanel`, the
     labelled form over the editors of a story's controls), `docs_panel.py` (`DocsPanel`, the Docs tab, and `controls_rows`, the pure
     function behind its controls table), `actions_panel.py` (`ActionsPanel`, the Actions tab: the log a story fills through
     `StoryContext.log` and `log_signal`, and the per-render sink that drops entries from an older render) and
-    `error_panel.py` (`ErrorPanel`, which the window shows in the preview for a story that fails and for the load errors). New gallery widgets go
+    `error_panel.py` (`ErrorPanel`, which the window shows in the preview for a story that fails and for the load errors),
+    `reload_watcher.py` (`ReloadWatcher`, a `QFileSystemWatcher` with a 300 ms debounce that runs a `ReloadSession`) and
+    `reload_status.py` (`ReloadStatus`, the status bar's message and icon). New gallery widgets go
     here, not at the package root.
     - `gui/icons.py` (internal, not in `__all__`): reads the bundle and renders icons (`icon_svg`, `build_icon`, `palette_icon`,
       `clear_icon_cache`), `IconRole` (the palette role that tints an icon) and `ActionIcons`, the registry the window retints when the
@@ -205,8 +208,9 @@ Icons are bundled Phosphor SVGs, never downloaded at runtime, and the gallery im
 - Tests build their own `StoryRegistry`; none may register a story in `default_registry`, and a test that must touch it restores it
   (`monkeypatch`, or `try/finally`). Stories in tests are made of stock Qt widgets.
 - A test that imports story modules (anything calling `load_stories`, or the CLI) uses the `stories` fixture in `tests/conftest.py`,
-  which isolates `sys.path`, `sys.modules` and `default_registry`, and writes its story files under `tmp_path` with the helpers in
-  `tests/story_files.py`.
+  which isolates `sys.path`, `sys.modules` and both bindings of the default registry (`pyside6_storybook.registry.default_registry`,
+  which `@story` reads, and `pyside6_storybook.default_registry`, which projects import), and writes its story files under `tmp_path`
+  with the helpers in `tests/story_files.py`.
 - A test that changes the application palette, style or style sheet restores them in a fixture with `try/finally`
   (`restore_application_look` and `themes` in `tests/conftest.py`).
 - Drive widgets the way a user does: `qtbot.keyClicks`, `qtbot.mouseClick`, or the editor's own setters. Assert which values were emitted, not

@@ -280,6 +280,7 @@ pyside6-storybook [TARGET ...]        open the gallery with the stories in these
   --examples                          also load the built-in example stories
   --theme {Light,Dark}                the theme to start in
   --list                              print the story ids and exit, without a window (works without a display)
+  --no-reload                         do not load the stories again when a file changes (see "Hot reload")
   --version                           print the version
 ```
 
@@ -385,6 +386,32 @@ def counter(ctx: StoryContext) -> QWidget:
 characters, and the panel keeps the last 500 actions. Clear empties it, and so does selecting another story; changing a control or the
 theme builds the story again and keeps the log. Under a plain `StoryContext`, such as a test builds, `log_signal` and `log` do nothing,
 so the story needs no check. `StoryContext.actions` is the `ActionSink` that receives the actions.
+
+## Hot reload
+
+The gallery loads your stories again when you save a file, so an edit shows in the preview without a restart. It watches the story
+files you named (and every folder below a folder target, so a new story file is noticed), the modules those stories import from your
+project, and the story modules of a package or entry point. A change is acted on 300 ms after the last write, and one burst of saves
+reloads once. The status bar shows "Reloaded 14:02:11", or "Reload failed 14:02:11: 1 story source failed to load".
+
+A reload drops from `sys.modules` the story modules and their parent packages, and every other module whose file is below the working
+directory or a `pythonpath` folder from `pyproject.toml` (not one in `site-packages`, `.venv`, `venv`, `node_modules` or a hidden folder),
+then loads the targets again into a new registry. Everything your project owns runs again in import order, so an edited widget class is
+picked up like an edited story, and a package `__init__` that appends to `default_registry.decorators` or `size_presets` ends up with
+one entry, not two.
+
+- **A good reload** replaces the story list. The selected story stays selected, and each control keeps its value when the new control of
+  the same name accepts it; an enum control keeps the member of the same name in the reloaded enum class. If the story is gone, the story
+  now at its position in the list is selected, or the last one. The Actions log stays for the same story, and the theme and the
+  canvas settings do not change.
+- **A failed reload** changes nothing: the previous stories stay, the preview shows the errors, and the status bar says so until the next
+  good reload. A reload fails when it finds no story, or when a source fails that was not already failing. Changing a control or the
+  theme meanwhile shows the last good story again. Fixing the file, including a story file that never imported, reloads it.
+
+Limits: modules installed in `site-packages` are not reloaded unless they are story modules, state kept outside the project (a database
+connection, a registry in a library) survives a reload, and a story file's own side effects at import time run again. A module the
+project imports that failed to import is not watched until a story reloads. `--no-reload` turns it off, and code that calls
+`pyside6_storybook.app.run(registry)` directly gets no reload.
 
 ## Themes
 

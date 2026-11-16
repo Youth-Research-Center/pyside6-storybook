@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from enum import Enum
 
 from PySide6.QtCore import QEvent, QSignalBlocker, Qt
 from PySide6.QtGui import QCloseEvent, QFont, QKeySequence, QShortcut
@@ -20,19 +21,24 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from pyside6_storybook.controls import Control, EnumControl
 from pyside6_storybook.discovery import LoadError
+from pyside6_storybook.discovery.reload import ReloadResult, ReloadSession
 from pyside6_storybook.gui.actions_panel import ActionsPanel
 from pyside6_storybook.gui.canvas import Canvas
 from pyside6_storybook.gui.controls_panel import ControlsPanel
 from pyside6_storybook.gui.docs_panel import DocsPanel
 from pyside6_storybook.gui.error_panel import ErrorPanel
 from pyside6_storybook.gui.icons import ActionIcons
+from pyside6_storybook.gui.reload_status import ReloadStatus
+from pyside6_storybook.gui.reload_watcher import ReloadWatcher
 from pyside6_storybook.gui.sidebar import LOAD_ERRORS_HEADING, StorySidebar
 from pyside6_storybook.registry import Layout, Story, StoryContext, StoryRegistry
 from pyside6_storybook.registry.rendering import StoryRenderError, render_story
 from pyside6_storybook.themes import BuiltinThemes
 
 NO_STORIES_MESSAGE = "No stories are registered."
+NO_STORIES_FOUND_MESSAGE = "No stories were found"
 
 _MARGIN = 10
 _SPACING = 8
@@ -57,6 +63,7 @@ class GalleryWindow(QMainWindow):
         parent: QWidget | None = None,
         *,
         load_errors: Sequence[LoadError] = (),
+        reload: ReloadSession | None = None,
     ) -> None:
         """Create the window and select the first entry of the story list.
 
@@ -65,6 +72,8 @@ class GalleryWindow(QMainWindow):
             themes: The themes to switch between. The caller activates and deactivates them.
             parent: The owning widget.
             load_errors: Story sources that failed to load, shown under a "Load errors" entry when there are any.
+            reload: What to load again when a story file changes. The window then watches the files, applies each reload and shows
+                its status in the status bar. Without it nothing is reloaded and the status bar is hidden.
         """
         super().__init__(parent)
         self.setWindowTitle("pyside6-storybook")
@@ -160,6 +169,12 @@ class GalleryWindow(QMainWindow):
             QShortcut(QKeySequence("Ctrl+F"), self, self._sidebar.focus_search),
             QShortcut(QKeySequence(Qt.Key.Key_Slash), self, self._on_slash_shortcut),
         )
+        self._reload_status = ReloadStatus(self)
+        self.statusBar().addWidget(self._reload_status, 1)
+        self.statusBar().setVisible(reload is not None)
+        if reload is not None:
+            self._reload_watcher = ReloadWatcher(reload, self)
+            self._reload_watcher.reloaded.connect(self._on_reloaded)
         self._sidebar.select_first()
 
     def current_preview_widget(self) -> QWidget | None:
@@ -184,8 +199,11 @@ class GalleryWindow(QMainWindow):
     def set_registry(self, registry: StoryRegistry, *, load_errors: Sequence[LoadError] = ()) -> None:
         """Show another set of stories and render the selected one again, once.
 
-        The selected story stays selected if the new registry still has its id. Its controls start at the story's own values, and each
-        control the story still has keeps its previous value when it accepts it. When the story is gone, the first entry is selected.
+        The selected story stays selected if the new registry still has its id. Each of its controls keeps its value when the new
+        control of the same name accepts it, and starts at its default otherwise; for an ``EnumControl`` whose old member belongs to
+        another enum class (a reloaded project enum) the member of the same name counts as accepted. If the story is gone, the story
+        that took its row position is selected, or else the last one; with no stories, the "Load errors" entry or nothing. The actions
+        log is kept when the same story stays selected.
 
         Args:
             registry: The stories to show.
@@ -193,14 +211,20 @@ class GalleryWindow(QMainWindow):
         """
         previous_id = self.current_story_id()
         previous_values = self._controls_panel.values() if self._controls_panel is not None else {}
+        previous_order = self._sidebar.story_ids()
         showing_errors = self._sidebar.load_errors_selected()
         self._registry = registry
         self._load_errors = tuple(load_errors)
         self._canvas.set_empty_message(NO_STORIES_MESSAGE if len(registry) == 0 and not self._load_errors else None)
         self._canvas.set_size_presets(registry.size_presets)
         self._sidebar.set_registry(registry, load_errors=self._load_errors)
-        if previous_id is not None and self._sidebar.selected_story_id() == previous_id:
-            self._show_story(registry.get(previous_id), previous_values)
+        order = self._sidebar.story_ids()
+        if previous_id is not None and previous_id in order:
+            story = registry.get(previous_id)
+            self._show_story(story, _carried_values(story, previous_values))
+        elif previous_id is not None and order:
+            position = previous_order.index(previous_id) if previous_id in previous_order else 0
+            self._sidebar.select_story(order[min(position, len(order) - 1)])
         elif showing_errors and self._sidebar.load_errors_selected():
             self._show_load_errors()
         elif not self._sidebar.select_first():
@@ -283,6 +307,20 @@ class GalleryWindow(QMainWindow):
         self._heading.setText(LOAD_ERRORS_HEADING)
         self._show_error(_load_errors_title(self._load_errors), _load_errors_details(self._load_errors))
 
+    def _on_reloaded(self, result: ReloadResult) -> None:
+        """Apply an accepted reload, or show why a rejected one was not used and keep the stories as they were."""
+        if result.accepted:
+            self.set_registry(result.load.registry, load_errors=result.load.errors)
+            self._reload_status.show_success()
+            return
+        errors = result.new_errors or result.load.errors
+        if errors:
+            title, details = _load_errors_title(errors), _load_errors_details(errors)
+        else:
+            title, details = NO_STORIES_FOUND_MESSAGE, ""
+        self._reload_status.show_failure(title)
+        self._show_error(title, details)
+
     def _show_story(self, story: Story, values: dict[str, object]) -> None:
         """Show a story with its controls.
 
@@ -358,6 +396,31 @@ class GalleryWindow(QMainWindow):
             panel.deleteLater()
 
 
+def _carried_values(story: Story, previous: dict[str, object]) -> dict[str, object]:
+    """Return the story's starting values, replacing the ones a control of the same name accepts from ``previous``."""
+    values = story.default_args()
+    for control in story.controls:
+        if control.name in previous:
+            accepted = _accepted_value(control, previous[control.name])
+            if accepted is not _REJECTED:
+                values[control.name] = accepted
+    return values
+
+
+_REJECTED = object()
+"""Returned by ``_accepted_value`` for a value the control does not accept; ``None`` is a valid value (an empty ``FileControl``)."""
+
+
+def _accepted_value(control: Control, value: object) -> object:
+    """Return ``value`` as the control's value, or the same-named member of a reloaded enum, or ``_REJECTED``."""
+    try:
+        return control.coerce(value)
+    except (TypeError, ValueError):
+        if isinstance(control, EnumControl) and isinstance(value, Enum):
+            return next((option for option in control.options if option.name == value.name), _REJECTED)
+    return _REJECTED
+
+
 def _load_errors_title(errors: Sequence[LoadError]) -> str:
     noun = "story source" if len(errors) == 1 else "story sources"
     return f"{len(errors)} {noun} failed to load"
@@ -373,4 +436,4 @@ def _load_errors_details(errors: Sequence[LoadError]) -> str:
     return "\n\n".join(sections)
 
 
-__all__ = ["LOAD_ERRORS_HEADING", "NO_STORIES_MESSAGE", "GalleryWindow"]
+__all__ = ["LOAD_ERRORS_HEADING", "NO_STORIES_FOUND_MESSAGE", "NO_STORIES_MESSAGE", "GalleryWindow"]
