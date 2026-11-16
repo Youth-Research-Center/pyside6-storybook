@@ -79,7 +79,9 @@ outlive a window (two windows in one test, or `run()` twice with one provider):
   - resets the switch to the provider's current theme, or leaves it as it was if that also fails;
   - keeps running.
 - `Ctrl+T` (next theme) goes through the same path.
-- `set_theme(name)` on the window is unchanged for callers.
+- `set_theme(name)` on the window keeps its contract: a name not in `theme_names()` raises `ValueError` before the provider is
+  called, and leaves the preview as it was. Only an exception the provider raises for a valid name goes to the error panel.
+  `set_theme` does not re-render by itself; the provider's notification does, so one switch renders once.
 
 **`run`** (`app.py`) becomes public and is exported from the package root:
 
@@ -126,13 +128,17 @@ and `BuiltinThemeProvider` under `### Added`, and `BuiltinThemes`' removal needs
   | `placeholder_text` | `PlaceholderText` |
 
   Reading the application palette means System (§3) gets real values too. The table is documented in the README.
-- **Example.** `Display/Token Badge`, in `examples/display_stories.py`: a small `QWidget` subclass defined in the module, which
-  paints a rounded badge in `accent` with `highlighted_text` text and a `border` outline. The story passes `ctx.tokens` to it, and
+- **Example.** `Display/Token Badge`, in `src/pyside6_storybook/examples/display_stories.py`: a small `QWidget` subclass defined in
+  the module, which paints a rounded badge in `accent` with `highlighted_text` text and a `border` outline. A missing token falls
+  back to the matching palette role, because callers build `StoryContext` without tokens. The story passes `ctx.tokens` to it, and
   it repaints on a theme switch because the story re-renders.
 
 ## 3. The System theme (#30)
 
-- **The theme.** `BuiltinThemeProvider.theme_names()` returns `("Light", "Dark", "System")`. Light stays the default.
+- **The theme.** `BuiltinThemeProvider.theme_names()` returns `("Light", "Dark", "System")`, and `BUILTIN_THEME_NAMES` is the same
+  tuple. Light stays the default, and `Ctrl+T` cycles Light, Dark, System. Contrast guarantees (the inactive selection's 4.5:1)
+  hold for Light and Dark only: System is Qt's palette (offscreen, #ffffff on #308cc6 is 3.69:1), and the tests exclude it
+  explicitly.
 - **Applying System.** It restores the style, palette and style sheet found at `activate`, and puts back the colour scheme found
   at `activate` with the existing `_restore_color_scheme` (unset the override, then force the original only if it differs), so a
   scheme the application forced stays forced and one that followed the system follows it again.
@@ -163,13 +169,18 @@ and `BuiltinThemeProvider` under `### Added`, and `BuiltinThemes`' removal needs
 `choices` and is validated after the provider loads.
 
 `discovery/sources.py`: `_KNOWN_KEYS` gains `theme_provider` and `theme`, validated as non-empty strings, and `StorySources` gains
-keyword-only `theme_provider: str | None = None` and `theme: str | None = None`. Unlike `stories`, these two keys are read from
-`pyproject.toml` **also when the command line names targets**: the project's theme applies to whatever stories are opened.
+keyword-only `theme_provider: str | None = None` and `theme: str | None = None`. Unlike `stories`, these two keys and `pythonpath`
+are read from `pyproject.toml` **also when the command line names targets**: the project's theme applies to whatever stories are
+opened, and its provider may live on the configured `pythonpath`. A broken `pyproject.toml` is therefore an error with targets too
+(today it is skipped), and the docstring of `resolve_story_sources` says so. `--help` names the built-in themes in the `--theme`
+help text, since the choices are gone.
 
 **Loading** (`themes/provider_loader.py`): `load_theme_provider(spec: str) -> ThemeProvider`.
 - The spec is `module:attribute`, and the attribute may be dotted (`app.theming:Theme.provider`).
 - The module is imported after `put_on_sys_path` and after the `QApplication` exists, so the configured `pythonpath` and the
-  working directory apply, as for stories.
+  working directory apply, as for stories, and **before `load_stories`**. Otherwise a story that imports the application's theme
+  module first would leave it unrecorded, a reload would drop it, and the stories and the provider would hold different copies.
+  An unknown `--theme` is therefore reported before any story is loaded.
 - The attribute is an instance, or a callable taking no arguments that returns one. A callable is called once the
   `QApplication` exists. A class passes `isinstance(cls, ThemeProvider)` (its methods are attributes), so the loader calls the
   attribute when it is a class (`isinstance(obj, type)`) or when it fails the check, and checks the result.
@@ -195,7 +206,8 @@ where the stories came from. Reading the names does not activate the provider (�
 **Reload.** The provider and its modules are not reloaded. Otherwise a story edit would re-import the application's theme module,
 and the stories and the provider would hold different copies of its singletons (the theme manager). `ReloadSession` gains a
 keyword-only `keep: Collection[str] = ()`: the module names the provider loader recorded. They are excluded from the modules a
-reload drops and from the watched files, so editing the provider triggers nothing. The README says to restart the gallery after
+reload drops (including the parent packages `_managed_modules` adds for them) and from the watched files, so editing the provider
+triggers nothing. The README says to restart the gallery after
 editing the provider.
 
 **`run` from code** takes `theme_provider=` (§1). The three ways (code, command line, `pyproject.toml`) are documented together.
@@ -207,10 +219,13 @@ selection and focus indicators stay readable. Qt cannot exempt a subtree from an
 try.
 
 **Marking the chrome**
-- **Names.** Every widget the gallery creates gets an object name with the prefix `sbk`, in camel case: `storySidebar` becomes
-  `sbkStorySidebar`, `previewSurface` becomes `sbkPreviewSurface`, and so on. That is about 40 names and some 170 test references,
-  renamed in one mechanical commit. The README lists them, and a test checks the README list against the widgets of a shown
-  window. `#sbkName` is the strongest selector an application can use.
+- **Names.** Every widget that has an object name today (53: 40 literals and 13 passed through `canvas._build_*` and
+  `docs_panel._text`) gets the prefix `sbk`, in camel case: `storySidebar` becomes `sbkStorySidebar`, `previewSurface` becomes
+  `sbkPreviewSurface`, and so on. That is about 180 test references in 11 modules, renamed in one mechanical commit. Internal
+  children (tab bars, viewports, editor inputs) get the property but no name, so tests that expect an editor input without a name
+  keep passing. The README lists the names. A test checks the README list against every literal passed to `mark_chrome` in `src/`,
+  in both directions, and that the names found on a shown window are a subset of it (some exist only in some states: `docsNoSource`,
+  the error panel's, the shortcuts dialog). `#sbkName` is the strongest selector an application can use.
 - **The property.** The dynamic property `sbkChrome = True` goes only on widgets an application might style and that contain no
   story widget:
   - the sidebar and its children: search field, tree, the tree's viewport;
@@ -234,7 +249,7 @@ try.
 - **Sidebar selection.** An application rule may set the selected row's background with `selection-background-color` (which does
   reach the option palette's `Highlight`) or with `QTreeView::item:selected { background: ... }` (which does not: the option still
   holds the old `Highlight`). A `QStyledItemDelegate` therefore finds the real background by drawing `PE_PanelItemViewItem` with the
-  option into a small `QImage` and sampling its centre, cached per (palette key, state, size). It paints the selected text in
+  option into a small `QImage` and sampling its centre, cached per (palette key, application style sheet, state, size). It paints the selected text in
   `pick_contrasting_text(<that colour>)`. When the application's rule also sets `color` for selected items, the style sheet wins
   and the delegate's colour is ignored; the guide says so.
 - **Everything else** (the error panel, labels, the checkerboard in `Base` and `Mid`) is covered by the palette contract and checked
@@ -262,7 +277,10 @@ chrome is unreadable, and with one. They are rendered by a script and committed 
   - `themed_app/storybook.py`: `ThemedAppProvider`, about 40 lines, adapting the manager to `ThemeProvider`. Its `provider`
     attribute is a callable returning one.
   - `pyproject.toml` with `[tool.pyside6-storybook]`: `stories`, `pythonpath = ["."]` and
-    `theme_provider = "themed_app.storybook:provider"`.
+    `theme_provider = "themed_app.storybook:provider"`. It has no `[project]`, so `uv run` inside the folder would make a separate
+    environment without the library; the README and guide run it as `uv run --project ../.. pyside6-storybook` from the folder.
+  - Tests reach the example only through `cli.main` and `load_stories`, never `import themed_app`, so `ty` (which checks
+    `examples/`) needs no extra path. Ruff treats `themed_app` as third party inside the example.
 - **Tests**, `tests/test_themed_app.py`, so CI runs the example on every push:
   - core, in-process: `cli.main(["--list"])` with `monkeypatch.chdir(<the example folder>)` and the `stories` fixture; the output
     names the provider and both themes;
