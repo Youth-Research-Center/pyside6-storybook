@@ -297,4 +297,7 @@ roadmap).
 MIT. See [LICENSE](LICENSE). PySide6, which pyside6-storybook depends on, is available under the LGPLv3, the GPLv3 or a
 commercial Qt licence.
 
+The gallery's icons are [Phosphor Icons](https://phosphoricons.com) (MIT), bundled in the package. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 pyside6-storybook is an independent project. It is not affiliated with or endorsed by The Qt Company or the Storybook project.

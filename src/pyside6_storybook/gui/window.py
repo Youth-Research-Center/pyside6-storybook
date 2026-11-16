@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 
-from PySide6.QtCore import QSignalBlocker, QSize, Qt
+from PySide6.QtCore import QEvent, QSignalBlocker, QSize, Qt
 from PySide6.QtGui import QCloseEvent, QFont, QPalette
 from PySide6.QtWidgets import (
     QComboBox,
@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 from pyside6_storybook.discovery import LoadError
 from pyside6_storybook.gui.controls_panel import ControlsPanel
 from pyside6_storybook.gui.error_panel import ErrorPanel
+from pyside6_storybook.gui.icons import ActionIcons
 from pyside6_storybook.registry import Layout, Story, StoryContext, StoryRegistry
 from pyside6_storybook.registry.rendering import StoryRenderError, render_story
 from pyside6_storybook.themes import BuiltinThemes
@@ -82,6 +83,7 @@ class GalleryWindow(QMainWindow):
         self._preview_widget: QWidget | None = None
         self._preview_root: QWidget | None = None
         self._error_panel: ErrorPanel | None = None
+        self._icons = ActionIcons()
 
         self._sidebar = QListWidget(self)
         self._sidebar.setObjectName("storySidebar")
@@ -182,6 +184,12 @@ class GalleryWindow(QMainWindow):
         with QSignalBlocker(self._theme_switch):
             self._theme_switch.setCurrentIndex(self._theme_switch.findText(name))
         self._rebuild_preview()
+
+    def changeEvent(self, event: QEvent) -> None:
+        """Render the chrome's icons again when the application's or the window's palette changes."""
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.ApplicationPaletteChange, QEvent.Type.PaletteChange):
+            self._icons.retint()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Release the previewed widget when the window closes."""

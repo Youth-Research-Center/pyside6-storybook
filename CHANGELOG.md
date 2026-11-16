@@ -49,6 +49,8 @@ All notable changes to this project are documented in this file.
   `pyside6-storybook --examples`.
 
 ### Changed
+- The error panel shows a warning icon beside its title. The gallery now bundles Phosphor Icons (MIT) and tints them from the active
+  palette, so the icon follows the theme.
 - The example stories `Buttons/Push Button` and `Inputs/Line Edit` are now `Buttons/Push Button/Default` and `Inputs/Line Edit/Default`,
   each with variants.
 - A control's default must have the control's value type: `BoolControl` takes only a `bool`, `IntControl` an `int` (not a `bool`),
