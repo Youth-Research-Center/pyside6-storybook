@@ -14,7 +14,13 @@ from pyside6_storybook.controls._options import derive_label
 
 @pytest.mark.parametrize(
     "control",
-    [TextControl("a", "x"), BoolControl("a", default=True), ChoiceControl("a", "x", ("x",)), IntControl("a", 1, 0, 2), FloatControl("a", 1.0, 0.0, 2.0)],
+    [
+        TextControl("a", "x"),
+        BoolControl("a", default=True),
+        ChoiceControl("a", "x", ("x",)),
+        IntControl("a", 1, 0, 2),
+        FloatControl("a", 1.0, 0.0, 2.0),
+    ],
 )
 def test_controls_are_frozen_and_slotted(control: object) -> None:
     assert not hasattr(control, "__dict__")

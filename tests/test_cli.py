@@ -119,14 +119,18 @@ def test_a_story_that_fails_to_import_does_not_stop_the_gallery(project: Path, g
     assert "RuntimeError: boom at import" in passed_errors[0].details
 
 
-def test_a_missing_target_exits_non_zero_without_opening_the_gallery(project: Path, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]) -> None:
+def test_a_missing_target_exits_non_zero_without_opening_the_gallery(
+    project: Path, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]
+) -> None:
     assert cli.main(["stories", "no/such/folder"]) == 1
 
     assert "no/such/folder: no such file, folder or module" in capsys.readouterr().err
     assert gallery.calls == []
 
 
-def test_no_stories_found_exits_non_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stories: StoryRegistry, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]) -> None:
+def test_no_stories_found_exits_non_zero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stories: StoryRegistry, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]
+) -> None:
     (tmp_path / "empty").mkdir()
     monkeypatch.chdir(tmp_path)
 
@@ -182,7 +186,9 @@ def test_a_typo_in_the_configured_stories_is_an_error_not_the_examples(
     assert gallery.calls == []
 
 
-def test_a_broken_configuration_is_reported(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stories: StoryRegistry, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]) -> None:
+def test_a_broken_configuration_is_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stories: StoryRegistry, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]
+) -> None:
     write(tmp_path, "pyproject.toml", '[tool.pyside6-storybook]\nstory = ["stories"]\n')
     monkeypatch.chdir(tmp_path)
 
@@ -192,7 +198,9 @@ def test_a_broken_configuration_is_reported(tmp_path: Path, monkeypatch: pytest.
     assert gallery.calls == []
 
 
-def test_list_says_where_the_stories_came_from(project: Path, monkeypatch: pytest.MonkeyPatch, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]) -> None:
+def test_list_says_where_the_stories_came_from(
+    project: Path, monkeypatch: pytest.MonkeyPatch, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]
+) -> None:
     write(project, "pyproject.toml", '[tool.pyside6-storybook]\nstories = ["stories"]\n')
 
     assert cli.main(["--list"]) == 0
@@ -238,7 +246,8 @@ def _without_platform_override() -> dict[str, str]:
 @pytest.mark.full
 def test_the_installed_script_lists_stories_without_a_display(tmp_path: Path) -> None:
     write(tmp_path, "stories/a_story.py", story_source("Script/A"))
-    write(tmp_path, "stories/widget_at_import_story.py", story_source("Script/B", imports="from PySide6.QtWidgets import QLabel\n_LABEL = QLabel('made at import')"))
+    imports = "from PySide6.QtWidgets import QLabel\n_LABEL = QLabel('made at import')"
+    write(tmp_path, "stories/widget_at_import_story.py", story_source("Script/B", imports=imports))
 
     completed = subprocess.run(
         [_installed_script(), "--list", "stories"],

@@ -105,7 +105,9 @@ def test_every_example_has_a_docstring(examples: StoryRegistry) -> None:
 @pytest.mark.full
 @pytest.mark.parametrize("theme", BUILTIN_THEME_NAMES)
 @pytest.mark.parametrize("story_id", EXPECTED_IDS)
-def test_every_example_renders_with_its_defaults_in_every_theme(qtbot, examples: StoryRegistry, themes: BuiltinThemes, story_id: str, theme: str) -> None:
+def test_every_example_renders_with_its_defaults_in_every_theme(
+    qtbot, examples: StoryRegistry, themes: BuiltinThemes, story_id: str, theme: str
+) -> None:
     themes.set_theme(theme)
     example = examples.get(story_id)
 

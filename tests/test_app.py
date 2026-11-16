@@ -42,7 +42,9 @@ def test_run_with_an_empty_registry_opens_the_empty_gallery(qapp: QApplication, 
     assert run(StoryRegistry(), argv=[]) == 0
 
 
-def test_run_starts_in_the_requested_theme_and_restores_the_palette(qapp: QApplication, restore_application_look: None, registry: StoryRegistry) -> None:
+def test_run_starts_in_the_requested_theme_and_restores_the_palette(
+    qapp: QApplication, restore_application_look: None, registry: StoryRegistry
+) -> None:
     palette_before = QPalette(qapp.palette())
     seen: dict[str, object] = {}
 
@@ -70,7 +72,9 @@ def test_run_starts_in_the_requested_theme_and_restores_the_palette(qapp: QAppli
     assert qapp.palette() == palette_before
 
 
-def test_run_rejects_an_unknown_theme_without_changing_the_application(qapp: QApplication, restore_application_look: None, registry: StoryRegistry) -> None:
+def test_run_rejects_an_unknown_theme_without_changing_the_application(
+    qapp: QApplication, restore_application_look: None, registry: StoryRegistry
+) -> None:
     palette_before = QPalette(qapp.palette())
     style_before = qapp.style().name()
     windows_before = set(qapp.topLevelWidgets())
