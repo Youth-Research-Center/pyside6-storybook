@@ -1,12 +1,13 @@
 import pytest
 from conftest import show_active
 from icon_testing import strongest_pixel
-from PySide6.QtCore import QPoint, QPointF, QSize, Qt
-from PySide6.QtGui import QColor, QImage, QPainter, QPaintEvent, QPalette, QWheelEvent
+from PySide6.QtCore import QEvent, QPoint, QPointF, QSize, Qt
+from PySide6.QtGui import QColor, QImage, QPainter, QPaintEvent, QPalette, QPixmap, QWheelEvent
 from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QLineEdit, QScrollArea, QSpinBox, QStackedWidget, QToolButton, QWidget
 
 from pyside6_storybook import Layout, StoryContext, StoryRegistry, TextControl
-from pyside6_storybook.gui.canvas import ZOOM_LEVELS, Canvas
+from pyside6_storybook.gui import canvas as canvas_module
+from pyside6_storybook.gui.canvas import PIXEL_BUDGET, ZOOM_LEVELS, Canvas
 from pyside6_storybook.gui.window import GalleryWindow
 from pyside6_storybook.themes import BuiltinThemes
 
@@ -41,6 +42,13 @@ def _big(ctx: StoryContext) -> QWidget:
     return _Big()
 
 
+def _spin(ctx: StoryContext) -> QWidget:
+    spin = QSpinBox()
+    spin.setRange(0, 1000)
+    spin.setValue(500)
+    return spin
+
+
 def _text(ctx: StoryContext) -> QWidget:
     label = QLabel(str(ctx.args["text"]))
     label.setAutoFillBackground(True)
@@ -52,6 +60,7 @@ def _make_registry() -> StoryRegistry:
     registry = StoryRegistry()
     registry.story("Zoom/Line", layout=Layout.PADDED)(_line)
     registry.story("Zoom/Big", layout=Layout.PADDED)(_big)
+    registry.story("Zoom/Spin", layout=Layout.PADDED)(_spin)
     registry.story("Zoom/Text", layout=Layout.PADDED, controls=[TextControl("text", "Hello")])(_text)
     return registry
 
@@ -134,6 +143,45 @@ def _wheel(window: QWidget, delta: int, *, ctrl: bool = True, at: QPoint = QPoin
     )
     QApplication.sendEvent(viewport, event)
     QApplication.processEvents()
+
+
+def _wheel_to(widget: QWidget, delta: int, *, ctrl: bool = True) -> None:
+    modifiers = Qt.KeyboardModifier.ControlModifier if ctrl else Qt.KeyboardModifier.NoModifier
+    centre = widget.rect().center()
+    event = QWheelEvent(
+        QPointF(centre),
+        QPointF(widget.mapToGlobal(centre)),
+        QPoint(0, 0),
+        QPoint(0, delta),
+        Qt.MouseButton.NoButton,
+        modifiers,
+        Qt.ScrollPhase.NoScrollPhase,
+        False,  # noqa: FBT003 - QWheelEvent's inverted flag
+    )
+    QApplication.sendEvent(widget, event)
+    QApplication.processEvents()
+
+
+def _set_custom_size(window: QWidget, width: int, height: int) -> None:
+    _choose_size(window, "Custom")
+    for name, value in (("canvasWidth", width), ("canvasHeight", height)):
+        spin = window.findChild(QSpinBox, name)
+        assert spin is not None
+        spin.setValue(value)
+    QApplication.processEvents()
+
+
+def _record_grabs(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Replace the surface's grab by a recorder of the device pixels it would produce, returning a tiny pixmap."""
+    grabbed: list[int] = []
+
+    def grab(self: QWidget) -> QPixmap:
+        ratio = self.devicePixelRatio()
+        grabbed.append(round(self.width() * self.height() * ratio * ratio))
+        return QPixmap(8, 8)
+
+    monkeypatch.setattr(canvas_module._Surface, "grab", grab)
+    return grabbed
 
 
 def test_the_canvas_starts_at_100_percent_with_the_live_surface_shown(qtbot, themes: BuiltinThemes) -> None:
@@ -558,3 +606,119 @@ def test_ctrl_wheel_keeps_the_content_under_the_cursor(qtbot, themes: BuiltinThe
     after = _stack(window).mapTo(viewport, QPoint(round(before.x() * 1.5), round(before.y() * 1.5)))
     assert abs(after.x() - cursor.x()) <= 2
     assert abs(after.y() - cursor.y()) <= 2
+
+
+def test_a_zoom_level_beyond_the_pixel_budget_is_not_reachable(qtbot, themes: BuiltinThemes, monkeypatch: pytest.MonkeyPatch) -> None:
+    window = _make_window(qtbot, themes)
+    canvas = _canvas(window)
+    grabbed = _record_grabs(monkeypatch)
+    _set_custom_size(window, 10_000, 10_000)
+
+    canvas.set_zoom(400)
+    canvas.zoom_in()
+    _wheel(window, 240)
+
+    assert canvas.zoom() == 100
+    assert not _button(window, "canvasZoomIn").isEnabled()
+    assert not _button(window, "canvasZoomOut").isEnabled()
+    assert all(pixels <= PIXEL_BUDGET for pixels in grabbed)
+
+
+def test_zoom_in_stops_at_the_last_level_within_the_budget(qtbot, themes: BuiltinThemes, monkeypatch: pytest.MonkeyPatch) -> None:
+    window = _make_window(qtbot, themes)
+    canvas = _canvas(window)
+    grabbed = _record_grabs(monkeypatch)
+    _set_custom_size(window, 5_000, 5_000)
+
+    canvas.set_zoom(400)
+    assert canvas.zoom() == 150
+    canvas.reset_zoom()
+    canvas.zoom_in()
+    assert canvas.zoom() == 150
+    canvas.zoom_in()
+
+    assert canvas.zoom() == 150
+    assert not _button(window, "canvasZoomIn").isEnabled()
+    assert _button(window, "canvasZoomOut").isEnabled()
+    assert grabbed
+    assert all(pixels * (max(canvas.zoom(), 100) / 100) ** 2 <= PIXEL_BUDGET for pixels in grabbed)
+
+
+def test_a_size_change_lowers_a_zoom_the_new_size_cannot_afford(qtbot, themes: BuiltinThemes, monkeypatch: pytest.MonkeyPatch) -> None:
+    window = _make_window(qtbot, themes)
+    canvas = _canvas(window)
+    grabbed = _record_grabs(monkeypatch)
+    _set_custom_size(window, 400, 300)
+    canvas.set_zoom(400)
+    assert canvas.zoom() == 400
+
+    _set_custom_size(window, 5_000, 5_000)
+
+    assert canvas.zoom() == 150
+    assert _label(window, "canvasZoomLevel").text() == "150%"
+    assert all(pixels * 2.25 <= PIXEL_BUDGET for pixels in grabbed[-1:])
+
+
+def test_ctrl_wheel_over_a_story_widget_zooms_and_does_not_reach_it(qtbot, themes: BuiltinThemes) -> None:
+    window = _make_window(qtbot, themes, "Zoom/Spin")
+    canvas = _canvas(window)
+    spin = window.current_preview_widget()
+    assert isinstance(spin, QSpinBox)
+
+    _wheel_to(spin, 120)
+
+    assert canvas.zoom() == 150
+    assert spin.value() == 500
+
+
+def test_the_wheel_over_unrelated_widgets_is_left_alone(qtbot, themes: BuiltinThemes) -> None:
+    window = _make_window(qtbot, themes, "Zoom/Spin")
+    canvas = _canvas(window)
+    other = QSpinBox()
+    qtbot.addWidget(other)
+    other.setRange(0, 1000)
+    other.setValue(500)
+    other.show()
+    qtbot.waitExposed(other)
+
+    _wheel_to(other, 120, ctrl=False)
+    assert other.value() != 500
+    value = other.value()
+    _wheel_to(other, 120)
+
+    assert canvas.zoom() == 100
+    assert other.value() != value
+    spin = window.current_preview_widget()
+    assert isinstance(spin, QSpinBox)
+    _wheel_to(spin, 120, ctrl=False)
+    assert canvas.zoom() == 100
+    assert spin.value() != 500
+
+
+def test_a_hidden_canvas_stops_watching_the_wheel(qtbot, themes: BuiltinThemes) -> None:
+    window = _make_window(qtbot, themes, "Zoom/Spin")
+    canvas = _canvas(window)
+    spin = window.current_preview_widget()
+    assert isinstance(spin, QSpinBox)
+    window.hide()
+
+    _wheel_to(spin, 120)
+
+    assert canvas.zoom() == 100
+
+
+def test_a_deleted_canvas_leaves_no_filter_behind(qtbot, themes: BuiltinThemes) -> None:
+    window = _make_window(qtbot, themes, "Zoom/Spin")
+    other = QSpinBox()
+    qtbot.addWidget(other)
+    other.setRange(0, 1000)
+    other.show()
+    qtbot.waitExposed(other)
+    window.close()
+    window.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    with qtbot.capture_exceptions() as exceptions:
+        _wheel_to(other, 120)
+
+    assert exceptions == []
