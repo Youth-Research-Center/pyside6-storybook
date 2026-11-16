@@ -294,7 +294,6 @@ class GalleryWindow(QMainWindow):
 
     def _show_nothing(self, *, keep_actions: bool = False) -> None:
         self._clear_preview()
-        self._actions_panel.invalidate()
         if not keep_actions:
             self._actions_panel.clear()
         self._clear_controls()
@@ -323,19 +322,30 @@ class GalleryWindow(QMainWindow):
         self._show_error(title, details)
 
     def _show_story(self, story: Story, values: dict[str, object]) -> None:
-        """Show a story with its controls, starting each control at its value in ``values``; a rejected value falls back to the defaults."""
+        """Show a story with its controls.
+
+        Each control starts at the story's value for it, or at its value in ``values`` when ``values`` has one that the control accepts.
+        """
         self._show_nothing(keep_actions=self._current_story is not None and self._current_story.id == story.id)
         self._current_story = story
         self._heading.setText(story.id)
         self._docs_panel.show_story(story, self._registry)
-        try:
-            panel = ControlsPanel(story.controls, self._controls_host, values=values or story.default_args())
-        except (TypeError, ValueError):
-            panel = ControlsPanel(story.controls, self._controls_host, values=story.default_args())
+        panel = ControlsPanel(story.controls, self._controls_host, values=self._starting_values(story, values))
         panel.valuesChanged.connect(self._on_values_changed)
         self._controls_host_layout.addWidget(panel)
         self._controls_panel = panel
         self._rebuild_preview()
+
+    def _starting_values(self, story: Story, previous: dict[str, object]) -> dict[str, object]:
+        starting = story.default_args()
+        for control in story.controls:
+            if control.name not in previous:
+                continue
+            try:
+                starting[control.name] = control.coerce(previous[control.name])
+            except (TypeError, ValueError):
+                self._logger.debug("Control %r of story %r rejected its previous value", control.name, story.id)
+        return starting
 
     def _on_values_changed(self, _values: dict[str, object]) -> None:
         self._rebuild_preview()
@@ -370,6 +380,8 @@ class GalleryWindow(QMainWindow):
         self._canvas.place(self._error_panel, Layout.FILL)
 
     def _clear_preview(self) -> None:
+        """Remove the preview, first stopping its widget's actions from being logged, including signals it emits while it is hidden."""
+        self._actions_panel.invalidate()
         self._canvas.clear()
         self._preview_widget = None
         self._preview_root = None
@@ -390,19 +402,23 @@ def _carried_values(story: Story, previous: dict[str, object]) -> dict[str, obje
     for control in story.controls:
         if control.name in previous:
             accepted = _accepted_value(control, previous[control.name])
-            if accepted is not None:
+            if accepted is not _REJECTED:
                 values[control.name] = accepted
     return values
 
 
-def _accepted_value(control: Control, value: object) -> object | None:
-    """Return ``value`` as the control's value, or the same-named member of a reloaded enum, or ``None`` when it is not accepted."""
+_REJECTED = object()
+"""Returned by ``_accepted_value`` for a value the control does not accept; ``None`` is a valid value (an empty ``FileControl``)."""
+
+
+def _accepted_value(control: Control, value: object) -> object:
+    """Return ``value`` as the control's value, or the same-named member of a reloaded enum, or ``_REJECTED``."""
     try:
         return control.coerce(value)
     except (TypeError, ValueError):
         if isinstance(control, EnumControl) and isinstance(value, Enum):
-            return next((option for option in control.options if option.name == value.name), None)
-    return None
+            return next((option for option in control.options if option.name == value.name), _REJECTED)
+    return _REJECTED
 
 
 def _load_errors_title(errors: Sequence[LoadError]) -> str:

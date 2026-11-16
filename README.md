@@ -327,15 +327,16 @@ and receives the same arguments.
 
 - **Zoom** shows the preview at 50, 67, 100, 150, 200, 300 or 400%. The buttons below the menus step to the previous or next level
   and reset to 100%; `Ctrl++` (or `Ctrl+=`), `Ctrl+-` and `Ctrl+0` do the same while focus is in the preview pane, and `Ctrl` with the
-  mouse wheel zooms one level per notch. Zooming keeps the centre of the visible area in place; with the wheel, the point under
+  mouse wheel, also over the story's own widgets, zooms one level per notch. Zooming keeps the centre of the visible area in place; with the wheel, the point under
   the cursor stays under it. At 100% the live widget is shown. At any other level the canvas shows an image of the
   preview scaled without smoothing, so 400% turns a one-pixel line into four sharp pixels. A zoomed preview is not interactive: return
-  to 100% to click, type or open popups. The image is taken again when a control, the theme, the background or the size changes.
+  to 100% to click, type or open popups. The image is taken again when a control, the theme, the background or the size changes. A level
+whose image would have more than 64 million device pixels is skipped for a large size.
 
 The choices stay while you switch stories, switch themes or reload; they are not saved between runs.
 
 To list sizes of your own, such as the screens your application supports, append `SizePreset` objects (a name, a width and a height in
-pixels) to `size_presets` of the registry. They follow the built-in sizes in the Size menu:
+pixels, each from 1 to 10 000) to `size_presets` of the registry. They follow the built-in sizes in the Size menu:
 
 ```python
 from pyside6_storybook import SizePreset, default_registry

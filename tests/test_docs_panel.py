@@ -1,12 +1,27 @@
 import functools
 import inspect
+import sys
+import types
 from enum import Enum
 from pathlib import Path
 
 import pytest
+from conftest import show_active
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QFontDatabase
-from PySide6.QtWidgets import QApplication, QLabel, QPlainTextEdit, QPushButton, QScrollArea, QSpinBox, QTableWidget, QTabWidget, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QLabel,
+    QLineEdit,
+    QPlainTextEdit,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QTableWidget,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 from story_files import write
 
 from pyside6_storybook import (
@@ -489,3 +504,125 @@ def test_the_docs_are_empty_without_a_story(qtbot, themes: BuiltinThemes) -> Non
 
     assert panel.findChild(QLabel, "docsHeading") is None
     assert panel.source_text() == ""
+
+
+# Review fixes
+
+
+def _documented(ctx: StoryContext) -> QWidget:
+    """Story text."""
+    return QLabel("x")
+
+
+def test_headings_are_plain_text_even_with_markup_in_the_component_name(qtbot) -> None:
+    registry = StoryRegistry()
+    base = _register(registry, "Box <b>Bold/Default")
+    base.variant("Other")
+
+    panel = _panel(qtbot, base, registry)
+
+    headings = panel.findChildren(QLabel, "docsHeading")
+    assert all(heading.textFormat() == Qt.TextFormat.PlainText for heading in headings)
+    assert "Stories of Box <b>Bold" in [heading.text() for heading in headings]
+
+
+@pytest.mark.usefixtures("restore_window_activation")
+def test_tab_reaches_a_description_label(qtbot) -> None:
+    registry = StoryRegistry()
+    story = registry.story("Box/Default")(_documented)
+    window = QWidget()
+    qtbot.addWidget(window)
+    layout = QVBoxLayout(window)
+    field = QLineEdit(window)
+    panel = DocsPanel(window)
+    layout.addWidget(field)
+    layout.addWidget(panel)
+    panel.show_story(story, registry)
+    _flush()
+    show_active(qtbot, window)
+    field.setFocus()
+    qtbot.waitUntil(field.hasFocus, timeout=2000)
+
+    qtbot.keyClick(field, Qt.Key.Key_Tab)
+
+    assert QApplication.focusWidget() is _label(panel, "docsStoryDoc")
+
+
+def test_the_controls_table_is_at_least_as_wide_as_its_columns(qtbot) -> None:
+    registry = StoryRegistry()
+    story = _register(registry, "Box/Default", controls=[TextControl("text", "long " * 40)])
+    panel = _panel(qtbot, story, registry)
+    panel.resize(200, 400)
+    panel.show()
+
+    table = panel.findChild(QTableWidget, "docsControlsTable")
+    assert table is not None
+    columns = sum(table.columnWidth(column) for column in range(table.columnCount()))
+    assert columns > 300
+    assert table.minimumWidth() >= columns + table.verticalHeader().width() + 2 * table.frameWidth()
+
+
+def test_selecting_many_stories_keeps_at_most_one_copy_binding(qtbot, themes: BuiltinThemes) -> None:
+    registry = StoryRegistry()
+    for index in range(20):
+        _register(registry, f"Group/Story{index}")
+    window = GalleryWindow(registry, themes)
+    qtbot.addWidget(window)
+    window.show()
+    _flush()
+    baseline = window._icons.binding_count()
+
+    for index in range(20):
+        window.select_story(f"Group/Story{index}")
+        _flush()
+
+    assert window._icons.binding_count() <= baseline
+    assert len(window.findChildren(QPushButton, "docsCopyButton")) == 1
+
+
+def test_the_source_view_follows_a_pixel_sized_application_font(qtbot) -> None:
+    registry = StoryRegistry()
+    story = _register(registry, "Box/Default")
+    original = QApplication.font()
+    font = QApplication.font()
+    font.setPixelSize(30)
+    QApplication.setFont(font)
+    try:
+        assert QApplication.font().pointSizeF() <= 0
+        panel = _panel(qtbot, story, registry)
+        view = panel.findChild(QPlainTextEdit, "docsSource")
+        assert view is not None
+        assert view.font().pixelSize() == 30
+    finally:
+        QApplication.setFont(original)
+
+
+def test_a_partial_story_describes_the_module_of_the_wrapped_function(qtbot, monkeypatch: pytest.MonkeyPatch) -> None:
+    module = types.ModuleType("docs_partial_module")
+    module.__doc__ = "The real module."
+    monkeypatch.setitem(sys.modules, "docs_partial_module", module)
+
+    def build(ctx: StoryContext, extra: int = 1) -> QWidget:
+        return QLabel("x")
+
+    build.__module__ = "docs_partial_module"
+    registry = StoryRegistry()
+    story = registry.story("Box/Default")(functools.partial(functools.partial(build, extra=2)))
+
+    panel = _panel(qtbot, story, registry)
+
+    assert _label(panel, "docsModuleDoc").text() == "The real module."
+
+
+def test_a_partial_story_without_a_real_module_has_no_component_description(qtbot) -> None:
+    def build(ctx: StoryContext, extra: int = 1) -> QWidget:
+        return QLabel("x")
+
+    build.__module__ = "docs_module_that_is_not_loaded"
+    registry = StoryRegistry()
+    story = registry.story("Box/Default")(functools.partial(build, extra=2))
+
+    panel = _panel(qtbot, story, registry)
+
+    assert panel.findChild(QLabel, "docsModuleDoc") is None
+    assert "Component description" not in _headings(panel)

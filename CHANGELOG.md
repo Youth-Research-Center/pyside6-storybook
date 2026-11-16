@@ -19,7 +19,8 @@ All notable changes to this project are documented in this file.
   (the protocol behind `StoryContext.actions`), exported from the package; `StoryContext` gains the keyword-only `actions` field, which
   does not take part in equality or `repr`. The push button and slider examples log their signals.
 - Zoom: buttons for zoom out, zoom in and reset in the canvas toolbar, with the level (50, 67, 100, 150, 200, 300 and 400%) between them,
-  the shortcuts `Ctrl++`, `Ctrl+=`, `Ctrl+-` and `Ctrl+0` while focus is in the preview pane, and `Ctrl`+wheel. At 100% the live
+  the shortcuts `Ctrl++`, `Ctrl+=`, `Ctrl+-` and `Ctrl+0` while focus is in the preview pane, and `Ctrl`+wheel, also over the story's
+  own widgets. A level that would need more than 64 million pixels is skipped. At 100% the live
   widget is shown as before; at another level the preview is an image of the widget scaled without smoothing, which is not interactive,
   and a line says so.
 - Canvas controls: a Background menu (Window, Base, Alternate Base or Checkerboard) and a Size menu (Fit, Phone portrait 320 by 480,

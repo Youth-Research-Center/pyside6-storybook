@@ -3,8 +3,8 @@ import weakref
 
 import pytest
 import shiboken6
-from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QAccessible, QAccessibleEvent
+from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtGui import QAccessible, QAccessibleEvent, QHideEvent
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QSlider, QTabWidget, QWidget
 
 from pyside6_storybook import StoryContext, StoryRegistry, load_stories
@@ -236,6 +236,61 @@ def test_the_side_pane_has_controls_and_actions_tabs(qtbot, themes: BuiltinTheme
     assert tabs.documentMode()
     assert tabs.widget(1) is panel
     assert window.findChild(QWidget, "controlsScroll") is tabs.widget(0)
+
+
+class _Pinger(QWidget):
+    """A widget that emits a logged signal while it is being hidden."""
+
+    ping = Signal()
+
+    def hideEvent(self, event: QHideEvent) -> None:
+        self.ping.emit()
+        super().hideEvent(event)
+
+
+def _pinger_window(qtbot, themes: BuiltinThemes) -> tuple[GalleryWindow, ActionsPanel]:
+    stories = StoryRegistry()
+
+    @stories.story("Logging/Pinger")
+    def pinger(ctx: StoryContext) -> QWidget:
+        widget = _Pinger()
+        ctx.log_signal(widget.ping)
+        return widget
+
+    window, panel = _window(qtbot, stories, themes)
+    window.show()
+    qtbot.waitExposed(window)
+    preview = window.current_preview_widget()
+    assert preview is not None
+    qtbot.waitUntil(preview.isVisible, timeout=2000)
+    return window, panel
+
+
+def test_a_signal_emitted_while_the_old_preview_is_hidden_is_not_logged_on_rebuild(qtbot, themes: BuiltinThemes) -> None:
+    window, panel = _pinger_window(qtbot, themes)
+
+    window.set_theme("Dark")
+
+    assert panel.count() == 0
+
+
+def test_a_signal_emitted_while_the_window_closes_is_not_logged(qtbot, themes: BuiltinThemes) -> None:
+    window, panel = _pinger_window(qtbot, themes)
+
+    window.close()
+
+    assert panel.count() == 0
+
+
+def test_the_new_preview_logs_after_a_rebuild(qtbot, themes: BuiltinThemes) -> None:
+    window, panel = _pinger_window(qtbot, themes)
+    window.set_theme("Dark")
+    preview = window.current_preview_widget()
+    assert isinstance(preview, _Pinger)
+
+    preview.ping.emit()
+
+    assert panel.count() == 1
 
 
 def test_selecting_another_story_clears_the_log(qtbot, themes: BuiltinThemes) -> None:

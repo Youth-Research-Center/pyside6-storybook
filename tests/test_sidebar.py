@@ -1,14 +1,15 @@
 import pytest
 from conftest import show_active
 from icon_testing import assert_tinted, strongest_pixel
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QSortFilterProxyModel, Qt
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QLineEdit, QSpinBox, QTreeView
 
-from pyside6_storybook import IntControl, LoadError, StoryRegistry, load_stories
+from pyside6_storybook import FileControl, IntControl, LoadError, StoryRegistry, load_stories
 from pyside6_storybook.cli import EXAMPLES_MODULE
 from pyside6_storybook.contrast import contrast_ratio
-from pyside6_storybook.gui.sidebar import StorySidebar
+from pyside6_storybook.gui.controls_panel import ControlsPanel
+from pyside6_storybook.gui.sidebar import StorySidebar, _StoryFilterModel
 from pyside6_storybook.gui.window import GalleryWindow
 from pyside6_storybook.themes import BUILTIN_THEME_NAMES, BuiltinThemes
 
@@ -296,6 +297,64 @@ def test_set_registry_keeps_a_collapsed_branch_collapsed_and_expands_a_new_one(q
     assert _expanded(sidebar) == {"A": False, "B": True, "C": True}
 
 
+@pytest.mark.filterwarnings("ignore:Function.*invalidateFilter:DeprecationWarning")
+def test_the_filter_falls_back_to_invalidate_filter_without_end_filter_change(qtbot, monkeypatch: pytest.MonkeyPatch) -> None:
+    def forbidden(_model: QSortFilterProxyModel) -> None:
+        raise AssertionError("beginFilterChange needs endFilterChange, which this Qt lacks")
+
+    monkeypatch.setattr(_StoryFilterModel, "endFilterChange", None, raising=False)
+    monkeypatch.setattr(_StoryFilterModel, "beginFilterChange", forbidden, raising=False)
+    sidebar = _sidebar(qtbot, _registry("A/Button", "A/Label"))
+
+    _type(qtbot, sidebar, "lab")
+    assert sidebar.visible_story_ids() == ["A/Label"]
+    _search(sidebar).clear()
+
+    assert sidebar.visible_story_ids() == ["A/Button", "A/Label"]
+
+
+def test_a_story_with_the_id_load_errors_is_a_story_not_the_errors_row(qtbot) -> None:
+    sidebar = _sidebar(qtbot, _registry("load-errors", "Other/One"), load_errors=(LoadError("a.py", "boom"),))
+    recorder = _Recorder(sidebar)
+
+    assert sidebar.select_story("load-errors")
+
+    assert sidebar.selected_story_id() == "load-errors"
+    assert not sidebar.load_errors_selected()
+    assert recorder.selected == ["load-errors"]
+    assert recorder.errors == 0
+    sidebar.select_load_errors()
+    assert sidebar.load_errors_selected()
+    assert sidebar.selected_story_id() is None
+
+
+def test_a_story_with_the_id_load_errors_stays_selected_over_a_set_registry(qtbot) -> None:
+    sidebar = _sidebar(qtbot, _registry("load-errors"), load_errors=(LoadError("a.py", "boom"),))
+    sidebar.select_story("load-errors")
+
+    sidebar.set_registry(_registry("load-errors", "B/One"), load_errors=(LoadError("a.py", "boom"),))
+
+    assert sidebar.selected_story_id() == "load-errors"
+    assert not sidebar.load_errors_selected()
+
+
+def test_select_first_chooses_from_the_whole_tree_when_the_search_matches_no_new_story(qtbot) -> None:
+    sidebar = _sidebar(qtbot, _registry("A/Button", "A/Label"))
+    sidebar.select_story("A/Label")
+    _type(qtbot, sidebar, "label")
+    recorder = _Recorder(sidebar)
+
+    sidebar.set_registry(_registry("X/One", "X/Two"))
+    assert sidebar.selected_story_id() is None
+    assert sidebar.visible_story_ids() == []
+    assert sidebar.select_first()
+
+    assert sidebar.selected_story_id() == "X/One"
+    assert recorder.selected == ["X/One"]
+    assert _search(sidebar).text() == ""
+    assert sidebar.visible_story_ids() == ["X/One", "X/Two"]
+
+
 def test_a_filter_that_keeps_the_selected_story_leaves_it_selected(qtbot) -> None:
     sidebar = _sidebar(qtbot, _registry("A/Button", "A/Label"))
     sidebar.select_story("A/Label")
@@ -334,6 +393,31 @@ def test_select_story_clears_a_search_that_hides_it(qtbot) -> None:
     assert recorder.selected == ["A/Label"]
     assert sidebar.visible_story_ids() == ["A/Button", "A/Label"]
     assert _tree(sidebar).currentIndex().data() == "Label"
+
+
+def test_restoring_the_selection_after_a_search_does_not_expand_a_collapsed_branch(qtbot) -> None:
+    sidebar = _sidebar(qtbot, _registry("A/One", "A/Two", "B/One", "B/Two"))
+    sidebar.select_story("A/One")
+    _tree(sidebar).collapse(_tree(sidebar).model().index(0, 0))
+    recorder = _Recorder(sidebar)
+
+    _type(qtbot, sidebar, "One")
+    _search(sidebar).clear()
+
+    assert _expanded(sidebar) == {"A": False, "B": True}
+    assert sidebar.selected_story_id() == "A/One"
+    assert recorder.selected == []
+
+
+def test_set_registry_does_not_expand_a_collapsed_branch_of_the_selected_story(qtbot) -> None:
+    sidebar = _sidebar(qtbot, _registry("A/One", "A/Two", "B/One", "B/Two"))
+    sidebar.select_story("A/One")
+    _tree(sidebar).collapse(_tree(sidebar).model().index(0, 0))
+
+    sidebar.set_registry(_registry("A/One", "A/Two", "B/One", "B/Two"))
+
+    assert _expanded(sidebar) == {"A": False, "B": True}
+    assert sidebar.selected_story_id() == "A/One"
 
 
 def test_select_story_expands_a_collapsed_branch(qtbot) -> None:
@@ -596,6 +680,57 @@ def test_window_set_registry_selects_the_story_at_the_same_row_when_the_story_is
     assert heading.text() == "Load errors"
 
 
+def _story_with_controls(registry: StoryRegistry, story_id: str, *names: str) -> None:
+    registry.story(story_id, controls=[IntControl(name, 1, 0, 100) for name in names])(lambda ctx: QLabel(str(sorted(ctx.args.items()))))
+
+
+def test_window_set_registry_starts_from_the_new_defaults_and_overlays_the_previous_values(qtbot, themes: BuiltinThemes) -> None:
+    old = StoryRegistry()
+    _story_with_controls(old, "T/Label/Default", "a", "gone")
+    old.get("T/Label/Default").variant("Loud", args={"a": 3})
+    window, _ = _window(qtbot, old, themes)
+    window.select_story("T/Label/Loud")
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    old_panel = window.findChild(ControlsPanel)
+    assert old_panel is not None
+    old_panel.findChildren(QSpinBox)[0].setValue(5)
+    new = StoryRegistry()
+    _story_with_controls(new, "T/Label/Default", "a", "b")
+    new.get("T/Label/Default").variant("Loud", args={"a": 3, "b": 9})
+
+    window.set_registry(new)
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    assert window.current_story_id() == "T/Label/Loud"
+    panel = window.findChild(ControlsPanel)
+    assert panel is not None
+    assert panel.values() == {"a": 5, "b": 9}
+    preview = window.current_preview_widget()
+    assert isinstance(preview, QLabel)
+    assert preview.text() == str([("a", 5), ("b", 9)])
+
+
+def test_window_set_registry_builds_one_controls_panel_even_when_a_value_is_rejected(qtbot, themes: BuiltinThemes) -> None:
+    old = StoryRegistry()
+    _story_with_controls(old, "T/One", "a", "b")
+    window, _ = _window(qtbot, old, themes)
+    old_panel = window.findChild(ControlsPanel)
+    assert old_panel is not None
+    spin_boxes = old_panel.findChildren(QSpinBox)
+    spin_boxes[0].setValue(50)
+    spin_boxes[1].setValue(60)
+    new = StoryRegistry()
+    new.story("T/One", controls=[IntControl("a", 1, 0, 10), IntControl("b", 1, 0, 100)])(lambda ctx: QLabel("x"))
+
+    window.set_registry(new)
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    panel = window.findChild(ControlsPanel)
+    assert panel is not None
+    assert panel.values() == {"a": 1, "b": 60}
+    assert len(window.findChildren(ControlsPanel)) == 1
+
+
 # Appearance and accessibility
 
 
@@ -632,3 +767,26 @@ def test_the_inactive_selection_keeps_a_readable_contrast(theme: str, qapp: QApp
         background = palette.color(group, QPalette.ColorRole.Highlight)
         assert contrast_ratio(text.name(), background.name()) >= 4.5, (theme, group)
 
+
+
+def test_window_set_registry_keeps_a_cleared_file_control_empty(qtbot, themes: BuiltinThemes) -> None:
+    def build() -> StoryRegistry:
+        registry = StoryRegistry()
+        registry.story("Files/Picker", controls=[FileControl("path", "default.png")])(lambda ctx: QLabel(str(ctx.args["path"])))
+        return registry
+
+    window = GalleryWindow(build(), themes)
+    qtbot.addWidget(window)
+    window.select_story("Files/Picker")
+    panel = window.findChild(ControlsPanel)
+    assert panel is not None
+    field = panel.findChild(QLineEdit)
+    assert field is not None
+    field.clear()
+    field.editingFinished.emit()
+    assert panel.values() == {"path": None}
+
+    window.set_registry(build())
+
+    new_panel = [found for found in window.findChildren(ControlsPanel) if found.isVisibleTo(window)][-1]
+    assert new_panel.values() == {"path": None}

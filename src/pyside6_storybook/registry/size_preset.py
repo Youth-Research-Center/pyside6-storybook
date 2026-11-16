@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+MAX_SIZE = 10_000
+"""The largest width or height of a preset, the limit of the canvas's custom size boxes."""
+
 
 @dataclass(frozen=True, slots=True)
 class SizePreset:
@@ -13,12 +16,12 @@ class SizePreset:
 
     Attributes:
         name: The name shown in the Size menu; not blank.
-        width: The width in pixels; positive.
-        height: The height in pixels; positive.
+        width: The width in pixels; positive and at most 10 000.
+        height: The height in pixels; positive and at most 10 000.
 
     Raises:
         TypeError: If ``name`` is not a string, or ``width`` or ``height`` is not an ``int`` (a ``bool`` is not accepted).
-        ValueError: If ``name`` is blank, or ``width`` or ``height`` is not positive.
+        ValueError: If ``name`` is blank, or ``width`` or ``height`` is not positive or is above 10 000, the largest size the canvas can show.
     """
 
     name: str
@@ -35,6 +38,8 @@ class SizePreset:
                 raise TypeError(f"SizePreset {label} must be an int, not {type(value).__name__}")
             if value <= 0:
                 raise ValueError(f"SizePreset {label} must be positive, not {value}")
+            if value > MAX_SIZE:
+                raise ValueError(f"SizePreset {label} must be at most {MAX_SIZE}, not {value}")
 
 
 __all__ = ["SizePreset"]
