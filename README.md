@@ -187,8 +187,8 @@ card.variant("Framed", decorators=[frame(), in_group_box])
 - A variant has its story's decorators unless it gives a list with `decorators=`, which replaces them (an empty list removes them).
   Registry decorators always apply.
 - To write one, return the widget you received after configuring it, or a new widget that contains it as a descendant: put it in a layout
-  of the wrapper, as `in_group_box` does. A decorator that raises, or returns something that is not a `QWidget`, or returns a widget that
-  does not contain the story's widget, shows an error in the preview that names the decorator.
+  of the wrapper, as `in_group_box` does. A decorator that raises, returns something that is not a `QWidget`, or returns a widget that
+  does not contain the widget it received (with the story's widget inside), shows an error in the preview that names the decorator.
 - Decorators run on every rebuild, so keep them stateless, like stories. The `Decorator` type is exported for annotations.
 
 ## Controls

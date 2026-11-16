@@ -384,3 +384,83 @@ def test_a_failure_deletes_a_widget_the_story_parented_elsewhere_but_not_its_own
         render_story(story, _CTX, registry=registry)
 
     assert _alive(owner, child) == [True, False]
+
+
+def test_a_decorator_that_unwraps_an_earlier_decoration_is_rejected_and_leaves_nothing_alive() -> None:
+    built: list[QWidget] = []
+    calls: list[str] = []
+    inner = _wrapper("inner", calls)
+
+    def story_function(ctx: StoryContext) -> QWidget:
+        widget = QLabel("story")
+        built.append(widget)
+        return widget
+
+    def recording_inner(widget: QWidget, ctx: StoryContext) -> QWidget:
+        wrapper = inner(widget, ctx)
+        built.append(wrapper)
+        return wrapper
+
+    class Unwrapping:
+        """Puts the story's widget, taken out of the inner wrapper, into a new frame of its own."""
+
+        def __call__(self, widget: QWidget, ctx: StoryContext) -> QWidget:
+            frame = QWidget()
+            built.append(frame)
+            QVBoxLayout(frame).addWidget(built[0])
+            return frame
+
+        def __repr__(self) -> str:
+            return "unwrapping()"
+
+    registry = StoryRegistry()
+    story = registry.story("Group/Story", decorators=[Unwrapping(), recording_inner])(story_function)
+
+    with pytest.raises(StoryRenderError) as caught:
+        render_story(story, _CTX, registry=registry)
+
+    assert caught.value.title == "Group/Story: decorator unwrapping() returned a widget that does not contain the widget it received"
+    assert _alive(*built) == [False, False, False]
+
+
+def test_a_failure_never_deletes_an_existing_window_a_decorator_reparented_into(qtbot) -> None:
+    window = QWidget()
+    qtbot.addWidget(window)
+    sibling = QLabel("unrelated", window)
+    built: list[QWidget] = []
+
+    def story_function(ctx: StoryContext) -> QWidget:
+        widget = QLabel("story")
+        built.append(widget)
+        return widget
+
+    def adopt_then_fail(widget: QWidget, ctx: StoryContext) -> QWidget:
+        widget.setParent(window)
+        raise RuntimeError("fail")
+
+    registry = StoryRegistry()
+    story = registry.story("Group/Story", decorators=[adopt_then_fail])(story_function)
+
+    with pytest.raises(StoryRenderError):
+        render_story(story, _CTX, registry=registry)
+
+    assert _alive(window, sibling, built[0]) == [True, True, False]
+
+
+def test_a_failure_never_deletes_an_existing_window_a_replacement_was_parented_to(qtbot) -> None:
+    window = QWidget()
+    qtbot.addWidget(window)
+    sibling = QLabel("unrelated", window)
+    replacements: list[QWidget] = []
+
+    def replace(widget: QWidget, ctx: StoryContext) -> QWidget:
+        replacement = QLabel("replacement", window)
+        replacements.append(replacement)
+        return replacement
+
+    registry, story = _registry_with([replace])
+
+    with pytest.raises(StoryRenderError):
+        render_story(story, _CTX, registry=registry)
+
+    assert _alive(window, sibling, *replacements) == [True, True, False]
