@@ -9,7 +9,7 @@ from pyside6_storybook import Layout, StoryContext, StoryRegistry, TextControl
 from pyside6_storybook.gui import canvas as canvas_module
 from pyside6_storybook.gui.canvas import PIXEL_BUDGET, ZOOM_LEVELS, Canvas
 from pyside6_storybook.gui.window import GalleryWindow
-from pyside6_storybook.themes import BuiltinThemes
+from pyside6_storybook.themes import BuiltinThemeProvider
 
 pytestmark = pytest.mark.usefixtures("restore_window_activation")
 
@@ -65,7 +65,7 @@ def _make_registry() -> StoryRegistry:
     return registry
 
 
-def _make_window(qtbot, themes: BuiltinThemes, story: str = "Zoom/Line", *, width: int = 1100, height: int = 700) -> GalleryWindow:
+def _make_window(qtbot, themes: BuiltinThemeProvider, story: str = "Zoom/Line", *, width: int = 1100, height: int = 700) -> GalleryWindow:
     window = GalleryWindow(_make_registry(), themes)
     qtbot.addWidget(window)
     window.resize(width, height)
@@ -184,7 +184,7 @@ def _record_grabs(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     return grabbed
 
 
-def test_the_canvas_starts_at_100_percent_with_the_live_surface_shown(qtbot, themes: BuiltinThemes) -> None:
+def test_the_canvas_starts_at_100_percent_with_the_live_surface_shown(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     canvas = _canvas(window)
     preview = window.current_preview_widget()
@@ -201,7 +201,7 @@ def test_the_canvas_starts_at_100_percent_with_the_live_surface_shown(qtbot, the
     assert _image_label(window).pixmap().isNull()
 
 
-def test_each_action_moves_one_level_and_stops_at_the_ends(qtbot, themes: BuiltinThemes) -> None:
+def test_each_action_moves_one_level_and_stops_at_the_ends(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     canvas = _canvas(window)
     zoom_in = _button(window, "canvasZoomIn")
@@ -228,7 +228,7 @@ def test_each_action_moves_one_level_and_stops_at_the_ends(qtbot, themes: Builti
     assert _label(window, "canvasZoomLevel").text() == "50%"
 
 
-def test_the_zoom_buttons_are_accessible_and_have_icons(qtbot, themes: BuiltinThemes) -> None:
+def test_the_zoom_buttons_are_accessible_and_have_icons(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
 
     expected = {
@@ -254,7 +254,7 @@ def test_a_standalone_canvas_keeps_its_own_icons(qtbot) -> None:
     assert not button.icon().isNull()
 
 
-def test_at_400_percent_a_one_pixel_line_is_four_black_device_pixels_without_blending(qtbot, themes: BuiltinThemes) -> None:
+def test_at_400_percent_a_one_pixel_line_is_four_black_device_pixels_without_blending(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     canvas = _canvas(window)
     preview = window.current_preview_widget()
@@ -276,7 +276,7 @@ def test_at_400_percent_a_one_pixel_line_is_four_black_device_pixels_without_ble
     assert names[start - first : start - first + int(4 * ratio)] == ["#000000"] * int(4 * ratio)
 
 
-def test_the_zoom_note_wraps_instead_of_widening_the_canvas(qtbot, themes: BuiltinThemes, restore_application_look: None) -> None:
+def test_the_zoom_note_wraps_instead_of_widening_the_canvas(qtbot, themes: BuiltinThemeProvider, restore_application_look: None) -> None:
     # Unwrapped, the note made the canvas wider than its toolbar with the Windows fonts, so zooming grew the window for good.
     font = QApplication.font()
     font.setPointSizeF(font.pointSizeF() * 1.4)
@@ -294,7 +294,7 @@ def test_the_zoom_note_wraps_instead_of_widening_the_canvas(qtbot, themes: Built
     assert canvas.minimumSizeHint().width() == minimum
 
 
-def test_reset_returns_to_the_live_page_without_a_pixmap_and_with_the_same_scroll_ranges(qtbot, themes: BuiltinThemes) -> None:
+def test_reset_returns_to_the_live_page_without_a_pixmap_and_with_the_same_scroll_ranges(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, "Zoom/Big", width=900, height=600)
     canvas = _canvas(window)
     before = _ranges(window)
@@ -312,7 +312,7 @@ def test_reset_returns_to_the_live_page_without_a_pixmap_and_with_the_same_scrol
     assert _ranges(window) == before
 
 
-def test_reset_keeps_sized_canvas_ranges_too(qtbot, themes: BuiltinThemes) -> None:
+def test_reset_keeps_sized_canvas_ranges_too(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, width=700, height=500)
     _choose_size(window, "Dialog")
     before = _ranges(window)
@@ -328,7 +328,7 @@ def test_reset_keeps_sized_canvas_ranges_too(qtbot, themes: BuiltinThemes) -> No
     assert _stack(window).size() == surface_size
 
 
-def test_a_control_change_while_zoomed_grabs_again(qtbot, themes: BuiltinThemes) -> None:
+def test_a_control_change_while_zoomed_grabs_again(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, "Zoom/Text")
     _canvas(window).set_zoom(200)
     QApplication.processEvents()
@@ -344,13 +344,13 @@ def test_a_control_change_while_zoomed_grabs_again(qtbot, themes: BuiltinThemes)
     assert preview.text() == "Hello world and more"
 
 
-def test_a_theme_switch_while_zoomed_grabs_again(qtbot, themes: BuiltinThemes) -> None:
+def test_a_theme_switch_while_zoomed_grabs_again(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, "Zoom/Text")
     _canvas(window).set_zoom(200)
     QApplication.processEvents()
     before = _shown_image(window)
 
-    window.set_theme("Dark" if themes.current == "Light" else "Light")
+    window.set_theme("Dark" if themes.current_theme() == "Light" else "Light")
 
     qtbot.waitUntil(lambda: _shown_image(window) != before, timeout=5000)
     label = window.current_preview_widget()
@@ -362,7 +362,7 @@ def test_a_theme_switch_while_zoomed_grabs_again(qtbot, themes: BuiltinThemes) -
     assert _canvas(window).zoom() == 200
 
 
-def test_a_background_change_while_zoomed_grabs_again(qtbot, themes: BuiltinThemes) -> None:
+def test_a_background_change_while_zoomed_grabs_again(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, "Zoom/Text")
     _canvas(window).set_zoom(200)
     QApplication.processEvents()
@@ -376,7 +376,7 @@ def test_a_background_change_while_zoomed_grabs_again(qtbot, themes: BuiltinThem
     assert _shown_image(window) != before
 
 
-def test_ctrl_wheel_zooms_one_level_per_120_units_keeping_the_remainder(qtbot, themes: BuiltinThemes) -> None:
+def test_ctrl_wheel_zooms_one_level_per_120_units_keeping_the_remainder(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     canvas = _canvas(window)
 
@@ -393,7 +393,7 @@ def test_ctrl_wheel_zooms_one_level_per_120_units_keeping_the_remainder(qtbot, t
     assert canvas.zoom() == 200
 
 
-def test_the_wheel_without_ctrl_scrolls_and_does_not_zoom(qtbot, themes: BuiltinThemes) -> None:
+def test_the_wheel_without_ctrl_scrolls_and_does_not_zoom(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, "Zoom/Big", width=900, height=500)
     canvas = _canvas(window)
     vertical = _scroll(window).verticalScrollBar()
@@ -414,7 +414,7 @@ def test_the_wheel_without_ctrl_scrolls_and_does_not_zoom(qtbot, themes: Builtin
     ],
 )
 def test_the_zoom_shortcuts_step_one_level_with_focus_in_the_canvas(
-    qtbot, themes: BuiltinThemes, keys: tuple[Qt.Key, Qt.KeyboardModifier], expected: int
+    qtbot, themes: BuiltinThemeProvider, keys: tuple[Qt.Key, Qt.KeyboardModifier], expected: int
 ) -> None:
     window = _make_window(qtbot, themes)
     show_active(qtbot, window)
@@ -428,7 +428,7 @@ def test_the_zoom_shortcuts_step_one_level_with_focus_in_the_canvas(
     assert _canvas(window).zoom() == expected
 
 
-def test_ctrl_zero_resets_the_zoom(qtbot, themes: BuiltinThemes) -> None:
+def test_ctrl_zero_resets_the_zoom(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     show_active(qtbot, window)
     _canvas(window).set_zoom(300)
@@ -442,7 +442,7 @@ def test_ctrl_zero_resets_the_zoom(qtbot, themes: BuiltinThemes) -> None:
     assert _stack(window).currentIndex() == 0
 
 
-def test_the_zoom_shortcuts_do_nothing_with_focus_outside_the_canvas(qtbot, themes: BuiltinThemes) -> None:
+def test_the_zoom_shortcuts_do_nothing_with_focus_outside_the_canvas(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     show_active(qtbot, window)
     target = window.findChild(QLineEdit, "storySearch")
@@ -455,7 +455,7 @@ def test_the_zoom_shortcuts_do_nothing_with_focus_outside_the_canvas(qtbot, them
     assert _canvas(window).zoom() == 100
 
 
-def test_the_zoomed_preview_note_is_visible_only_while_zoomed(qtbot, themes: BuiltinThemes) -> None:
+def test_the_zoomed_preview_note_is_visible_only_while_zoomed(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     note = _label(window, "canvasZoomNote")
     canvas = _canvas(window)
@@ -471,7 +471,7 @@ def test_the_zoomed_preview_note_is_visible_only_while_zoomed(qtbot, themes: Bui
     assert not note.isVisible()
 
 
-def test_current_preview_widget_is_the_same_while_zoomed(qtbot, themes: BuiltinThemes) -> None:
+def test_current_preview_widget_is_the_same_while_zoomed(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     preview = window.current_preview_widget()
 
@@ -486,7 +486,7 @@ def test_current_preview_widget_is_the_same_while_zoomed(qtbot, themes: BuiltinT
     assert preview.isVisible()
 
 
-def test_at_50_percent_the_scroll_ranges_follow_the_image_not_the_hidden_surface(qtbot, themes: BuiltinThemes) -> None:
+def test_at_50_percent_the_scroll_ranges_follow_the_image_not_the_hidden_surface(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, "Zoom/Big", width=900, height=600)
     canvas = _canvas(window)
     live = _ranges(window)
@@ -503,7 +503,7 @@ def test_at_50_percent_the_scroll_ranges_follow_the_image_not_the_hidden_surface
     assert _ranges(window)[0] < live[0]
 
 
-def test_at_50_percent_a_sized_canvas_follows_the_image(qtbot, themes: BuiltinThemes) -> None:
+def test_at_50_percent_a_sized_canvas_follows_the_image(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, width=700, height=500)
     _choose_size(window, "Dialog")
     live = _ranges(window)
@@ -518,7 +518,7 @@ def test_at_50_percent_a_sized_canvas_follows_the_image(qtbot, themes: BuiltinTh
     assert _stack(window).currentIndex() == 1
 
 
-def test_a_fit_mode_resize_while_zoomed_grabs_again_at_the_new_viewport_size(qtbot, themes: BuiltinThemes) -> None:
+def test_a_fit_mode_resize_while_zoomed_grabs_again_at_the_new_viewport_size(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, "Zoom/Text", width=900, height=600)
     _canvas(window).set_zoom(50)
     QApplication.processEvents()
@@ -532,7 +532,7 @@ def test_a_fit_mode_resize_while_zoomed_grabs_again_at_the_new_viewport_size(qtb
     assert _image_label(window).pixmap().width() == pytest.approx(viewport.width() * 0.5 * ratio, abs=2)
 
 
-def test_set_zoom_rejects_a_value_that_is_not_a_level(qtbot, themes: BuiltinThemes) -> None:
+def test_set_zoom_rejects_a_value_that_is_not_a_level(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
 
     with pytest.raises(ValueError, match="not a zoom level"):
@@ -541,7 +541,7 @@ def test_set_zoom_rejects_a_value_that_is_not_a_level(qtbot, themes: BuiltinThem
     assert _canvas(window).zoom() == 100
 
 
-def test_the_zoom_stays_when_the_story_changes_and_is_grabbed_for_the_new_story(qtbot, themes: BuiltinThemes) -> None:
+def test_the_zoom_stays_when_the_story_changes_and_is_grabbed_for_the_new_story(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     _canvas(window).set_zoom(200)
     QApplication.processEvents()
@@ -563,7 +563,7 @@ def _centered(ctx: StoryContext) -> QWidget:
     return _Fixed()
 
 
-def _anchor_window(qtbot, themes: BuiltinThemes) -> GalleryWindow:
+def _anchor_window(qtbot, themes: BuiltinThemeProvider) -> GalleryWindow:
     registry = StoryRegistry()
     registry.story("Zoom/Centered", layout=Layout.CENTERED)(_centered)
     window = GalleryWindow(registry, themes)
@@ -575,7 +575,7 @@ def _anchor_window(qtbot, themes: BuiltinThemes) -> GalleryWindow:
     return window
 
 
-def test_zooming_keeps_a_centred_widget_in_view(qtbot, themes: BuiltinThemes) -> None:
+def test_zooming_keeps_a_centred_widget_in_view(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _anchor_window(qtbot, themes)
     preview = window.current_preview_widget()
     assert preview is not None
@@ -590,7 +590,7 @@ def test_zooming_keeps_a_centred_widget_in_view(qtbot, themes: BuiltinThemes) ->
     assert _scroll(window).horizontalScrollBar().maximum() > 0
 
 
-def test_zooming_in_then_out_returns_to_the_same_scroll_values(qtbot, themes: BuiltinThemes) -> None:
+def test_zooming_in_then_out_returns_to_the_same_scroll_values(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     _choose_size(window, "Custom")
     for name, value in (("canvasWidth", 1600), ("canvasHeight", 1200)):
@@ -615,7 +615,7 @@ def test_zooming_in_then_out_returns_to_the_same_scroll_values(qtbot, themes: Bu
     assert abs(vertical.value() - start[1]) <= 1
 
 
-def test_ctrl_wheel_keeps_the_content_under_the_cursor(qtbot, themes: BuiltinThemes) -> None:
+def test_ctrl_wheel_keeps_the_content_under_the_cursor(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, width=700, height=500)
     _choose_size(window, "Dialog")
     viewport = _scroll(window).viewport()
@@ -630,7 +630,7 @@ def test_ctrl_wheel_keeps_the_content_under_the_cursor(qtbot, themes: BuiltinThe
     assert abs(after.y() - cursor.y()) <= 2
 
 
-def test_a_zoom_level_beyond_the_pixel_budget_is_not_reachable(qtbot, themes: BuiltinThemes, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_zoom_level_beyond_the_pixel_budget_is_not_reachable(qtbot, themes: BuiltinThemeProvider, monkeypatch: pytest.MonkeyPatch) -> None:
     window = _make_window(qtbot, themes)
     canvas = _canvas(window)
     grabbed = _record_grabs(monkeypatch)
@@ -646,7 +646,7 @@ def test_a_zoom_level_beyond_the_pixel_budget_is_not_reachable(qtbot, themes: Bu
     assert all(pixels <= PIXEL_BUDGET for pixels in grabbed)
 
 
-def test_zoom_in_stops_at_the_last_level_within_the_budget(qtbot, themes: BuiltinThemes, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_zoom_in_stops_at_the_last_level_within_the_budget(qtbot, themes: BuiltinThemeProvider, monkeypatch: pytest.MonkeyPatch) -> None:
     window = _make_window(qtbot, themes)
     canvas = _canvas(window)
     grabbed = _record_grabs(monkeypatch)
@@ -666,7 +666,7 @@ def test_zoom_in_stops_at_the_last_level_within_the_budget(qtbot, themes: Builti
     assert all(pixels * (max(canvas.zoom(), 100) / 100) ** 2 <= PIXEL_BUDGET for pixels in grabbed)
 
 
-def test_a_size_change_lowers_a_zoom_the_new_size_cannot_afford(qtbot, themes: BuiltinThemes, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_size_change_lowers_a_zoom_the_new_size_cannot_afford(qtbot, themes: BuiltinThemeProvider, monkeypatch: pytest.MonkeyPatch) -> None:
     window = _make_window(qtbot, themes)
     canvas = _canvas(window)
     grabbed = _record_grabs(monkeypatch)
@@ -681,7 +681,7 @@ def test_a_size_change_lowers_a_zoom_the_new_size_cannot_afford(qtbot, themes: B
     assert all(pixels * 2.25 <= PIXEL_BUDGET for pixels in grabbed[-1:])
 
 
-def test_ctrl_wheel_over_a_story_widget_zooms_and_does_not_reach_it(qtbot, themes: BuiltinThemes) -> None:
+def test_ctrl_wheel_over_a_story_widget_zooms_and_does_not_reach_it(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, "Zoom/Spin")
     canvas = _canvas(window)
     spin = window.current_preview_widget()
@@ -693,7 +693,7 @@ def test_ctrl_wheel_over_a_story_widget_zooms_and_does_not_reach_it(qtbot, theme
     assert spin.value() == 500
 
 
-def test_the_wheel_over_unrelated_widgets_is_left_alone(qtbot, themes: BuiltinThemes) -> None:
+def test_the_wheel_over_unrelated_widgets_is_left_alone(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, "Zoom/Spin")
     canvas = _canvas(window)
     other = QSpinBox()
@@ -717,7 +717,7 @@ def test_the_wheel_over_unrelated_widgets_is_left_alone(qtbot, themes: BuiltinTh
     assert spin.value() != 500
 
 
-def test_a_hidden_canvas_stops_watching_the_wheel(qtbot, themes: BuiltinThemes) -> None:
+def test_a_hidden_canvas_stops_watching_the_wheel(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, "Zoom/Spin")
     canvas = _canvas(window)
     spin = window.current_preview_widget()
@@ -729,7 +729,7 @@ def test_a_hidden_canvas_stops_watching_the_wheel(qtbot, themes: BuiltinThemes) 
     assert canvas.zoom() == 100
 
 
-def test_a_deleted_canvas_leaves_no_filter_behind(qtbot, themes: BuiltinThemes) -> None:
+def test_a_deleted_canvas_leaves_no_filter_behind(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, "Zoom/Spin")
     other = QSpinBox()
     qtbot.addWidget(other)

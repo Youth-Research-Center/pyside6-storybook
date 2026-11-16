@@ -427,13 +427,41 @@ one entry, not two.
 Limits: modules installed in `site-packages` are not reloaded unless they are story modules, state kept outside the project (a database
 connection, a registry in a library) survives a reload, and a story file's own side effects at import time run again. A module the
 project imports that failed to import is not watched until a story reloads. `--no-reload` turns it off, and code that calls
-`pyside6_storybook.app.run(registry)` directly gets no reload.
+`pyside6_storybook.run(registry)` directly gets no reload.
 
 ## Themes
 
 The gallery switches between two built-in themes, Light and Dark: the Fusion style with an explicit palette, so a widget looks
-the same on Windows, macOS and Linux. A theme hook that lets an application plug in its own theme manager is planned (see the
-roadmap).
+the same on Windows, macOS and Linux. `Ctrl+T` switches to the next theme.
+
+An application that has its own theme manager plugs it in with a theme provider, an object that implements the `ThemeProvider`
+protocol. `BuiltinThemeProvider` is the default one and a model for your own:
+
+```python
+from pyside6_storybook import BuiltinThemeProvider, run
+
+raise SystemExit(run(theme_provider=BuiltinThemeProvider(), theme="Dark"))
+```
+
+A provider has six methods, called on the main thread:
+
+| Method | What it does |
+| --- | --- |
+| `theme_names()` | The names the theme switch lists. Not empty, and it works before `activate`. |
+| `current_theme()` | The name of the current theme. Also works before `activate`. |
+| `activate(app)` | Called once before the window is built. Record what the provider will change on the `QApplication` and apply the current theme. |
+| `set_theme(name)` | Apply a theme. Raise `ValueError` for a name that `theme_names()` does not list. |
+| `on_changed(callback)` | Register a callback, called with no arguments after every theme change: one the gallery asked for and one the provider made itself. |
+| `deactivate()` | Restore the style, palette, style sheet and font, and clear the callbacks. |
+
+A provider that sets an application-wide style sheet also sets a matching `QPalette`: the gallery's own widgets are drawn from
+palette roles, and a style sheet alone leaves the application palette unchanged. The gallery re-renders the preview when the
+provider calls its callbacks, so a theme change the provider makes by itself shows up too. Every call into a provider is guarded:
+an exception is logged and shown in the preview as "Theme provider failed: ...", and the gallery keeps running.
+
+`run(registry, argv, *, theme=None, theme_provider=None)` opens the gallery. `theme` must be one of the provider's names; `run` raises
+`ValueError` otherwise. After the provider is deactivated, `run` logs a warning for each of the application's style, palette, style sheet
+and font that the provider did not restore.
 
 ## Licence
 

@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import functools
 import itertools
 import logging
-from collections.abc import Sequence
+import traceback
+import weakref
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
+from typing import TypeVar
 
 import shiboken6
 from PySide6.QtCore import QEvent, QSignalBlocker, Qt
@@ -44,7 +48,7 @@ from pyside6_storybook.gui.reload_watcher import ReloadWatcher
 from pyside6_storybook.gui.sidebar import LOAD_ERRORS_HEADING, StorySidebar
 from pyside6_storybook.registry import Layout, Story, StoryContext, StoryRegistry
 from pyside6_storybook.registry.rendering import StoryRenderError, render_story
-from pyside6_storybook.themes import BuiltinThemes
+from pyside6_storybook.themes import ThemeProvider
 
 NO_STORIES_MESSAGE = "No stories are registered."
 NO_STORIES_FOUND_MESSAGE = "No stories were found"
@@ -55,6 +59,9 @@ _SECTION_SPACING = 6
 _HELP_KEYS = "F1"
 _HELP_DESCRIPTION = "Show the keyboard shortcuts"
 SHORTCUTS_HEADERS = ("Keys", "Action")
+_THEME_ERROR_TITLE = "Theme provider failed"
+
+_T = TypeVar("_T")
 
 
 @dataclass(frozen=True)
@@ -92,7 +99,7 @@ class GalleryWindow(QMainWindow):
     def __init__(
         self,
         registry: StoryRegistry,
-        themes: BuiltinThemes,
+        theme_provider: ThemeProvider,
         parent: QWidget | None = None,
         *,
         load_errors: Sequence[LoadError] = (),
@@ -102,7 +109,8 @@ class GalleryWindow(QMainWindow):
 
         Args:
             registry: The stories to show.
-            themes: The themes to switch between. The caller activates and deactivates them.
+            theme_provider: The provider of the themes to switch between. The caller activates and deactivates it. The window
+                registers one callback with it and guards every call into it: an exception is logged and shown in the preview.
             parent: The owning widget.
             load_errors: Story sources that failed to load, shown under a "Load errors" entry when there are any.
             reload: What to load again when a story file changes. The window then watches the files, applies each reload and shows
@@ -112,7 +120,7 @@ class GalleryWindow(QMainWindow):
         self.setWindowTitle("pyside6-storybook")
         self._logger = logging.getLogger(self.__class__.__name__)
         self._registry = registry
-        self._themes = themes
+        self._theme_provider = theme_provider
         self._load_errors = tuple(load_errors)
         self._current_story: Story | None = None
         self._controls_panel: ControlsPanel | None = None
@@ -161,9 +169,12 @@ class GalleryWindow(QMainWindow):
         self._theme_switch = QComboBox(self)
         self._theme_switch.setObjectName("themeSwitch")
         self._theme_switch.setAccessibleName("Theme")
-        self._theme_switch.addItems(themes.names)
-        self._theme_switch.setCurrentIndex(self._theme_switch.findText(themes.current))
+        self._theme_switch.addItems(self._call_provider(self._theme_provider.theme_names, default=(), report=False))
+        self._sync_theme_switch()
         self._theme_switch.currentIndexChanged.connect(self._on_theme_switch_changed)
+        # The provider can outlive the window, so it gets a callback that does not keep the window alive.
+        handler: weakref.WeakMethod[Callable[[], None]] = weakref.WeakMethod(self._on_provider_changed)
+        self._call_provider(self._theme_provider.on_changed, functools.partial(_call_weak_method, handler), default=None, report=False)
 
         self._controls_host = QWidget(self)
         self._controls_host_layout = QVBoxLayout(self._controls_host)
@@ -276,18 +287,57 @@ class GalleryWindow(QMainWindow):
             self._show_nothing()
 
     def set_theme(self, name: str) -> None:
-        """Switch the theme and rebuild the preview.
+        """Ask the theme provider for a theme. The provider's change notification then updates the switch and rebuilds the preview.
+
+        If the provider raises, the error is logged and shown in the preview, and the switch shows the provider's current theme.
 
         Args:
-            name: One of the theme names of the ``BuiltinThemes`` the window was created with.
+            name: One of the names the provider lists in ``theme_names``.
 
         Raises:
-            ValueError: If ``name`` is not a theme name.
+            ValueError: If ``name`` is not one of them. The provider is not called and the preview does not change.
         """
-        self._themes.set_theme(name)
+        names = self._call_provider(self._theme_provider.theme_names, default=None)
+        if names is None:
+            return
+        if name not in names:
+            raise ValueError(f"Unknown theme {name!r}; expected one of {tuple(names)}")
+        self._call_provider(self._theme_provider.set_theme, name, default=None)
+
+    def _call_provider(self, function: Callable[..., _T], *args: object, default: _T, report: bool = True) -> _T:
+        """Call into the theme provider; an exception is logged, shown in the preview when ``report`` is set, and ``default`` returned."""
+        try:
+            return function(*args)
+        except Exception as error:
+            self._logger.error("Theme provider call %s failed", getattr(function, "__name__", function), exc_info=error)
+            if report:
+                self._show_provider_error(error)
+            return default
+
+    def _show_provider_error(self, error: Exception) -> None:
+        details = "".join(traceback.format_exception(error))
+        self._show_error(f"{_THEME_ERROR_TITLE}: {type(error).__name__}: {error}", details)
+        self._sync_theme_switch()
+
+    def _sync_theme_switch(self) -> None:
+        """Select the provider's current theme in the switch, or leave the switch as it was if the provider fails."""
+        try:
+            name = self._theme_provider.current_theme()
+        except Exception:
+            self._logger.exception("Theme provider call current_theme failed")
+            return
         with QSignalBlocker(self._theme_switch):
             self._theme_switch.setCurrentIndex(self._theme_switch.findText(name))
-        self._rebuild_preview()
+
+    def _on_provider_changed(self) -> None:
+        """Follow a theme change the provider announces: update the switch and rebuild the preview. Never raises."""
+        if not shiboken6.isValid(self):
+            return
+        try:
+            self._sync_theme_switch()
+            self._rebuild_preview()
+        except Exception:
+            self._logger.exception("Handling a theme change failed")
 
     def changeEvent(self, event: QEvent) -> None:
         """Render the chrome's icons again when the application's or the window's palette changes."""
@@ -354,9 +404,10 @@ class GalleryWindow(QMainWindow):
         self._step_story(-1)
 
     def _select_next_theme(self) -> None:
-        names = self._themes.names
-        if len(names) > 1:
-            self.set_theme(names[(names.index(self._themes.current) + 1) % len(names)])
+        names = tuple(self._call_provider(self._theme_provider.theme_names, default=()))
+        current = self._call_provider(self._theme_provider.current_theme, default=None)
+        if len(names) > 1 and current in names:
+            self.set_theme(names[(names.index(current) + 1) % len(names)])
 
     def _panes(self) -> tuple[QWidget, ...]:
         return (self._sidebar, self._preview_pane, self._side_pane)
@@ -571,11 +622,17 @@ class GalleryWindow(QMainWindow):
         panel = self._controls_panel
         if story is None or panel is None:
             return
+        try:
+            theme = self._theme_provider.current_theme()
+        except Exception as error:
+            self._logger.error("Theme provider call current_theme failed", exc_info=error)
+            self._show_provider_error(error)
+            return
         self._clear_preview()
         try:
             rendered = render_story(
                 story,
-                StoryContext(args=panel.values(), theme=self._themes.current, actions=self._actions_panel.new_sink()),
+                StoryContext(args=panel.values(), theme=theme, actions=self._actions_panel.new_sink()),
                 registry=self._registry,
             )
         except StoryRenderError as error:
@@ -610,6 +667,13 @@ class GalleryWindow(QMainWindow):
             self._controls_host_layout.removeWidget(panel)
             panel.hide()
             panel.deleteLater()
+
+
+def _call_weak_method(method: weakref.WeakMethod[Callable[[], None]]) -> None:
+    """Call a method through a weak reference, if its object is still alive."""
+    target = method()
+    if target is not None:
+        target()
 
 
 def _focus_targets(root: QWidget, *, only_visible: bool = False) -> list[QWidget]:

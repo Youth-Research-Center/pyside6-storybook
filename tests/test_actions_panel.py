@@ -12,7 +12,7 @@ from pyside6_storybook.cli import EXAMPLES_MODULE
 from pyside6_storybook.gui.actions_panel import ANNOUNCE_INTERVAL_MS, MAX_ARGUMENT_CHARS, MAX_ENTRIES, ActionsPanel, format_arguments
 from pyside6_storybook.gui.window import GalleryWindow
 from pyside6_storybook.registry.rendering import render_story
-from pyside6_storybook.themes import BuiltinThemes
+from pyside6_storybook.themes import BuiltinThemeProvider
 
 
 @pytest.fixture
@@ -186,7 +186,7 @@ def _logging_registry() -> StoryRegistry:
     return stories
 
 
-def _window(qtbot, stories: StoryRegistry, themes: BuiltinThemes) -> tuple[GalleryWindow, ActionsPanel]:
+def _window(qtbot, stories: StoryRegistry, themes: BuiltinThemeProvider) -> tuple[GalleryWindow, ActionsPanel]:
     window = GalleryWindow(stories, themes)
     qtbot.addWidget(window)
     panel = window.findChild(ActionsPanel)
@@ -205,7 +205,7 @@ def test_a_story_that_logs_signals_renders_under_a_plain_context(qtbot) -> None:
     qtbot.mouseClick(rendered.widget, Qt.MouseButton.LeftButton)
 
 
-def test_clicking_the_example_button_logs_clicked_without_arguments(qtbot, stories: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_clicking_the_example_button_logs_clicked_without_arguments(qtbot, stories: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window, panel = _window(qtbot, load_stories([EXAMPLES_MODULE]).registry, themes)
     window.select_story("Buttons/Push Button/Default")
     button = window.current_preview_widget()
@@ -216,7 +216,7 @@ def test_clicking_the_example_button_logs_clicked_without_arguments(qtbot, stori
     assert [(name, arguments) for _time, name, arguments in panel.rows()] == [("clicked", "")]
 
 
-def test_moving_the_example_slider_logs_the_new_value(qtbot, stories: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_moving_the_example_slider_logs_the_new_value(qtbot, stories: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window, panel = _window(qtbot, load_stories([EXAMPLES_MODULE]).registry, themes)
     window.select_story("Inputs/Slider")
     slider = window.current_preview_widget()
@@ -227,7 +227,7 @@ def test_moving_the_example_slider_logs_the_new_value(qtbot, stories: StoryRegis
     assert [(name, arguments) for _time, name, arguments in panel.rows()] == [("valueChanged", "7")]
 
 
-def test_the_side_pane_has_controls_and_actions_tabs(qtbot, themes: BuiltinThemes) -> None:
+def test_the_side_pane_has_controls_and_actions_tabs(qtbot, themes: BuiltinThemeProvider) -> None:
     window, panel = _window(qtbot, _logging_registry(), themes)
 
     tabs = window.findChild(QTabWidget, "sideTabs")
@@ -248,7 +248,7 @@ class _Pinger(QWidget):
         super().hideEvent(event)
 
 
-def _pinger_window(qtbot, themes: BuiltinThemes) -> tuple[GalleryWindow, ActionsPanel]:
+def _pinger_window(qtbot, themes: BuiltinThemeProvider) -> tuple[GalleryWindow, ActionsPanel]:
     stories = StoryRegistry()
 
     @stories.story("Logging/Pinger")
@@ -266,7 +266,7 @@ def _pinger_window(qtbot, themes: BuiltinThemes) -> tuple[GalleryWindow, Actions
     return window, panel
 
 
-def test_a_signal_emitted_while_the_old_preview_is_hidden_is_not_logged_on_rebuild(qtbot, themes: BuiltinThemes) -> None:
+def test_a_signal_emitted_while_the_old_preview_is_hidden_is_not_logged_on_rebuild(qtbot, themes: BuiltinThemeProvider) -> None:
     window, panel = _pinger_window(qtbot, themes)
 
     window.set_theme("Dark")
@@ -274,7 +274,7 @@ def test_a_signal_emitted_while_the_old_preview_is_hidden_is_not_logged_on_rebui
     assert panel.count() == 0
 
 
-def test_a_signal_emitted_while_the_window_closes_is_not_logged(qtbot, themes: BuiltinThemes) -> None:
+def test_a_signal_emitted_while_the_window_closes_is_not_logged(qtbot, themes: BuiltinThemeProvider) -> None:
     window, panel = _pinger_window(qtbot, themes)
 
     window.close()
@@ -282,7 +282,7 @@ def test_a_signal_emitted_while_the_window_closes_is_not_logged(qtbot, themes: B
     assert panel.count() == 0
 
 
-def test_the_new_preview_logs_after_a_rebuild(qtbot, themes: BuiltinThemes) -> None:
+def test_the_new_preview_logs_after_a_rebuild(qtbot, themes: BuiltinThemeProvider) -> None:
     window, panel = _pinger_window(qtbot, themes)
     window.set_theme("Dark")
     preview = window.current_preview_widget()
@@ -293,7 +293,7 @@ def test_the_new_preview_logs_after_a_rebuild(qtbot, themes: BuiltinThemes) -> N
     assert panel.count() == 1
 
 
-def test_selecting_another_story_clears_the_log(qtbot, themes: BuiltinThemes) -> None:
+def test_selecting_another_story_clears_the_log(qtbot, themes: BuiltinThemeProvider) -> None:
     window, panel = _window(qtbot, _logging_registry(), themes)
     button = window.current_preview_widget()
     assert isinstance(button, QPushButton)
@@ -305,7 +305,7 @@ def test_selecting_another_story_clears_the_log(qtbot, themes: BuiltinThemes) ->
     assert panel.count() == 0
 
 
-def test_the_log_is_kept_when_the_same_story_renders_again(qtbot, themes: BuiltinThemes) -> None:
+def test_the_log_is_kept_when_the_same_story_renders_again(qtbot, themes: BuiltinThemeProvider) -> None:
     window, panel = _window(qtbot, _logging_registry(), themes)
     first = window.current_preview_widget()
     assert isinstance(first, QPushButton)
@@ -320,7 +320,7 @@ def test_the_log_is_kept_when_the_same_story_renders_again(qtbot, themes: Builti
     assert [name for _time, name, _arguments in panel.rows()] == ["clicked", "clicked"]
 
 
-def test_set_registry_keeps_the_log_for_the_same_story_and_clears_it_for_another(qtbot, themes: BuiltinThemes) -> None:
+def test_set_registry_keeps_the_log_for_the_same_story_and_clears_it_for_another(qtbot, themes: BuiltinThemeProvider) -> None:
     window, panel = _window(qtbot, _logging_registry(), themes)
     button = window.current_preview_widget()
     assert isinstance(button, QPushButton)
@@ -340,7 +340,7 @@ def test_set_registry_keeps_the_log_for_the_same_story_and_clears_it_for_another
     assert panel.count() == 0
 
 
-def test_a_replaced_preview_widget_cannot_log_any_more(qtbot, themes: BuiltinThemes, qapp: QApplication) -> None:
+def test_a_replaced_preview_widget_cannot_log_any_more(qtbot, themes: BuiltinThemeProvider, qapp: QApplication) -> None:
     window, panel = _window(qtbot, _logging_registry(), themes)
     old = window.current_preview_widget()
     assert isinstance(old, QPushButton)

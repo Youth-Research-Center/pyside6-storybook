@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QApplication, QComboBox, QFrame, QLabel, QScrollAr
 from pyside6_storybook import Layout, SizePreset, StoryContext, StoryRegistry
 from pyside6_storybook.gui.canvas import Canvas, CanvasBackground
 from pyside6_storybook.gui.window import GalleryWindow
-from pyside6_storybook.themes import BuiltinThemes
+from pyside6_storybook.themes import BuiltinThemeProvider
 
 _BUILTIN_SIZES = {"Phone portrait": (320, 480), "Phone landscape": (480, 320), "Dialog": (800, 600)}
 
@@ -30,7 +30,9 @@ def _make_registry() -> StoryRegistry:
     return registry
 
 
-def _make_window(qtbot, themes: BuiltinThemes, registry: StoryRegistry | None = None, *, width: int = 1100, height: int = 700) -> GalleryWindow:
+def _make_window(
+    qtbot, themes: BuiltinThemeProvider, registry: StoryRegistry | None = None, *, width: int = 1100, height: int = 700
+) -> GalleryWindow:
     window = GalleryWindow(registry if registry is not None else _make_registry(), themes)
     qtbot.addWidget(window)
     window.resize(width, height)
@@ -113,7 +115,7 @@ def _size_texts(window: QWidget) -> list[str]:
         ("Alternate Base", QPalette.ColorRole.AlternateBase),
     ],
 )
-def test_a_background_sets_the_surfaces_background_role(qtbot, themes: BuiltinThemes, background: str, role: QPalette.ColorRole) -> None:
+def test_a_background_sets_the_surfaces_background_role(qtbot, themes: BuiltinThemeProvider, background: str, role: QPalette.ColorRole) -> None:
     window = _make_window(qtbot, themes)
 
     _choose(_combo(window, "canvasBackground"), background)
@@ -122,7 +124,7 @@ def test_a_background_sets_the_surfaces_background_role(qtbot, themes: BuiltinTh
     assert _canvas(window).background() is CanvasBackground(background)
 
 
-def test_the_default_background_is_window_and_the_options_are_listed_in_order(qtbot, themes: BuiltinThemes) -> None:
+def test_the_default_background_is_window_and_the_options_are_listed_in_order(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     combo = _combo(window, "canvasBackground")
 
@@ -131,7 +133,7 @@ def test_the_default_background_is_window_and_the_options_are_listed_in_order(qt
     assert _surface(window).backgroundRole() == QPalette.ColorRole.Window
 
 
-def test_the_checkerboard_is_painted_from_the_palette_and_leaves_the_story_palette_alone(qtbot, themes: BuiltinThemes) -> None:
+def test_the_checkerboard_is_painted_from_the_palette_and_leaves_the_story_palette_alone(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, width=900, height=600)
     preview = _story_widget(window)
     window_color = preview.palette().window().color()
@@ -145,7 +147,7 @@ def test_the_checkerboard_is_painted_from_the_palette_and_leaves_the_story_palet
     assert _surface(window).palette().window().style().name == "SolidPattern"
 
 
-def test_the_checkerboard_alternates_eight_pixel_squares_of_base_and_mid_and_follows_a_theme_switch(qtbot, themes: BuiltinThemes) -> None:
+def test_the_checkerboard_alternates_eight_pixel_squares_of_base_and_mid_and_follows_a_theme_switch(qtbot, themes: BuiltinThemeProvider) -> None:
     registry = StoryRegistry()
     window = _make_window(qtbot, themes, registry, width=900, height=600)
     _choose(_combo(window, "canvasBackground"), "Checkerboard")
@@ -170,7 +172,7 @@ def test_the_checkerboard_alternates_eight_pixel_squares_of_base_and_mid_and_fol
         assert (pixel(9, 9), pixel(15, 15)) == (mid, mid)
 
 
-def test_base_keeps_meaning_the_themes_base_after_a_theme_switch(qtbot, themes: BuiltinThemes) -> None:
+def test_base_keeps_meaning_the_themes_base_after_a_theme_switch(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, StoryRegistry(), width=900, height=600)
     _choose(_combo(window, "canvasBackground"), "Base")
     colors = []
@@ -189,7 +191,7 @@ def test_base_keeps_meaning_the_themes_base_after_a_theme_switch(qtbot, themes: 
 
 
 @pytest.mark.parametrize("name", sorted(_BUILTIN_SIZES))
-def test_a_built_in_size_gives_a_fill_story_exactly_that_size(qtbot, themes: BuiltinThemes, name: str) -> None:
+def test_a_built_in_size_gives_a_fill_story_exactly_that_size(qtbot, themes: BuiltinThemeProvider, name: str) -> None:
     window = _make_window(qtbot, themes)
     width, height = _BUILTIN_SIZES[name]
 
@@ -199,7 +201,7 @@ def test_a_built_in_size_gives_a_fill_story_exactly_that_size(qtbot, themes: Bui
     assert _canvas(window).active_size() == QSize(width, height)
 
 
-def test_a_size_larger_than_the_window_still_gives_the_exact_size_and_scrolls(qtbot, themes: BuiltinThemes) -> None:
+def test_a_size_larger_than_the_window_still_gives_the_exact_size_and_scrolls(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, width=700, height=500)
 
     _choose_size(window, "Dialog")
@@ -210,7 +212,7 @@ def test_a_size_larger_than_the_window_still_gives_the_exact_size_and_scrolls(qt
     assert scroll.verticalScrollBar().maximum() > 0
 
 
-def test_a_custom_size_shows_its_spin_boxes_and_gives_a_fill_story_exactly_that_size(qtbot, themes: BuiltinThemes) -> None:
+def test_a_custom_size_shows_its_spin_boxes_and_gives_a_fill_story_exactly_that_size(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     width, height = _spin(window, "canvasWidth"), _spin(window, "canvasHeight")
     assert not width.isVisible()
@@ -228,7 +230,7 @@ def test_a_custom_size_shows_its_spin_boxes_and_gives_a_fill_story_exactly_that_
     assert _size_label(window).text() == "333 \u00d7 222"
 
 
-def test_choosing_custom_after_a_preset_starts_at_that_presets_size(qtbot, themes: BuiltinThemes) -> None:
+def test_choosing_custom_after_a_preset_starts_at_that_presets_size(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     _choose_size(window, "Phone portrait")
 
@@ -238,7 +240,7 @@ def test_choosing_custom_after_a_preset_starts_at_that_presets_size(qtbot, theme
     assert _story_widget(window).size() == QSize(320, 480)
 
 
-def test_a_size_outlines_the_surface_and_fit_restores_the_unsized_canvas(qtbot, themes: BuiltinThemes) -> None:
+def test_a_size_outlines_the_surface_and_fit_restores_the_unsized_canvas(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     scroll, surface = _scroll(window), _surface(window)
     fit_size = surface.size()
@@ -263,7 +265,7 @@ def test_a_size_outlines_the_surface_and_fit_restores_the_unsized_canvas(qtbot, 
     assert _story_widget(window).geometry() == surface.rect().adjusted(10, 10, -10, -10)
 
 
-def test_the_size_label_shows_only_while_a_size_is_active(qtbot, themes: BuiltinThemes) -> None:
+def test_the_size_label_shows_only_while_a_size_is_active(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     label = _size_label(window)
     assert not label.isVisible()
@@ -276,7 +278,7 @@ def test_the_size_label_shows_only_while_a_size_is_active(qtbot, themes: Builtin
     assert not label.isVisible()
 
 
-def test_registry_presets_follow_the_built_in_sizes_and_precede_custom(qtbot, themes: BuiltinThemes) -> None:
+def test_registry_presets_follow_the_built_in_sizes_and_precede_custom(qtbot, themes: BuiltinThemeProvider) -> None:
     registry = _make_registry()
     registry.size_presets.append(SizePreset("Tablet", 768, 1024))
     registry.size_presets.append(SizePreset("Watch", 200, 200))
@@ -296,7 +298,7 @@ def test_registry_presets_follow_the_built_in_sizes_and_precede_custom(qtbot, th
     assert _story_widget(window).size() == QSize(768, 1024)
 
 
-def test_a_preset_that_disappears_after_set_registry_falls_back_to_fit(qtbot, themes: BuiltinThemes) -> None:
+def test_a_preset_that_disappears_after_set_registry_falls_back_to_fit(qtbot, themes: BuiltinThemeProvider) -> None:
     registry = _make_registry()
     registry.size_presets.append(SizePreset("Tablet", 768, 1024))
     window = _make_window(qtbot, themes, registry)
@@ -312,7 +314,7 @@ def test_a_preset_that_disappears_after_set_registry_falls_back_to_fit(qtbot, th
     assert "Tablet (768 × 1024)" not in _size_texts(window)
 
 
-def test_a_preset_that_is_still_listed_and_a_custom_size_survive_set_registry(qtbot, themes: BuiltinThemes) -> None:
+def test_a_preset_that_is_still_listed_and_a_custom_size_survive_set_registry(qtbot, themes: BuiltinThemeProvider) -> None:
     registry = _make_registry()
     registry.size_presets.append(SizePreset("Tablet", 768, 1024))
     window = _make_window(qtbot, themes, registry)
@@ -371,7 +373,7 @@ def test_a_registry_has_no_size_presets_by_default() -> None:
     assert StoryRegistry().size_presets == []
 
 
-def test_the_background_and_size_survive_switching_story_and_theme(qtbot, themes: BuiltinThemes) -> None:
+def test_the_background_and_size_survive_switching_story_and_theme(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     _choose(_combo(window, "canvasBackground"), "Alternate Base")
     _choose_size(window, "Phone landscape")
@@ -387,7 +389,7 @@ def test_the_background_and_size_survive_switching_story_and_theme(qtbot, themes
     assert _story_widget(window).size() == QSize(480, 320)
 
 
-def test_a_padded_story_keeps_its_top_alignment_inside_a_size(qtbot, themes: BuiltinThemes) -> None:
+def test_a_padded_story_keeps_its_top_alignment_inside_a_size(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     window.select_story("Padded/Story")
     _choose_size(window, "Dialog")
@@ -395,7 +397,7 @@ def test_a_padded_story_keeps_its_top_alignment_inside_a_size(qtbot, themes: Bui
     assert _story_widget(window).y() == _surface(window).contentsRect().top() + 10
 
 
-def test_choosing_custom_does_not_widen_the_window_under_a_wide_font(qtbot, themes: BuiltinThemes, restore_application_look: None) -> None:
+def test_choosing_custom_does_not_widen_the_window_under_a_wide_font(qtbot, themes: BuiltinThemeProvider, restore_application_look: None) -> None:
     # The Width and Height boxes have a row of their own: next to Background and Size they made the toolbar wider than the default
     # window with the Windows fonts, and the window grew from 1100 to 1244 pixels.
     font = QApplication.font()
@@ -415,7 +417,9 @@ def test_choosing_custom_does_not_widen_the_window_under_a_wide_font(qtbot, them
 
 
 @pytest.mark.parametrize("size", ["Fit", "Dialog", "Custom"])
-def test_every_canvas_control_is_visible_and_at_least_its_minimum_size_hint_at_the_default_size(qtbot, themes: BuiltinThemes, size: str) -> None:
+def test_every_canvas_control_is_visible_and_at_least_its_minimum_size_hint_at_the_default_size(
+    qtbot, themes: BuiltinThemeProvider, size: str
+) -> None:
     window = _make_window(qtbot, themes)
     _choose_size(window, size)
     toolbar = window.findChild(QWidget, "canvasToolbar")
@@ -443,7 +447,7 @@ def test_every_canvas_control_is_visible_and_at_least_its_minimum_size_hint_at_t
     assert len(controls) == {"Fit": 4, "Dialog": 5, "Custom": 9}[size]
 
 
-def test_every_combo_and_spin_box_has_an_accessible_name_and_a_label_buddy(qtbot, themes: BuiltinThemes) -> None:
+def test_every_combo_and_spin_box_has_an_accessible_name_and_a_label_buddy(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     toolbar = window.findChild(QWidget, "canvasToolbar")
     assert toolbar is not None
@@ -463,7 +467,7 @@ def test_every_combo_and_spin_box_has_an_accessible_name_and_a_label_buddy(qtbot
         assert combo.sizeAdjustPolicy() == QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
 
 
-def test_the_toolbar_is_a_plain_widget_with_the_custom_size_boxes_on_a_row_of_their_own(qtbot, themes: BuiltinThemes) -> None:
+def test_the_toolbar_is_a_plain_widget_with_the_custom_size_boxes_on_a_row_of_their_own(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     toolbar = window.findChild(QWidget, "canvasToolbar")
 
@@ -499,7 +503,7 @@ def test_place_and_clear_work_on_a_canvas_on_its_own(qtbot) -> None:
     assert widget.isHidden()
 
 
-def test_the_size_list_shows_every_name_in_full_although_the_box_elides_it(qtbot, themes: BuiltinThemes) -> None:
+def test_the_size_list_shows_every_name_in_full_although_the_box_elides_it(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     combo = _combo(window, "canvasSize")
     view = combo.view()

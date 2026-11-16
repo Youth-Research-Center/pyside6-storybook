@@ -26,7 +26,7 @@ from pyside6_storybook.cli import EXAMPLES_MODULE
 from pyside6_storybook.gui import ErrorPanel, GalleryWindow
 from pyside6_storybook.gui.sidebar import StorySidebar
 from pyside6_storybook.registry.rendering import render_story
-from pyside6_storybook.themes import BUILTIN_THEME_NAMES, BuiltinThemes
+from pyside6_storybook.themes import BUILTIN_THEME_NAMES, BuiltinThemeProvider
 
 EXPECTED_IDS = [
     "Buttons/Push Button/Default",
@@ -107,7 +107,7 @@ def test_every_example_has_a_docstring(examples: StoryRegistry) -> None:
 @pytest.mark.parametrize("theme", BUILTIN_THEME_NAMES)
 @pytest.mark.parametrize("story_id", EXPECTED_IDS)
 def test_every_example_renders_with_its_defaults_in_every_theme(
-    qtbot, examples: StoryRegistry, themes: BuiltinThemes, story_id: str, theme: str
+    qtbot, examples: StoryRegistry, themes: BuiltinThemeProvider, story_id: str, theme: str
 ) -> None:
     themes.set_theme(theme)
     example = examples.get(story_id)
@@ -120,7 +120,7 @@ def test_every_example_renders_with_its_defaults_in_every_theme(
 
 
 @pytest.mark.full
-def test_the_gallery_renders_every_example_without_an_error(qtbot, examples: StoryRegistry, themes: BuiltinThemes, qapp: QApplication) -> None:
+def test_the_gallery_renders_every_example_without_an_error(qtbot, examples: StoryRegistry, themes: BuiltinThemeProvider, qapp: QApplication) -> None:
     window = GalleryWindow(examples, themes)
     qtbot.addWidget(window)
     window.show()

@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Theme providers: the new `ThemeProvider` protocol lets an application supply its own themes to the gallery (`theme_names`, `current_theme`,
+  `activate`, `set_theme`, `on_changed`, `deactivate`), and `BuiltinThemeProvider` is the default Light and Dark provider. `run`, which
+  opens the gallery, is now exported from the package and takes the keyword-only `theme_provider`; it validates `theme` against the
+  provider's names and logs a warning for each of the application's style, palette, style sheet and font that the provider did not
+  restore. The theme switch lists the provider's names, and an exception from the provider is shown in the preview instead of closing
+  the gallery.
 - Keyboard navigation and accessibility: Tab follows reading order (search, tree, preview tabs, canvas controls, the preview, then the
   theme switch, the side tabs and the controls), `F6` and `Shift+F6` move between the three panes and return to the widget that had
   focus there, `Ctrl+Alt+Down` and `Ctrl+Alt+Up` open the next and previous story in the list, and `Ctrl+T` switches to the next

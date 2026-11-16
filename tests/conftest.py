@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 import pyside6_storybook
 from pyside6_storybook import BoolControl, IntControl, StoryContext, StoryRegistry, TextControl
 from pyside6_storybook import registry as registry_module
-from pyside6_storybook.themes import BuiltinThemes
+from pyside6_storybook.themes import BuiltinThemeProvider
 
 
 @pytest.fixture
@@ -35,9 +35,9 @@ def restore_application_look(qapp: QApplication) -> Iterator[None]:
 
 
 @pytest.fixture
-def themes(qapp: QApplication, restore_application_look: None) -> Iterator[BuiltinThemes]:
+def themes(qapp: QApplication, restore_application_look: None) -> Iterator[BuiltinThemeProvider]:
     """Active built-in themes, deactivated after the test."""
-    builtin_themes = BuiltinThemes()
+    builtin_themes = BuiltinThemeProvider()
     builtin_themes.activate(qapp)
     try:
         yield builtin_themes

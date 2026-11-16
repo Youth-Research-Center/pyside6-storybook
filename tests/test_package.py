@@ -12,6 +12,7 @@ def test_public_api_is_exported() -> None:
     expected = {
         "ActionSink",
         "BoolControl",
+        "BuiltinThemeProvider",
         "ChoiceControl",
         "ColorControl",
         "Control",
@@ -28,9 +29,11 @@ def test_public_api_is_exported() -> None:
         "StoryContext",
         "StoryRegistry",
         "TextControl",
+        "ThemeProvider",
         "__version__",
         "default_registry",
         "load_stories",
+        "run",
         "story",
     }
     assert set(pyside6_storybook.__all__) == expected

@@ -43,7 +43,7 @@ from pyside6_storybook.gui.canvas import Canvas
 from pyside6_storybook.gui.controls_panel import ControlsPanel
 from pyside6_storybook.gui.docs_panel import NO_CONTROLS_MESSAGE, NO_SOURCE_MESSAGE, VARIANT_CAPTION, DocsPanel, controls_rows
 from pyside6_storybook.gui.window import GalleryWindow
-from pyside6_storybook.themes import BuiltinThemes
+from pyside6_storybook.themes import BuiltinThemeProvider
 
 
 class Mode(Enum):
@@ -94,7 +94,7 @@ def _register(registry: StoryRegistry, story_id: str, **kwargs) -> Story:
     return registry.story(story_id, **kwargs)(_build)
 
 
-def _window(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> GalleryWindow:
+def _window(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> GalleryWindow:
     window = GalleryWindow(registry, themes)
     qtbot.addWidget(window)
     return window
@@ -414,7 +414,7 @@ def test_activating_a_link_requests_that_story(qtbot) -> None:
     assert requested == ["Inputs/Button/Wide"]
 
 
-def test_activating_a_link_selects_that_story_in_the_window(qtbot, themes: BuiltinThemes) -> None:
+def test_activating_a_link_selects_that_story_in_the_window(qtbot, themes: BuiltinThemeProvider) -> None:
     registry, base, *_ = _siblings_registry()
     window = _window(qtbot, registry, themes)
     window.select_story(base.id)
@@ -429,7 +429,7 @@ def test_activating_a_link_selects_that_story_in_the_window(qtbot, themes: Built
     assert _label(_window_panel(window), "docsSiblingCurrent").text() == "Wide (this story)"
 
 
-def test_the_preview_pane_has_canvas_and_docs_tabs_in_document_mode(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_the_preview_pane_has_canvas_and_docs_tabs_in_document_mode(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _window(qtbot, registry, themes)
 
     tabs = window.findChild(QTabWidget, "previewTabs")
@@ -447,7 +447,7 @@ def test_the_preview_pane_has_canvas_and_docs_tabs_in_document_mode(qtbot, regis
     assert docs_scroll.widget() is _window_panel(window)
 
 
-def test_the_docs_follow_the_selection(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_the_docs_follow_the_selection(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _window(qtbot, registry, themes)
     panel = _window_panel(window)
     assert 'QPushButton(str(ctx.args["text"]))' in panel.source_text()
@@ -460,7 +460,7 @@ def test_the_docs_follow_the_selection(qtbot, registry: StoryRegistry, themes: B
     assert _label(panel, "docsNoControls").text() == NO_CONTROLS_MESSAGE
 
 
-def test_a_control_change_does_not_rebuild_the_docs(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_a_control_change_does_not_rebuild_the_docs(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _window(qtbot, registry, themes)
     window.select_story("Display/Label")
     _flush()
@@ -478,7 +478,7 @@ def test_a_control_change_does_not_rebuild_the_docs(qtbot, registry: StoryRegist
     assert panel.findChild(QTableWidget, "docsControlsTable") is table
 
 
-def test_the_docs_refresh_after_set_registry(qtbot, themes: BuiltinThemes) -> None:
+def test_the_docs_refresh_after_set_registry(qtbot, themes: BuiltinThemeProvider) -> None:
     old = StoryRegistry()
     old.story("Box/Default", controls=[IntControl("size", 1, 0, 9)])(_build)
     new = StoryRegistry()
@@ -497,7 +497,7 @@ def test_the_docs_refresh_after_set_registry(qtbot, themes: BuiltinThemes) -> No
     assert _cell(table, 0, 2) == "2"
 
 
-def test_the_docs_are_empty_without_a_story(qtbot, themes: BuiltinThemes) -> None:
+def test_the_docs_are_empty_without_a_story(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _window(qtbot, StoryRegistry(), themes)
 
     panel = _window_panel(window)
@@ -562,7 +562,7 @@ def test_the_controls_table_is_at_least_as_wide_as_its_columns(qtbot) -> None:
     assert table.minimumWidth() >= columns + table.verticalHeader().width() + 2 * table.frameWidth()
 
 
-def test_selecting_many_stories_keeps_at_most_one_copy_binding(qtbot, themes: BuiltinThemes) -> None:
+def test_selecting_many_stories_keeps_at_most_one_copy_binding(qtbot, themes: BuiltinThemeProvider) -> None:
     registry = StoryRegistry()
     for index in range(20):
         _register(registry, f"Group/Story{index}")

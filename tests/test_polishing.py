@@ -16,7 +16,7 @@ from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton
 from pyside6_storybook import StoryRegistry
 from pyside6_storybook.gui.window import GalleryWindow
-from pyside6_storybook.themes import BuiltinThemes
+from pyside6_storybook.themes import BuiltinThemeProvider
 
 app = QApplication([])
 registry = StoryRegistry()
@@ -33,7 +33,7 @@ def _run(script: str) -> subprocess.CompletedProcess[str]:
 def test_a_style_sheet_cleared_while_the_gallery_window_exists_does_not_crash_later() -> None:
     result = _run(
         """
-        themes = BuiltinThemes()
+        themes = BuiltinThemeProvider()
         themes.activate(app)
         app.setStyleSheet("QLabel { color: #222222; }")
         window = GalleryWindow(registry, themes)
@@ -57,7 +57,7 @@ def test_activating_the_themes_under_an_application_style_sheet_does_not_crash_l
         """
         app.setStyleSheet("QLabel { color: #222222; }")
         label = QLabel("Never shown")
-        themes = BuiltinThemes()
+        themes = BuiltinThemeProvider()
         themes.activate(app)
         del label
         gc.collect()
