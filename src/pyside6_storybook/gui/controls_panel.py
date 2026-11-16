@@ -54,6 +54,7 @@ class ControlsPanel(QWidget):
         for control in self._controls:
             editor = create_editor(control, control.coerce(starting.get(control.name, control.default)), self)
             editor.set_accessible_texts(control.display_label, control.description)
+            _share_input_focus_policy(editor)
             editor.valueChanged.connect(self._on_editor_changed)
             label = QLabel(control.display_label, self)
             label.setBuddy(editor)
@@ -82,6 +83,17 @@ class ControlsPanel(QWidget):
         label.setFont(font)
         label.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         layout.addWidget(label)
+
+
+def _share_input_focus_policy(editor: ControlEditor) -> None:
+    """Give the editor widget the focus policy of its focus proxy, so ``QWidget.setTabOrder`` accepts it as a compound widget.
+
+    A widget with the default ``NoFocus`` policy is ignored by ``setTabOrder``, which would leave the editor's input where it was
+    created in the window's focus chain. With the proxy's policy, ``setTabOrder`` moves the editor with its inputs, in their order.
+    """
+    proxy = editor.focusProxy()
+    if proxy is not None:
+        editor.setFocusPolicy(proxy.focusPolicy())
 
 
 __all__ = ["NO_CONTROLS_MESSAGE", "ControlsPanel"]

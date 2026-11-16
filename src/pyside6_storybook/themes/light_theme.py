@@ -29,11 +29,11 @@ LIGHT_THEME = ThemeDefinition(
         _ROLE.Dark: "#A0A0A0",
         _ROLE.Mid: "#B8B8B8",
         _ROLE.Shadow: "#000000",
-        _ROLE.Highlight: "#2A6FDB",
+        _ROLE.Highlight: "#1F5FC4",
         _ROLE.HighlightedText: "#FFFFFF",
         _ROLE.Link: "#0B57D0",
         _ROLE.LinkVisited: "#6B3FA0",
-        _ROLE.Accent: "#2A6FDB",
+        _ROLE.Accent: "#1F5FC4",
     },
     disabled_colors={
         _ROLE.WindowText: "#8A8A8A",

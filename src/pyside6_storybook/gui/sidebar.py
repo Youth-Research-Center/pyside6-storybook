@@ -293,6 +293,10 @@ class StorySidebar(QWidget):
         """Return the text of the "Load errors (N)" row, or ``None`` when there is no such row."""
         return self._errors_item.text() if self._errors_item is not None else None
 
+    def focus_chain(self) -> list[QWidget]:
+        """Return the widgets Tab visits in the sidebar, in order: the search field, then the tree."""
+        return [self._search, self._tree]
+
     def focus_search(self) -> None:
         """Move focus to the search field and select its text."""
         self._search.setFocus(Qt.FocusReason.ShortcutFocusReason)

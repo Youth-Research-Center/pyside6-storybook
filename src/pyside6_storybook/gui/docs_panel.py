@@ -8,10 +8,11 @@ import inspect
 import sys
 from collections.abc import Mapping
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QEvent, QSize, Qt, Signal
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QAbstractScrollArea,
     QApplication,
     QFrame,
     QHBoxLayout,
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPlainTextEdit,
     QPushButton,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -90,6 +92,25 @@ def _control_row(control: Control, value: object) -> tuple[str, str, str, str]:
     if isinstance(control, FileControl):
         return (name, "file", str(value) if value else NO_FILE_TEXT, control.filter)
     raise TypeError(f"Unsupported control {control!r}")
+
+
+class _SourceView(QPlainTextEdit):
+    """A read-only view of source code that is as tall as its lines (at most ``_MAX_SOURCE_LINES``), whatever the font."""
+
+    def __init__(self, source: str, parent: QWidget) -> None:
+        super().__init__(source, parent)
+        self._lines = min(max(source.count("\n") + 1, 1), _MAX_SOURCE_LINES)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+
+    def sizeHint(self) -> QSize:
+        """Return a height for the lines, the frame, the document margins and the horizontal scroll bar."""
+        hint = super().sizeHint()
+        height = self.fontMetrics().lineSpacing() * self._lines + 2 * self.frameWidth() + 2 * _SPACING
+        return QSize(hint.width(), height + self.horizontalScrollBar().sizeHint().height())
+
+    def minimumSizeHint(self) -> QSize:
+        """Return the same height as ``sizeHint`` and the usual minimum width."""
+        return QSize(super().minimumSizeHint().width(), self.sizeHint().height())
 
 
 class DocsPanel(QWidget):
@@ -227,8 +248,9 @@ class DocsPanel(QWidget):
             for column, text in enumerate(cells):
                 table.setItem(row, column, QTableWidgetItem(text))
         table.resizeRowsToContents()
-        height = header.height() + 2 * table.frameWidth() + sum(table.rowHeight(row) for row in range(len(rows)))
-        table.setFixedHeight(height)
+        # The table is as tall as its rows, whatever the font, without a pixel height of its own.
+        table.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
+        table.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         columns = sum(table.columnWidth(column) for column in range(len(CONTROLS_HEADERS)))
         table.setMinimumWidth(columns + table.verticalHeader().width() + 2 * table.frameWidth())
         return table
@@ -275,7 +297,7 @@ class DocsPanel(QWidget):
         buttons.addStretch(1)
         layout.addLayout(buttons)
 
-        view = QPlainTextEdit(source, body)
+        view = _SourceView(source, body)
         view.setObjectName("docsSource")
         view.setAccessibleName("Source")
         view.setReadOnly(True)
@@ -287,9 +309,6 @@ class DocsPanel(QWidget):
         elif QApplication.font().pixelSize() > 0:
             font.setPixelSize(QApplication.font().pixelSize())
         view.setFont(font)
-        lines = min(max(source.count("\n") + 1, 1), _MAX_SOURCE_LINES)
-        scroll_bar_height = view.horizontalScrollBar().sizeHint().height()
-        view.setFixedHeight(view.fontMetrics().lineSpacing() * lines + 2 * view.frameWidth() + 2 * _SPACING + scroll_bar_height)
         view.setFrameShape(QFrame.Shape.StyledPanel)
         layout.addWidget(view)
         return body

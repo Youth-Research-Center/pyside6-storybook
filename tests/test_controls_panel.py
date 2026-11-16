@@ -8,6 +8,9 @@ from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QLabel, QLin
 from pyside6_storybook import BoolControl, ChoiceControl, FloatControl, IntControl, TextControl
 from pyside6_storybook.gui.controls_panel import NO_CONTROLS_MESSAGE, ControlsPanel
 from pyside6_storybook.gui.editors import ControlEditor
+from pyside6_storybook.gui.editors.bool_editor import BoolEditor
+from pyside6_storybook.gui.editors.int_editor import IntEditor
+from pyside6_storybook.gui.editors.text_editor import TextEditor
 
 _EditorT = TypeVar("_EditorT", bound=QWidget)
 
@@ -326,3 +329,13 @@ def test_multiline_text_emits_per_edit_and_keeps_newlines(qtbot) -> None:
 
     assert emitted == [{"text": "a\n"}, {"text": "a\nb"}]
     assert panel.values() == {"text": "a\nb"}
+
+
+def test_an_editor_with_a_focus_proxy_has_the_focus_policy_of_its_input(qtbot) -> None:
+    panel = ControlsPanel([TextControl("text", "hi"), BoolControl("enabled", default=True), IntControl("count", 1, 0, 9)])
+    qtbot.addWidget(panel)
+
+    for editor in (_editor(panel, TextEditor), _editor(panel, BoolEditor), _editor(panel, IntEditor)):
+        proxy = _proxy(editor)
+        assert proxy.focusPolicy() != Qt.FocusPolicy.NoFocus
+        assert editor.focusPolicy() == proxy.focusPolicy()
