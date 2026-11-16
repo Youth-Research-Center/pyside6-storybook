@@ -339,6 +339,9 @@ def test_a_preset_that_is_still_listed_and_a_custom_size_survive_set_registry(qt
         (("  ", 1, 1), ValueError),
         (("A", 0, 1), ValueError),
         (("A", 1, -5), ValueError),
+        (("Large", 2**31, 480), ValueError),
+        (("X", 10_001, 10), ValueError),
+        (("X", 10, 10_001), ValueError),
         (("A", True, 1), TypeError),
         (("A", 1, 2.5), TypeError),
         ((5, 1, 1), TypeError),
@@ -347,6 +350,10 @@ def test_a_preset_that_is_still_listed_and_a_custom_size_survive_set_registry(qt
 def test_a_size_preset_validates_its_fields(args: tuple, error: type[Exception]) -> None:
     with pytest.raises(error):
         SizePreset(*args)
+
+
+def test_a_size_preset_accepts_the_largest_size_of_the_canvas() -> None:
+    assert SizePreset("Huge", 10_000, 10_000).width == 10_000
 
 
 def test_a_size_preset_is_frozen_and_compares_by_value() -> None:

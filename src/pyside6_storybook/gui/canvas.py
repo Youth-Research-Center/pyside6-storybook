@@ -10,6 +10,7 @@ from PySide6.QtGui import QPainter, QPaintEvent, QPalette, QPixmap
 from PySide6.QtWidgets import QComboBox, QFrame, QHBoxLayout, QLabel, QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget
 
 from pyside6_storybook.registry import Layout, SizePreset
+from pyside6_storybook.registry.size_preset import MAX_SIZE
 
 _MARGIN = 10
 _ROW_SPACING = 6
@@ -17,7 +18,6 @@ _CONTROL_SPACING = 8
 _LABEL_SPACING = 4
 _CHECKER_SQUARE = 8
 _POPUP_PADDING = 24
-_MAX_SIZE = 10_000
 _WIDGET_SIZE_LIMIT = 16_777_215
 _COMBO_MINIMUM_LENGTH = 7
 _SIZE_COMBO_MINIMUM_LENGTH = 7
@@ -267,7 +267,7 @@ class Canvas(QWidget):
         spin = QSpinBox(self._toolbar)
         spin.setObjectName(name)
         spin.setAccessibleName(accessible_name)
-        spin.setRange(1, _MAX_SIZE)
+        spin.setRange(1, MAX_SIZE)
         spin.setValue(value)
         spin.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         return spin
