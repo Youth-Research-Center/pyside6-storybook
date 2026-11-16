@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 
-from PySide6.QtCore import QEvent, QSignalBlocker, QSize, Qt
-from PySide6.QtGui import QCloseEvent, QFont, QKeySequence, QPalette, QShortcut
+from PySide6.QtCore import QEvent, QSignalBlocker, Qt
+from PySide6.QtGui import QCloseEvent, QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from pyside6_storybook.discovery import LoadError
+from pyside6_storybook.gui.canvas import Canvas
 from pyside6_storybook.gui.controls_panel import ControlsPanel
 from pyside6_storybook.gui.docs_panel import DocsPanel
 from pyside6_storybook.gui.error_panel import ErrorPanel
@@ -35,14 +36,6 @@ NO_STORIES_MESSAGE = "No stories are registered."
 _MARGIN = 10
 _SPACING = 8
 _SECTION_SPACING = 6
-_LAYOUT_ALIGNMENTS = {
-    Layout.PADDED: Qt.AlignmentFlag.AlignTop,
-    Layout.CENTERED: Qt.AlignmentFlag.AlignCenter,
-    Layout.FILL: Qt.AlignmentFlag(0),
-}
-"""The alignment of the previewed widget inside the surface's margins. An empty alignment lets the widget grow in each direction its
-size policy allows; where it cannot grow, the layout centres it."""
-_SCROLLABLE_LAYOUTS = frozenset({Layout.PADDED, Layout.CENTERED})
 
 
 class GalleryWindow(QMainWindow):
@@ -91,26 +84,9 @@ class GalleryWindow(QMainWindow):
         self._heading.setObjectName("previewHeading")
         self._heading.setFont(self._bold_font(self._heading))
 
-        self._preview_scroll = QScrollArea(self)
-        self._preview_scroll.setObjectName("previewScroll")
-        self._preview_scroll.setFrameShape(QFrame.Shape.StyledPanel)
-        self._preview_scroll.setWidgetResizable(True)
-        self._preview_scroll.viewport().setBackgroundRole(QPalette.ColorRole.Window)
-        self._preview_surface = QFrame(self._preview_scroll)
-        self._preview_surface.setObjectName("previewSurface")
-        self._preview_surface.setFrameShape(QFrame.Shape.NoFrame)
-        # Window, not Base: stories are shown on the background they sit on in an application window, where Fusion's input fields
-        # and check boxes (drawn in Base with an outline derived from Window) stand out. On Base they vanish in the Dark theme.
-        self._preview_surface.setBackgroundRole(QPalette.ColorRole.Window)
-        self._preview_surface.setAutoFillBackground(True)
-        self._preview_layout = QVBoxLayout(self._preview_surface)
-        self._preview_layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
-        self._preview_scroll.setWidget(self._preview_surface)
-        self._empty_label = QLabel(NO_STORIES_MESSAGE, self._preview_surface)
-        self._empty_label.setObjectName("previewEmptyState")
-        self._empty_label.setForegroundRole(QPalette.ColorRole.PlaceholderText)
-        self._empty_label.setVisible(len(registry) == 0 and not self._load_errors)
-        self._preview_layout.addWidget(self._empty_label, alignment=Qt.AlignmentFlag.AlignTop)
+        self._canvas = Canvas(self)
+        self._canvas.set_size_presets(registry.size_presets)
+        self._canvas.set_empty_message(NO_STORIES_MESSAGE if len(registry) == 0 and not self._load_errors else None)
 
         self._docs_panel = DocsPanel(self, icons=self._icons)
         self._docs_scroll = QScrollArea(self)
@@ -125,7 +101,7 @@ class GalleryWindow(QMainWindow):
         self._preview_tabs.setObjectName("previewTabs")
         self._preview_tabs.setAccessibleName("Preview")
         self._preview_tabs.setDocumentMode(True)
-        self._preview_tabs.addTab(self._preview_scroll, "Canvas")
+        self._preview_tabs.addTab(self._canvas, "Canvas")
         self._preview_tabs.addTab(self._docs_scroll, "Docs")
 
         preview_pane = QWidget(self)
@@ -164,7 +140,7 @@ class GalleryWindow(QMainWindow):
         splitter.addWidget(self._sidebar)
         splitter.addWidget(preview_pane)
         splitter.addWidget(side_pane)
-        splitter.setSizes([200, 500, 300])
+        splitter.setSizes([200, 560, 300])
         self.setCentralWidget(splitter)
 
         self._sidebar.storySelected.connect(self._on_story_selected)
@@ -209,7 +185,8 @@ class GalleryWindow(QMainWindow):
         showing_errors = self._sidebar.load_errors_selected()
         self._registry = registry
         self._load_errors = tuple(load_errors)
-        self._empty_label.setVisible(len(registry) == 0 and not self._load_errors)
+        self._canvas.set_empty_message(NO_STORIES_MESSAGE if len(registry) == 0 and not self._load_errors else None)
+        self._canvas.set_size_presets(registry.size_presets)
         self._sidebar.set_registry(registry, load_errors=self._load_errors)
         if previous_id is not None and self._sidebar.selected_story_id() == previous_id:
             self._show_story(registry.get(previous_id), previous_values)
@@ -286,7 +263,7 @@ class GalleryWindow(QMainWindow):
         self._current_story = None
         self._heading.setText("")
         self._docs_panel.clear()
-        self._place_preview(None, Layout.FILL)
+        self._canvas.clear()
 
     def _show_load_errors(self) -> None:
         self._show_nothing()
@@ -329,48 +306,15 @@ class GalleryWindow(QMainWindow):
             return
         self._preview_widget = rendered.widget
         self._preview_root = rendered.root
-        self._place_preview(rendered.root, story.layout if story.layout is not None else self._registry.default_layout)
+        self._canvas.place(rendered.root, story.layout if story.layout is not None else self._registry.default_layout)
 
     def _show_error(self, title: str, details: str) -> None:
         self._clear_preview()
-        self._error_panel = ErrorPanel(title, details, self._preview_surface)
-        self._place_preview(self._error_panel, Layout.FILL)
-
-    def _place_preview(self, widget: QWidget | None, layout: Layout) -> None:
-        """Put ``widget`` in the preview surface for ``layout``, or reset the surface when ``widget`` is ``None``.
-
-        This sets the widget's alignment in the surface, the surface's minimum size and the scroll bar policies. In ``PADDED`` and
-        ``CENTERED`` the surface is at least as large as the widget's natural size plus the margins, so the preview scrolls instead
-        of squashing the widget. In ``FILL`` there is no minimum and no scroll bar.
-
-        Args:
-            widget: A child of the preview surface, or ``None`` to reset the surface.
-            layout: How to place the widget.
-        """
-        policy = Qt.ScrollBarPolicy.ScrollBarAsNeeded if layout in _SCROLLABLE_LAYOUTS else Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        self._preview_scroll.setHorizontalScrollBarPolicy(policy)
-        self._preview_scroll.setVerticalScrollBarPolicy(policy)
-        self._preview_surface.setMinimumSize(0, 0)
-        if widget is None:
-            return
-        self._preview_layout.addWidget(widget)
-        self._preview_layout.setAlignment(widget, _LAYOUT_ALIGNMENTS[layout])
-        if layout not in _SCROLLABLE_LAYOUTS:
-            return
-        margins = self._preview_layout.contentsMargins()
-        extra = QSize(margins.left() + margins.right(), margins.top() + margins.bottom())
-        if widget.hasHeightForWidth():
-            self._preview_surface.setMinimumWidth(widget.minimumSizeHint().width() + extra.width())
-        else:
-            natural = widget.sizeHint().expandedTo(widget.minimumSize()).boundedTo(widget.maximumSize())
-            self._preview_surface.setMinimumSize(natural + extra)
+        self._error_panel = ErrorPanel(title, details, self._canvas.surface)
+        self._canvas.place(self._error_panel, Layout.FILL)
 
     def _clear_preview(self) -> None:
-        for widget in (self._preview_root, self._error_panel):
-            if widget is not None:
-                self._preview_layout.removeWidget(widget)
-                widget.hide()
-                widget.deleteLater()
+        self._canvas.clear()
         self._preview_widget = None
         self._preview_root = None
         self._error_panel = None

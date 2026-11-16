@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterable, Iterator
 
 from pyside6_storybook.controls import Control
 from pyside6_storybook.registry.layout import Layout, coerce_layout
+from pyside6_storybook.registry.size_preset import SizePreset
 from pyside6_storybook.registry.story_context import Decorator, StoryFunction
 from pyside6_storybook.registry.story_definition import Story
 
@@ -16,12 +17,15 @@ class StoryRegistry:
     Attributes:
         decorators: Decorators applied to every story of this registry, outside the story's own, the first one outermost. A plain
             list that is read at render time, so a project may append to it after its stories are registered.
+        size_presets: Named canvas sizes that the gallery's Size menu lists after its built-in sizes. Empty by default. A plain list
+            that the window reads when it is built and again in ``GalleryWindow.set_registry``, so a project may append to it.
     """
 
     def __init__(self) -> None:
         self._stories: dict[str, Story] = {}
         self._default_layout = Layout.PADDED
         self.decorators: list[Decorator] = []
+        self.size_presets: list[SizePreset] = []
 
     @property
     def default_layout(self) -> Layout:

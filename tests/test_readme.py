@@ -10,7 +10,8 @@ from PySide6.QtCore import QSize
 from PySide6.QtWidgets import QFrame, QGroupBox, QPlainTextEdit, QPushButton, QWidget
 from story_files import write
 
-from pyside6_storybook import Control, Layout, StoryContext, StoryRegistry, load_stories
+import pyside6_storybook
+from pyside6_storybook import Control, Layout, SizePreset, StoryContext, StoryRegistry, load_stories
 from pyside6_storybook.decorators import padding
 from pyside6_storybook.discovery import sources
 from pyside6_storybook.discovery.sources import resolve_story_sources
@@ -135,3 +136,13 @@ def test_the_decorators_example_registers_and_renders_with_the_documented_order(
     assert isinstance(group_box, QGroupBox)
     assert isinstance(group_box.parentWidget(), QFrame)
     assert group_box.title() == "Dark"
+
+
+def test_the_size_preset_example_adds_presets_to_the_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    (source,) = _code_blocks(_section("The gallery window"), "python")
+    isolated = StoryRegistry()
+    monkeypatch.setattr(pyside6_storybook, "default_registry", isolated)
+
+    exec(compile(source, "README.md", "exec"), {"__name__": "readme_example"})  # noqa: S102 - runs the repository's own README
+
+    assert isolated.size_presets == [SizePreset("Tablet", 768, 1024), SizePreset("Small laptop", 1280, 720)]
