@@ -121,6 +121,11 @@ class Story:
         return self._component
 
     @property
+    def function(self) -> StoryFunction:
+        """The callable the story was created with; a variant has its base's."""
+        return self._function
+
+    @property
     def args(self) -> Mapping[str, Any]:
         """For a variant, the values it overrides, by control name, as a read-only mapping; empty for any other story."""
         return self._args

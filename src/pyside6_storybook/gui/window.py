@@ -1,4 +1,4 @@
-"""The gallery window: story list, preview and a side pane with the theme switch and the controls."""
+"""The gallery window: story list, preview and docs tabs, and a side pane with the theme switch and the controls."""
 
 from __future__ import annotations
 
@@ -15,12 +15,14 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QScrollArea,
     QSplitter,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from pyside6_storybook.discovery import LoadError
 from pyside6_storybook.gui.controls_panel import ControlsPanel
+from pyside6_storybook.gui.docs_panel import DocsPanel
 from pyside6_storybook.gui.error_panel import ErrorPanel
 from pyside6_storybook.gui.icons import ActionIcons
 from pyside6_storybook.gui.sidebar import LOAD_ERRORS_HEADING, StorySidebar
@@ -44,7 +46,7 @@ _SCROLLABLE_LAYOUTS = frozenset({Layout.PADDED, Layout.CENTERED})
 
 
 class GalleryWindow(QMainWindow):
-    """Three panes in a splitter: the story list, the selected story's preview and the theme and controls pane.
+    """Three panes in a splitter: the story list, the selected story's preview and docs (in tabs), and the theme and controls pane.
 
     The preview is rebuilt from scratch whenever a control value or the theme changes. A story or decorator that raises, or returns
     something that is not a ``QWidget``, shows an ``ErrorPanel`` in the preview instead; nothing it raises reaches the Qt event loop. Story
@@ -110,12 +112,28 @@ class GalleryWindow(QMainWindow):
         self._empty_label.setVisible(len(registry) == 0 and not self._load_errors)
         self._preview_layout.addWidget(self._empty_label, alignment=Qt.AlignmentFlag.AlignTop)
 
+        self._docs_panel = DocsPanel(self, icons=self._icons)
+        self._docs_scroll = QScrollArea(self)
+        self._docs_scroll.setObjectName("docsScroll")
+        self._docs_scroll.setFrameShape(QFrame.Shape.StyledPanel)
+        self._docs_scroll.setWidgetResizable(True)
+        self._docs_scroll.setWidget(self._docs_panel)
+        self._docs_panel.storyRequested.connect(self.select_story)
+
+        # Document mode keeps the tab frame from taking width away from the preview.
+        self._preview_tabs = QTabWidget(self)
+        self._preview_tabs.setObjectName("previewTabs")
+        self._preview_tabs.setAccessibleName("Preview")
+        self._preview_tabs.setDocumentMode(True)
+        self._preview_tabs.addTab(self._preview_scroll, "Canvas")
+        self._preview_tabs.addTab(self._docs_scroll, "Docs")
+
         preview_pane = QWidget(self)
         preview_layout = QVBoxLayout(preview_pane)
         preview_layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
         preview_layout.setSpacing(_SPACING)
         preview_layout.addWidget(self._heading)
-        preview_layout.addWidget(self._preview_scroll, stretch=1)
+        preview_layout.addWidget(self._preview_tabs, stretch=1)
 
         self._theme_switch = QComboBox(self)
         self._theme_switch.setObjectName("themeSwitch")
@@ -267,6 +285,7 @@ class GalleryWindow(QMainWindow):
         self._clear_controls()
         self._current_story = None
         self._heading.setText("")
+        self._docs_panel.clear()
         self._place_preview(None, Layout.FILL)
 
     def _show_load_errors(self) -> None:
@@ -282,6 +301,7 @@ class GalleryWindow(QMainWindow):
         self._show_nothing()
         self._current_story = story
         self._heading.setText(story.id)
+        self._docs_panel.show_story(story, self._registry)
         panel = ControlsPanel(story.controls, self._controls_host, values=self._starting_values(story, values))
         panel.valuesChanged.connect(self._on_values_changed)
         self._controls_host_layout.addWidget(panel)

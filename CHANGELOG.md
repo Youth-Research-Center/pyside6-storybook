@@ -5,6 +5,9 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- The Docs tab: the preview pane has "Canvas" and "Docs" tabs. Docs shows the story module's and the story's docstrings, a table of the
+  controls (type, starting value, range or options), links to the stories of the same component, and the story's source with a Copy
+  button. `Story.function` is the callable the story was created with, as a read-only property.
 - The story list is a tree built from the story ids, with a search field that keeps the stories whose id contains the text, a
   placeholder when nothing matches, and the shortcuts `Ctrl+F` and `/` that focus the search. `GalleryWindow.select_story(story_id)`
   opens a story, clearing the search if it hides the story, and `GalleryWindow.set_registry(registry, *, load_errors=())` shows another
