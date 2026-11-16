@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtWidgets import QDoubleSpinBox, QHBoxLayout, QSlider, QWidget
 
@@ -62,12 +64,20 @@ class FloatEditor(ControlEditor):
             self._slider.setAccessibleDescription(description)
 
     def _position_of(self, value: float) -> int:
-        """Return the slider position nearest to ``value``."""
-        position = round((value - self._control.minimum) / self._control.effective_step)
-        return max(0, min(position, self._control.slider_steps))
+        """Return the slider position whose value is nearest to ``value``.
+
+        The two positions around ``value`` are compared by their actual values, because the last interval can be shorter than a
+        step: in ``0..1`` with a step of ``0.3``, ``1.0`` is the last position (``1.0``), not the one before it (``0.9``).
+        """
+        steps = self._control.slider_steps
+        exact = (value - self._control.minimum) / self._control.effective_step
+        candidates = {max(0, min(position, steps)) for position in (math.floor(exact), math.ceil(exact))}
+        return min(sorted(candidates), key=lambda position: abs(self._value_at(position) - value))
 
     def _value_at(self, position: int) -> float:
-        """Return the value of a slider position; the last position is always the maximum."""
+        """Return the value of a slider position; the last position is always exactly the maximum."""
+        if position >= self._control.slider_steps:
+            return self._control.maximum
         return min(self._control.minimum + position * self._control.effective_step, self._control.maximum)
 
     def _on_spin_box_changed(self, value: float) -> None:

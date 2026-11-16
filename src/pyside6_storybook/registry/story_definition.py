@@ -50,10 +50,11 @@ class Story:
     """
 
     __slots__ = (
+        "_args",
+        "_component",
         "_function",
         "_registry",
-        "args",
-        "component",
+        "_variant_of",
         "controls",
         "decorators",
         "doc",
@@ -63,7 +64,6 @@ class Story:
         "module",
         "name",
         "qualname",
-        "variant_of",
     )
 
     def __init__(
@@ -105,15 +105,30 @@ class Story:
         self.id = id
         self.name = segments[-1]
         self.groups = tuple(segments[:-1])
-        self.component = "/".join(self.groups) or None
-        self.args: Mapping[str, Any] = MappingProxyType({})
-        self.variant_of: Story | None = None
+        self._component = "/".join(self.groups) or None
+        self._args: Mapping[str, Any] = MappingProxyType({})
+        self._variant_of: Story | None = None
         self._registry: StoryRegistry | None = None
         self.controls = controls
         self.doc = inspect.getdoc(function) or ""
         self.module = getattr(function, "__module__", None) or type(function).__module__
         self.qualname = getattr(function, "__qualname__", None) or type(function).__qualname__
         self._function = function
+
+    @property
+    def component(self) -> str | None:
+        """The groups joined with ``/`` (``"Inputs/Button"`` for ``"Inputs/Button/Default"``), or ``None`` without groups."""
+        return self._component
+
+    @property
+    def args(self) -> Mapping[str, Any]:
+        """For a variant, the values it overrides, by control name, as a read-only mapping; empty for any other story."""
+        return self._args
+
+    @property
+    def variant_of(self) -> Story | None:
+        """The base story, for a variant; ``None`` otherwise."""
+        return self._variant_of
 
     @property
     def origin(self) -> StoryOrigin:
@@ -187,8 +202,8 @@ class Story:
             layout=self.layout if layout is None else layout,
             decorators=self.decorators if decorators is None else decorators,
         )
-        variant.args = MappingProxyType(checked)
-        variant.variant_of = self
+        variant._args = MappingProxyType(checked)
+        variant._variant_of = self
         return self._registry.register(variant)
 
     def __call__(self, ctx: StoryContext) -> QWidget:

@@ -113,6 +113,16 @@ def test_every_control_type_has_an_editor_and_an_unknown_one_is_rejected() -> No
         create_editor(object(), 1)  # ty: ignore[invalid-argument-type]
 
 
+def test_a_subclass_of_a_control_gets_its_base_class_editor(qtbot) -> None:
+    class PercentControl(IntControl):
+        pass
+
+    editor = create_editor(PercentControl("p", 5, 0, 100), 5)
+    qtbot.addWidget(editor)
+    assert type(editor) is EDITORS[IntControl]
+    assert editor.value() == 5
+
+
 def test_the_base_editor_has_no_value(qtbot) -> None:
     editor = ControlEditor()
     qtbot.addWidget(editor)
@@ -278,6 +288,29 @@ def test_float_editor_slider_last_position_is_the_maximum_when_the_step_does_not
     slider.setValue(3)
 
     assert recorder.values == [0.7, 2.1]
+
+
+def test_float_editor_slider_last_position_is_the_maximum_when_the_tolerance_drops_a_tiny_last_interval(qtbot) -> None:
+    editor, recorder = _make(qtbot, FloatControl("x", 0.0, 0.0, 1.0000000001, step=1.0, decimals=10, slider=True))
+    slider = _child(editor, QSlider)
+    assert slider.maximum() == 1
+
+    slider.setValue(1)
+
+    assert recorder.values == [1.0000000001]
+
+
+@pytest.mark.parametrize(("value", "position"), [(1.0, 4), (0.96, 4), (0.9, 3), (0.94, 3), (0.2, 1)])
+def test_float_editor_slider_follows_the_spin_box_to_the_nearest_position_including_a_short_last_interval(
+    qtbot, value: float, position: int
+) -> None:
+    editor, _recorder = _make(qtbot, FloatControl("x", 0.0, 0.0, 1.0, step=0.3, slider=True))
+    slider = _child(editor, QSlider)
+    assert slider.maximum() == 4
+
+    _child(editor, QDoubleSpinBox).setValue(value)
+
+    assert slider.value() == position
 
 
 def test_float_editor_slider_position_is_a_step_from_the_minimum(qtbot) -> None:
@@ -486,6 +519,19 @@ def test_color_editor_asks_for_alpha_only_when_the_control_allows_it(qtbot, monk
     qtbot.mouseClick(_child(editor, QPushButton), Qt.MouseButton.LeftButton)
     assert alphas == [True]
     assert _child(editor, QLineEdit).text() == "#33669980"
+
+
+def test_color_editor_keeps_a_finer_than_8_bit_colour_when_return_is_pressed_on_unchanged_text(qtbot) -> None:
+    fine = QColor.fromRgbF(0.1, 0.2, 0.3)
+    editor, recorder = _make(qtbot, ColorControl("c", "#336699"), fine)
+    line_edit = _child(editor, QLineEdit)
+    _focus(qtbot, line_edit)
+
+    qtbot.keyClick(line_edit, Qt.Key.Key_Return)
+
+    assert recorder.values == []
+    assert editor.value() == fine
+    assert line_edit.text() == "#1a334d"
 
 
 def test_color_editor_commits_a_typed_hex_value_once_even_after_focus_leaves(qtbot) -> None:

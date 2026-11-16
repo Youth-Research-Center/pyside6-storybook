@@ -103,8 +103,14 @@ class ColorEditor(ControlEditor):
         self._commit(color)
 
     def _on_editing_finished(self) -> None:
+        text = self._hex.text().strip()
+        if text.lower() == self._hex_text():
+            # The text shows the current colour, which may be finer than 8 bits per channel (a QColor from variant args); reparsing
+            # the rounded hex would change it.
+            self._show_color()
+            return
         try:
-            color = self._control.coerce(self._hex.text().strip())
+            color = self._control.coerce(text)
         except ValueError:
             self._show_color()
             return
