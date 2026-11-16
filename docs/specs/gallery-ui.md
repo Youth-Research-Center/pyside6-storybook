@@ -39,9 +39,10 @@ to match.
 ```
 
 - **Sidebar** (`gui/sidebar.py`, #19): search field and story tree.
-- **Preview pane**: a `QTabWidget` with "Canvas" (`gui/canvas.py`: two rows of canvas controls, scrolled surface, zoom; #20,
+- **Preview pane**: a `QTabWidget` in document mode (`setDocumentMode(True)`, which keeps the frame from eating into the
+  preview's width) with "Canvas" (`gui/canvas.py`: two rows of canvas controls, scrolled surface, zoom; #20,
   #21) and "Docs" (`gui/docs_panel.py`, #23). The heading with the story id stays above the tabs.
-- **Side pane**: the theme switch, then a `QTabWidget` with "Controls" (today's controls panel) and "Actions"
+- **Side pane**: the theme switch, then a document-mode `QTabWidget` with "Controls" (today's controls panel) and "Actions"
   (`gui/actions_panel.py`, #22).
 - **Status bar**: reload status (#24).
 - **Menu bar**: one "Help" menu with "Keyboard shortcuts" (#25). Menus are plain text, without icons (#45 conventions).
@@ -78,8 +79,8 @@ PandaPlot's pipeline is ported, as the issue lists, with these decisions:
   `MUTED` (`PlaceholderText`) is only for decorative icons next to text that carries the meaning (the search field's
   magnifying glass); the contrast test still requires 3:1 for them.
 - **Initial icon set.** Exactly the icons milestone 3 uses: `magnifying-glass`, `copy`, `trash`, `warning`,
-  `arrows-clockwise`, `magnifying-glass-plus`, `magnifying-glass-minus` and `arrow-counter-clockwise` (reset zoom), plus `question`
-  for Help if it gets a button. PR 1 bundles all of them, so later PRs do not regenerate the bundle. No `x`: the search field
+  `arrows-clockwise`, `magnifying-glass-plus`, `magnifying-glass-minus` and `arrow-counter-clockwise` (reset zoom). Help is a
+  menu entry, and menus have no icons. PR 1 bundles all of them, so later PRs do not regenerate the bundle. No `x`: the search field
   uses Qt's own clear button, which already reaches 8.5:1 (Light) and 17:1 (Dark).
 - **CI.** The lint job runs `uv run --no-sync python scripts/icons/build_icon_bundle.py --check`, with `.icon-cache/` cached by
   `actions/cache` keyed on the manifest's hash. `.icon-cache/` is git-ignored.
@@ -94,7 +95,7 @@ PandaPlot's pipeline is ported, as the issue lists, with these decisions:
   - "No network request": `gui/icons.py` reads only package files, and a test checks that no module in `src/pyside6_storybook`
     imports `urllib`, `http`, `socket` or `ssl`.
   - #45's wheel smoke test that renders an icon from the installed package belongs to #37 (milestone 6), which builds and
-    installs the wheel. It is deferred there, and #37 gets a note.
+    installs the wheel. It is deferred there; #45 records the deferral.
 
 ## 2. Sidebar tree and search (#19)
 
@@ -135,10 +136,15 @@ PandaPlot's pipeline is ported, as the issue lists, with these decisions:
   `QSortFilterProxyModel` moves the current index when a filter hides the current row (it emits `currentChanged`), so the
   sidebar sets a guard flag while it changes the filter, and ignores current-index changes during it. Typing in the search
   field therefore never changes the previewed story.
-- `select_story(story_id)` selects a row without being told by a click. It returns `False` when the id is not shown.
+- `select_story(story_id)` selects that story's row (clearing the search first if the filter hides it) and emits
+  `storySelected`, so `GalleryWindow.select_story` opens the story. It returns `False` when the id is not in the tree.
+- `visible_story_ids()` returns the ids of the story rows the filter keeps, in tree order, whether or not their branch is
+  expanded. Next and previous story (§8) walk this list and expand the branch of the row they select.
+- `load_errors_label()` returns the "Load errors (N)" row's text, or `None` when there is no such row.
 - If the filter hides the selected story, the selection is kept in the source model and the preview stays. When it matches
   again, it is shown selected.
-- `set_registry(registry, *, load_errors=())` rebuilds the model and keeps the selected id selected if it still exists (#24).
+- `set_registry(registry, *, load_errors=())` rebuilds the model and keeps the selected id selected if it still exists (#24),
+  without emitting: the window re-renders once itself.
 
 **Keyboard** (PR 2 implements these shortcuts; PR 8 adds the rest of §8)
 - `Ctrl+F` focuses the search field and selects its text. **This replaces #19's `Ctrl+K`**: in a `QLineEdit`, `Ctrl+K` deletes
@@ -151,7 +157,7 @@ PandaPlot's pipeline is ported, as the issue lists, with these decisions:
   (`QTreeView` default), and Escape clears the search.
 
 **Accessibility**
-- Accessible names: the field "Search stories", the tree "Stories".
+- Accessible names: the field "Search stories", the tree "Stories". The sidebar pane as a whole is "Story list" (§8).
 - `Highlight` and `HighlightedText` already reach 4.5:1 in both themes, and the built-in palettes set the same colours in the
   Active and Inactive groups, so an unfocused tree keeps a readable selection. A test checks the Inactive pair.
 
@@ -164,7 +170,8 @@ PandaPlot's pipeline is ported, as the issue lists, with these decisions:
    `TextSelectableByMouse | TextSelectableByKeyboard`, so it can be reached and selected from the keyboard.
 2. **Story docstring** (`story.doc`): same widget. There is no heading when it is empty, so no empty sections appear.
 3. **Controls table**: a read-only `QTableWidget` with columns Name, Type, Default and Range or options. The values come from a
-   pure function `controls_rows(controls) -> list[tuple[str, str, str, str]]` in `docs_panel.py`, which the tests check directly.
+   pure function `controls_rows(controls, values) -> list[tuple[str, str, str, str]]` in `docs_panel.py` (`values` are the
+   story's `default_args()`), which the tests check directly.
    A story without controls shows "No controls." instead of a table.
 
    | Control | Type | Default | Range or options |
@@ -210,7 +217,9 @@ button were hidden and unreachable by mouse or Tab. The controls are therefore a
 - row 2: the zoom buttons and level (§5), a stretch, and the size label.
 
 A test shows the window at its default size (1100 × 700) and checks that every canvas control is visible and at least as large
-as its `minimumSizeHint()`. The issue is updated.
+as its `minimumSizeHint()`. The issue is updated. A combo box cannot shrink below its contents, so the rows raise the window's
+minimum width (to about 540 px); that is accepted, and the combos use `AdjustToMinimumContentsLengthWithIcon` with a short
+minimum length to keep it small.
 
 **Background**
 - A `QComboBox` labelled "Background" with Window (the default, today's look), Base, Alternate Base and Checkerboard.
@@ -259,7 +268,10 @@ as its `minimumSizeHint()`. The issue is updated.
   previews are images; return to 100% to interact."
 
 **Mechanics**
-- The scroll area's widget is a `QStackedWidget` with the live surface (page 0) and a zoom label (page 1).
+- The scroll area's widget becomes a `QStackedWidget` with the live surface (page 0) and a zoom label (page 1). The fixed-size
+  placement of §4 (fixed size, `widgetResizable(False)`, centring) then applies to the stack rather than the surface.
+- While zoomed, page 0's size policy is `Ignored`, so the hidden live surface does not hold the stack at its full size: at 50% the
+  scroll ranges follow the image, not the live surface.
 - At 100% page 0 is shown and nothing else changes: no proxy, no image. That is #21's second acceptance criterion.
 - At any other level:
   - The canvas grabs the live surface with `QWidget.grab()` at its current size, after `ensurePolished()` and activating its
@@ -283,11 +295,14 @@ as its `minimumSizeHint()`. The issue is updated.
 ## 6. Actions panel (#22)
 
 **Public API.** `StoryContext` gains two methods, `log_signal(signal, name=None)` and `log(name, *args)`, and one keyword-only
-field `actions: ActionSink | None = None`.
+field `actions: ActionSink | None = field(default=None, compare=False, repr=False)`, so equality and `repr` stay as they are.
 - `ActionSink` is a `Protocol` with `record(name: str, args: tuple[object, ...]) -> None`. It is exported for typing only.
 - Without a sink (a plain `StoryContext`, the pytest plugin in milestone 5), both methods do nothing.
 - `log_signal` connects the signal to a small slot that calls `record(name or <signal name>, args)`.
-  - The signal name comes from `SignalInstance`'s repr when `name` is omitted. When it cannot be found, `log_signal` raises
+  - The signal name comes from `SignalInstance`'s repr (`<PySide6.QtCore.SignalInstance clicked() at 0x…>`: the token after
+    `SignalInstance ` and before `(`) when `name` is omitted.
+  - The arguments are whatever the signal delivers to a `*args` slot. `QPushButton.clicked` delivers none, so its row reads
+    `clicked()`; `valueChanged` delivers `(5,)`. #22's "clicked(False)" example becomes "clicked()". When it cannot be found, `log_signal` raises
     `TypeError` asking for `name=`.
   - It returns `None`.
 
@@ -322,15 +337,17 @@ issue's example. Follow-up: #66.
   edited story.
 
 **Mechanics** (`discovery/reload.py`, internal, Qt-free and testable without a window)
-- `ReloadSession(targets, *, cwd, pythonpath)` records what to reload. `reload() -> LoadResult`:
+- `ReloadSession(targets, *, cwd, pythonpath, initial: LoadResult)` records what to reload; `initial` is the command line's
+  first load, the baseline for step 1's modules, step 4's errors and the watcher's first files. `reload() -> ReloadResult`:
   1. **Find the modules to drop.** Two sets, merged:
      - every module in the last accepted `LoadResult.modules`, wherever it lives (the built-in examples inside the library,
        entry-point story packages in `site-packages`), plus their parent packages up to the top-level name, except
        `pyside6_storybook` itself and its non-story modules. Without this, a module still in `sys.modules` is found by
        `load_stories` without running again, and its stories disappear from the new registry;
      - every other `sys.modules` entry whose `__file__` resolves under `cwd` or a `pythonpath` entry (the project's widget
-       modules), excluding files under the library's package and paths with a part named `site-packages`, `dist-packages`,
-       `.venv`, `venv`, `node_modules`, or starting with `.`.
+       modules), excluding files under the library's package and paths whose part *relative to that root* is named
+       `site-packages`, `dist-packages`, `.venv`, `venv`, `node_modules`, or starts with `.` (relative, so a project that itself
+       lives under a dot folder still reloads).
   2. **Snapshot** those entries and both bindings of the default registry: `pyside6_storybook.registry.default_registry` (which
      `@story` reads) and `pyside6_storybook.default_registry` (which a project's `__init__` imports to append decorators or size
      presets). The `stories` test fixture is extended to isolate both bindings too.
@@ -361,7 +378,8 @@ issue's example. Follow-up: #66.
   - It re-renders. Theme and canvas settings are window state and are untouched.
   - The Docs tab is refreshed.
 - **Rejected:** the registry is unchanged. The preview shows the new errors in the error panel (the existing load-errors format),
-  and the next accepted reload replaces the error panel with the story.
+  and the next accepted reload replaces the error panel with the story. A control or theme change meanwhile re-renders the
+  last good story, replacing the error panel; the status bar keeps the failure until the next accepted reload.
 - **Status bar.** A `QLabel` in the status bar shows "Reloaded 14:02:11" or "Reload failed 14:02:11: 1 story source failed to
   load". It has an `arrows-clockwise` or `warning` icon and an accessible name, "Reload status".
 
@@ -390,8 +408,8 @@ The last PR audits the whole window. The earlier PRs already follow the rules be
 - `F6` and `Shift+F6` cycle focus between the panes (sidebar, preview pane, side pane): to the pane's last focused widget, or
   else its first.
 - **Accessible names.**
-  - Panes: "Stories", "Preview" and "Controls and actions".
-  - The preview surface: "Preview of <story id>".
+  - Panes: "Story list", "Preview" and "Controls and actions".
+  - The canvas scroll area, which is the focusable part of the preview: "Preview of <story id>".
   - Every chrome control has a name. A test walks all focusable chrome widgets, everything outside the story's own widget, and
     fails on an empty name.
 
@@ -403,13 +421,15 @@ The last PR audits the whole window. The earlier PRs already follow the rules be
 - `Ctrl+T`: next theme.
 - `F6` and `Shift+F6`: switch pane.
 - The zoom shortcuts of §5.
-- Help > "Keyboard shortcuts" (`F1`) opens a `QDialog` listing them, parented to the window and deleted after it closes.
+- Help > "Keyboard shortcuts" (`F1`) opens a `QDialog` listing them with `open()` (not a nested `exec()` loop), parented to the
+  window and deleted after it closes.
 - **`/` is a `QShortcut`.**
   - Qt does not deliver a `QShortcut` on a printable key to a focused `QLineEdit`, spin box or editable combo box: they claim it
     through `ShortcutOverride` and type the character, including editors inside the previewed story.
   - A `keyPressEvent` fallback would not work: the tree and the actions list consume printable keys for keyboard search.
   - The handler does nothing when a non-editable `QComboBox` has focus, where `/` belongs to the combo's own keyboard search.
-  - Tests check that `/` types into a `QLineEdit`, a `QSpinBox` and the story's editors, and opens search from the tree.
+  - Tests check that `/` types into a `QLineEdit` and does not fire, nor move focus, from a `QSpinBox` (which rejects the
+    character) or the story's editors, and that it opens search from the tree.
   - The other shortcuts use a modifier, so they do not collide with typing.
 
 **Focus**
