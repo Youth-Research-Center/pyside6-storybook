@@ -1,4 +1,5 @@
-from PySide6.QtGui import QFontDatabase
+from icon_testing import assert_tinted, strongest_pixel
+from PySide6.QtGui import QColor, QFontDatabase, QPalette
 from PySide6.QtWidgets import QLabel, QPlainTextEdit
 
 from pyside6_storybook.gui.error_panel import ErrorPanel
@@ -52,3 +53,32 @@ def test_uses_no_fixed_colours(qtbot) -> None:
     assert panel.styleSheet() == ""
     for child in panel.findChildren(QLabel) + panel.findChildren(QPlainTextEdit):
         assert child.styleSheet() == ""
+
+
+def test_a_warning_icon_tinted_with_the_text_colour_sits_beside_the_title(qtbot) -> None:
+    panel = ErrorPanel("Story raised ValueError", "trace")
+    qtbot.addWidget(panel)
+    panel.show()
+    icon = panel.findChild(QLabel, "errorIcon")
+    title = panel.findChild(QLabel, "errorTitle")
+    assert icon is not None
+    assert title is not None
+    pixmap = icon.pixmap()
+
+    assert not pixmap.isNull()
+    assert_tinted(strongest_pixel(pixmap), panel.palette().color(QPalette.ColorGroup.Active, QPalette.ColorRole.WindowText).name())
+    assert icon.geometry().right() < title.geometry().left()
+
+
+def test_the_icon_is_rendered_again_when_the_palette_changes(qtbot) -> None:
+    panel = ErrorPanel("Title", "details")
+    qtbot.addWidget(panel)
+    icon = panel.findChild(QLabel, "errorIcon")
+    assert icon is not None
+    palette = QPalette(panel.palette())
+    palette.setColor(QPalette.ColorGroup.Active, QPalette.ColorRole.WindowText, QColor("#ff0000"))
+    palette.setColor(QPalette.ColorGroup.Inactive, QPalette.ColorRole.WindowText, QColor("#ff0000"))
+
+    panel.setPalette(palette)
+
+    assert_tinted(strongest_pixel(icon.pixmap()), "#ff0000")

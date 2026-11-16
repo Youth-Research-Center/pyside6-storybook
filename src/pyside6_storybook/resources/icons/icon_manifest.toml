@@ -1,0 +1,26 @@
+# Icons bundled with pyside6-storybook. To add or change an icon:
+#   1. add its Phosphor name to `icons` (browse https://phosphoricons.com),
+#   2. run `uv run python scripts/icons/build_icon_bundle.py`,
+#   3. commit the regenerated icon_bundle.json, licenses/ and THIRD_PARTY_NOTICES.md.
+# `uv run python scripts/icons/build_icon_bundle.py --check` fails when the committed files are out of date.
+
+# Phosphor weights to bundle. Each extra weight multiplies the bundle size.
+weights = ["regular"]
+
+icons = [
+    "arrow-counter-clockwise",
+    "arrows-clockwise",
+    "copy",
+    "magnifying-glass",
+    "magnifying-glass-minus",
+    "magnifying-glass-plus",
+    "trash",
+    "warning",
+]
+
+[sources.phosphor]
+package = "@phosphor-icons/core"
+title = "Phosphor Icons"
+version = "2.1.1"
+integrity = "sha512-v4ARvrip4qBCImOE5rmPUylOEK4iiED9ZyKjcvzuezqMaiRASCHKcRIuvvxL/twvLpkfnEODCOJp5dM4eZilxQ=="
+license = "MIT"
