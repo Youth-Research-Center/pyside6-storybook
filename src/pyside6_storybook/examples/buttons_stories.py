@@ -13,10 +13,14 @@ from pyside6_storybook import BoolControl, Layout, StoryContext, TextControl, st
     layout=Layout.CENTERED,
 )
 def push_button(ctx: StoryContext) -> QWidget:
-    """A ``QPushButton`` at its natural size, centred in the preview. Edit its text, disable it, or make it checkable."""
+    """A ``QPushButton`` at its natural size, centred in the preview. Edit its text, disable it, or make it checkable.
+
+    Clicking it logs ``clicked`` in the Actions tab.
+    """
     button = QPushButton(ctx.args["text"])
     button.setEnabled(ctx.args["enabled"])
     button.setCheckable(ctx.args["checkable"])
+    ctx.log_signal(button.clicked)
     return button
 
 

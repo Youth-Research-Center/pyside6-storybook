@@ -10,6 +10,7 @@ def test_version_comes_from_package_metadata() -> None:
 
 def test_public_api_is_exported() -> None:
     expected = {
+        "ActionSink",
         "BoolControl",
         "ChoiceControl",
         "ColorControl",

@@ -289,7 +289,8 @@ from, and the exit code is 1 if any story module failed to load.
 ## The gallery window
 
 The window has three panes: the story list on the left, the preview of the selected story in the middle, and the theme switch and
-the story's controls on the right. The middle pane has two tabs: "Canvas", the rendered story, and "Docs", described below.
+the story's controls on the right. The middle pane has two tabs: "Canvas", the rendered story, and "Docs", described below. The right
+pane has two as well: "Controls" and "Actions", described under "Logging actions".
 
 The story list is a tree built from the story ids. Each `/`-separated segment but the last is a branch, and the stories are leaves,
 in the order they were registered. A component below the top level that has only one story, such as
@@ -356,6 +357,33 @@ The Docs tab describes the selected story, top to bottom:
   cannot be read, such as one built from a `functools.partial`, shows "Source not available for this story." instead.
 
 The tab updates when you select another story, not when you change a control.
+
+## Logging actions
+
+The Actions tab lists what a story reports, newest first, with the time, the action and its arguments. A story opts in signal by
+signal with `ctx.log_signal`, or logs anything with `ctx.log`:
+
+```python
+from PySide6.QtWidgets import QPushButton, QWidget
+
+from pyside6_storybook import StoryContext, story
+
+
+@story("Buttons/Counter")
+def counter(ctx: StoryContext) -> QWidget:
+    """A button that logs its signals."""
+    button = QPushButton("Click me")
+    ctx.log_signal(button.clicked)
+    ctx.log_signal(button.toggled, name="toggle")
+    button.clicked.connect(lambda: ctx.log("custom", "any", 1))
+    return button
+```
+
+`log_signal` shows the arguments the signal delivers to a slot, so `QPushButton.clicked` reads `clicked()` and a slider's
+`valueChanged` reads `valueChanged(5)`. The signal's own name is used unless you pass `name=`. Arguments are shortened to 200
+characters, and the panel keeps the last 500 actions. Clear empties it, and so does selecting another story; changing a control or the
+theme builds the story again and keeps the log. Under a plain `StoryContext`, such as a test builds, `log_signal` and `log` do nothing,
+so the story needs no check. `StoryContext.actions` is the `ActionSink` that receives the actions.
 
 ## Themes
 
