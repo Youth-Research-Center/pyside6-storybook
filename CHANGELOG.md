@@ -25,3 +25,8 @@ All notable changes to this project are documented in this file.
   error which source it used.
 - Example stories built from stock Qt widgets (buttons, inputs, display widgets, the active palette and a small form), shown by
   `pyside6-storybook --examples`.
+
+### Fixed
+- The Dark theme's input fields, unchecked check boxes and alternate table rows were almost invisible in the preview. The preview
+  surface now uses the window background, where a stock widget sits in an application, and the Dark palette separates `Window`,
+  `Base` and `AlternateBase` further; the Light theme's alternate rows are a little stronger too.

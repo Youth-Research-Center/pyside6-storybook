@@ -3,11 +3,25 @@ from pathlib import Path
 
 import pytest
 import shiboken6
-from PySide6.QtCore import QEvent
-from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QFrame, QLabel, QLineEdit, QListWidget, QPushButton, QWidget
+from PySide6.QtCore import QEvent, QPoint, QRect, Qt
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QFrame,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QPushButton,
+    QStyle,
+    QStyleOptionButton,
+    QVBoxLayout,
+    QWidget,
+)
 from story_files import story_source, write
 
 from pyside6_storybook import BoolControl, IntControl, LoadError, StoryContext, StoryRegistry, load_stories
+from pyside6_storybook.contrast import contrast_ratio
 from pyside6_storybook.gui.controls_panel import NO_CONTROLS_MESSAGE, ControlsPanel
 from pyside6_storybook.gui.error_panel import ErrorPanel
 from pyside6_storybook.gui.window import NO_STORIES_MESSAGE, GalleryWindow
@@ -419,3 +433,50 @@ def test_the_traceback_starts_at_the_story_not_in_the_library(qtbot, themes: Bui
     assert "test_window.py" in details
     assert "_raising" in details
     assert "pyside6_storybook" not in details
+
+
+def _inputs(_ctx: StoryContext) -> QWidget:
+    """An unfocused line edit and an unchecked check box, as a form shows them before the user interacts."""
+    widget = QWidget()
+    layout = QVBoxLayout(widget)
+    for child in (QLineEdit(widget), QCheckBox("Remember me", widget)):
+        child.setObjectName(type(child).__name__)
+        child.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        layout.addWidget(child)
+    return widget
+
+
+@pytest.mark.parametrize("theme", ["Light", "Dark"])
+def test_inputs_stand_out_from_the_preview_surface(qtbot, themes: BuiltinThemes, theme: str) -> None:
+    registry = StoryRegistry()
+    registry.story("Forms/Inputs")(_inputs)
+    window = _make_window(qtbot, registry, themes)
+    window.set_theme(theme)
+    window.resize(900, 600)
+    window.show()
+    qtbot.waitExposed(window)
+    QApplication.processEvents()
+    surface = window.findChild(QFrame, "previewSurface")
+    preview = window.current_preview_widget()
+    assert surface is not None and preview is not None
+    edit = preview.findChild(QLineEdit, "QLineEdit")
+    check = preview.findChild(QCheckBox, "QCheckBox")
+    assert edit is not None and check is not None
+    image = window.grab().toImage()
+    background = image.pixelColor(surface.mapTo(window, surface.contentsRect().topLeft())).name()
+
+    def strongest(widget: QWidget, rect: QRect) -> float:
+        origin = widget.mapTo(window, QPoint(0, 0))
+        return max(
+            contrast_ratio(image.pixelColor(origin.x() + x, origin.y() + y).name(), background)
+            for x in range(rect.left(), rect.right() + 1)
+            for y in range(rect.top(), rect.bottom() + 1)
+        )
+
+    option = QStyleOptionButton()
+    check.initStyleOption(option)
+    indicator = check.style().subElementRect(QStyle.SubElement.SE_CheckBoxIndicator, option, check)
+    # The line edit's left edge (frame and fill, away from any text) and the check box's indicator. Before #62 both measured about
+    # 1.0 in the Dark theme: the inputs were drawn in the colour of the surface.
+    assert strongest(edit, QRect(0, 0, 3, edit.height())) >= 1.25
+    assert strongest(check, indicator) >= 1.25
