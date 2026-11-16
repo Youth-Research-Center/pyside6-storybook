@@ -21,7 +21,9 @@ _README = Path(__file__).resolve().parents[1] / "README.md"
 
 def _section(heading: str) -> str:
     text = _README.read_text(encoding="utf-8")
-    start = text.index(f"## {heading}\n")
+    match = re.search(rf"^## {re.escape(heading)}\n", text, re.MULTILINE)
+    assert match is not None, heading
+    start = match.start()
     end = text.find("\n## ", start + 1)
     return text[start : end if end != -1 else len(text)]
 

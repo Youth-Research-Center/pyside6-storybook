@@ -100,7 +100,8 @@ in the same pull request as the bump.
     name that keeps it a single module), `load_result.py` (`LoadResult`, `LoadError`), `sources.py` (`resolve_story_sources`: the
     command line's targets or the default sources from `pyproject.toml`, entry points or the examples) and `constants.py` (file-name
     patterns, names and messages)
-  - `gui/` - the gallery's widgets, one module per widget: `window.py` (`GalleryWindow`), `controls_panel.py` (`ControlsPanel`, the
+  - `gui/` - the gallery's widgets, one module per widget: `window.py` (`GalleryWindow`), `sidebar.py` (`StorySidebar`: the search field
+    and the tree of stories, with its filter model), `controls_panel.py` (`ControlsPanel`, the
     labelled form over the editors of a story's controls) and `error_panel.py` (`ErrorPanel`, which the window shows in the preview for a
     story that fails and for the load errors). New gallery widgets go here, not at the package root.
     - `gui/icons.py` (internal, not in `__all__`): reads the bundle and renders icons (`icon_svg`, `build_icon`, `palette_icon`,

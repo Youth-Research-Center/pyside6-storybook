@@ -5,6 +5,10 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- The story list is a tree built from the story ids, with a search field that keeps the stories whose id contains the text, a
+  placeholder when nothing matches, and the shortcuts `Ctrl+F` and `/` that focus the search. `GalleryWindow.select_story(story_id)`
+  opens a story, clearing the search if it hides the story, and `GalleryWindow.set_registry(registry, *, load_errors=())` shows another
+  set of stories, keeping the selected story and its control values when it still exists.
 - Story decorators: `decorators=` on `@story` and `Story.variant()` takes functions that wrap the story's widget, the first one outermost
   (`decorators=[padding(24), fixed_size(320, 200)]` is a 320 by 200 widget inside 24 pixels of padding). `StoryRegistry.decorators` wraps
   every story of a registry, outside the story's own, and a variant keeps its story's decorators unless it gives a list. The built-ins
@@ -49,6 +53,8 @@ All notable changes to this project are documented in this file.
   `pyside6-storybook --examples`.
 
 ### Changed
+- The story list is no longer a flat list of ids: stories are grouped by the segments of their ids, and a component below the top level
+  with a single story is shown as that story's row.
 - The error panel shows a warning icon beside its title. The gallery now bundles Phosphor Icons (MIT) and tints them from the active
   palette, so the icon follows the theme.
 - The example stories `Buttons/Push Button` and `Inputs/Line Edit` are now `Buttons/Push Button/Default` and `Inputs/Line Edit/Default`,

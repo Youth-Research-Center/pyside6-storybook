@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QLabel, QListWidget, QWidget
+from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
 import pyside6_storybook.examples
 from pyside6_storybook import (
@@ -24,6 +24,7 @@ from pyside6_storybook import (
 )
 from pyside6_storybook.cli import EXAMPLES_MODULE
 from pyside6_storybook.gui import ErrorPanel, GalleryWindow
+from pyside6_storybook.gui.sidebar import StorySidebar
 from pyside6_storybook.registry.rendering import render_story
 from pyside6_storybook.themes import BUILTIN_THEME_NAMES, BuiltinThemes
 
@@ -123,15 +124,15 @@ def test_the_gallery_renders_every_example_without_an_error(qtbot, examples: Sto
     window = GalleryWindow(examples, themes)
     qtbot.addWidget(window)
     window.show()
-    sidebar = window.findChild(QListWidget, "storySidebar")
+    sidebar = window.findChild(StorySidebar)
     assert sidebar is not None
 
     with qtbot.capture_exceptions() as exceptions:
         for theme in BUILTIN_THEME_NAMES:
             window.set_theme(theme)
-            for row in range(sidebar.count()):
-                sidebar.setCurrentRow(row)
-                assert window.current_preview_widget() is not None, sidebar.item(row).text()
+            for story_id in sidebar.visible_story_ids():
+                assert window.select_story(story_id)
+                assert window.current_preview_widget() is not None, story_id
                 assert not [panel for panel in window.findChildren(ErrorPanel) if panel.isVisibleTo(window)]
 
     assert exceptions == []
