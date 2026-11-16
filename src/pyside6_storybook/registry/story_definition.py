@@ -45,7 +45,20 @@ class Story:
             module and qualified name of its type.
     """
 
-    __slots__ = ("_function", "_registry", "args", "component", "controls", "doc", "groups", "id", "module", "name", "qualname", "variant_of")
+    __slots__ = (
+        "_args",
+        "_component",
+        "_function",
+        "_registry",
+        "_variant_of",
+        "controls",
+        "doc",
+        "groups",
+        "id",
+        "module",
+        "name",
+        "qualname",
+    )
 
     def __init__(self, id: str, function: StoryFunction, *, controls: Iterable[Control] = ()) -> None:
         """Create a story.
@@ -73,15 +86,30 @@ class Story:
         self.id = id
         self.name = segments[-1]
         self.groups = tuple(segments[:-1])
-        self.component = "/".join(self.groups) or None
-        self.args: Mapping[str, Any] = MappingProxyType({})
-        self.variant_of: Story | None = None
+        self._component = "/".join(self.groups) or None
+        self._args: Mapping[str, Any] = MappingProxyType({})
+        self._variant_of: Story | None = None
         self._registry: StoryRegistry | None = None
         self.controls = controls
         self.doc = inspect.getdoc(function) or ""
         self.module = getattr(function, "__module__", None) or type(function).__module__
         self.qualname = getattr(function, "__qualname__", None) or type(function).__qualname__
         self._function = function
+
+    @property
+    def component(self) -> str | None:
+        """The groups joined with ``/`` (``"Inputs/Button"`` for ``"Inputs/Button/Default"``), or ``None`` without groups."""
+        return self._component
+
+    @property
+    def args(self) -> Mapping[str, Any]:
+        """For a variant, the values it overrides, by control name, as a read-only mapping; empty for any other story."""
+        return self._args
+
+    @property
+    def variant_of(self) -> Story | None:
+        """The base story, for a variant; ``None`` otherwise."""
+        return self._variant_of
 
     @property
     def origin(self) -> StoryOrigin:
@@ -138,8 +166,8 @@ class Story:
             except (TypeError, ValueError) as error:
                 raise ValueError(f"Variant {variant_id!r}: invalid value for {key!r}: {error}") from error
         variant = Story(variant_id, self._function, controls=self.controls)
-        variant.args = MappingProxyType(checked)
-        variant.variant_of = self
+        variant._args = MappingProxyType(checked)
+        variant._variant_of = self
         return self._registry.register(variant)
 
     def __call__(self, ctx: StoryContext) -> QWidget:
