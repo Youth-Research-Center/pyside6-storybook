@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Story decorators: `decorators=` on `@story` and `Story.variant()` takes functions that wrap the story's widget, the first one outermost
+  (`decorators=[padding(24), fixed_size(320, 200)]` is a 320 by 200 widget inside 24 pixels of padding). `StoryRegistry.decorators` wraps
+  every story of a registry, outside the story's own, and a variant keeps its story's decorators unless it gives a list. The built-ins
+  `padding`, `frame` and `fixed_size` are in `pyside6_storybook.decorators`, and `Decorator` is exported from the package. A decorator
+  that fails, or does not return a widget containing the widget it received, shows an error in the preview that names it. `Story` gains
+  `decorators`, and `GalleryWindow.current_preview_widget()` still returns the story's own widget. The sign-in form example uses `padding`.
+- Preview layouts: `layout=` on `@story` and `Story.variant()` takes a `Layout` (`CENTERED`, `PADDED` or `FILL`) or its string value, and
+  `StoryRegistry.default_layout` (`Layout.PADDED` by default) applies to stories that declare none; a variant keeps its story's layout
+  unless it gives another. The preview scrolls a widget larger than the pane in `PADDED` and `CENTERED`, and `FILL` grows the widget
+  with the pane. `Layout` is exported from the package. Example stories show all three (`Display/Table` fills the preview).
+- `ColorControl` (a hex string default, `alpha=True` for `#RRGGBBAA`; the story receives a `QColor`), `EnumControl` (a Python or Qt enum
+  member; `options` lists the named members) and `FileControl` (the story receives a `Path`, or `None` while empty; `filter=` is the
+  Browse dialog's name filter), with editors in the gallery and example stories.
+- Story variants: `Story.variant(name, *, args=None)` registers the same story with other starting values under the id
+  `<component>/<name>`, and `Story` gains `component`, `variant_of` and `args` (a read-only mapping). `Story.default_args()` uses a variant's
+  `args`, and the gallery shows variants as stories of their own.
 - Control options: `label` and `description` on every control (the form label and the editor's tooltip and accessible description),
   `TextControl(multiline=True)`, `IntControl(step=..., slider=True)` and `FloatControl(step=..., decimals=..., slider=True)`. Every control
   also has a read-only `display_label`, a `coerce(value)` method that returns the value in the control's type or raises `ValueError` or
@@ -33,6 +49,8 @@ All notable changes to this project are documented in this file.
   `pyside6-storybook --examples`.
 
 ### Changed
+- The example stories `Buttons/Push Button` and `Inputs/Line Edit` are now `Buttons/Push Button/Default` and `Inputs/Line Edit/Default`,
+  each with variants.
 - A control's default must have the control's value type: `BoolControl` takes only a `bool`, `IntControl` an `int` (not a `bool`),
   `FloatControl` an `int` or `float` (not a `bool`), `TextControl` and `ChoiceControl` a string. `Story.default_args()` returns each
   default passed through the control's `coerce`, so a `FloatControl` default given as `1` starts as `1.0`.

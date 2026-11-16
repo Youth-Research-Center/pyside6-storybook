@@ -4,19 +4,24 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QCheckBox, QPushButton, QWidget
 
-from pyside6_storybook import BoolControl, StoryContext, TextControl, story
+from pyside6_storybook import BoolControl, Layout, StoryContext, TextControl, story
 
 
 @story(
-    "Buttons/Push Button",
+    "Buttons/Push Button/Default",
     controls=[TextControl("text", "Push me"), BoolControl("enabled", default=True), BoolControl("checkable", default=False)],
+    layout=Layout.CENTERED,
 )
 def push_button(ctx: StoryContext) -> QWidget:
-    """A ``QPushButton``. Edit its text, disable it, or make it checkable so it stays down when clicked."""
+    """A ``QPushButton`` at its natural size, centred in the preview. Edit its text, disable it, or make it checkable."""
     button = QPushButton(ctx.args["text"])
     button.setEnabled(ctx.args["enabled"])
     button.setCheckable(ctx.args["checkable"])
     return button
+
+
+push_button.variant("Disabled", args={"enabled": False})
+push_button.variant("Checkable", args={"checkable": True, "text": "Toggle me"})
 
 
 @story(
