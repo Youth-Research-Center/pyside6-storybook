@@ -1,0 +1,434 @@
+# Gallery UI (milestone 3): implementation plan
+
+Status: reviewed; ready for implementation. Implements `docs/specs/gallery-ui.md` (the spec) in eight stacked pull requests.
+Section numbers (§2) refer to the spec.
+
+## Order, branches and merging
+
+| # | Issue | Branch | Base | Depends on |
+| --- | --- | --- | --- | --- |
+| 1 | #45 icons | `claude/pyside6-storybook-icons` | `main` | – |
+| 2 | #19 sidebar | `claude/pyside6-storybook-sidebar` | PR 1 | icons (search field) |
+| 3 | #23 Docs tab | `claude/pyside6-storybook-docs-tab` | PR 2 | `select_story` (variant links), icons (Copy) |
+| 4 | #20 canvas controls | `claude/pyside6-storybook-canvas-toolbar` | PR 3 | the Canvas tab |
+| 5 | #21 zoom | `claude/pyside6-storybook-zoom` | PR 4 | `Canvas` |
+| 6 | #22 Actions | `claude/pyside6-storybook-actions` | PR 5 | icons (Clear); the side tabs are new here |
+| 7 | #24 hot reload | `claude/pyside6-storybook-hot-reload` | PR 6 | `set_registry` (PR 2), canvas presets (PR 4), actions clearing (PR 6) |
+| 8 | #25 accessibility | `claude/pyside6-storybook-accessibility` | PR 7 | every pane exists |
+
+**Stacked PRs.** The eight PRs touch the same files (`gui/window.py`, README, changelog, `AGENTS.md`), so each branch starts
+from the previous one and each PR targets the previous branch. Every PR description says, at the top: "Stacked on #N. Merge
+the stack bottom-up, and retarget this PR to `main` before merging it (GitHub does it automatically when 'Automatically delete
+head branches' is on)." The spec PR (#67) is documentation only; merge it before PR 1 so `main` has the spec, though PR 1 does
+not depend on it.
+
+## Process per PR
+
+1. A Sonnet subagent implements the PR on its branch, following the spec, this plan, `AGENTS.md` and `CLAUDE.md`, and
+   commits without pushing.
+2. I review the diff against the spec and the checklist below, and run:
+   - `uv run ruff check .`
+   - `uv run ruff check --select W291,W292,W293 <changed files>`
+   - `uv run ty check`
+   - `QT_QPA_PLATFORM=offscreen uv run pytest -q`
+   - the oldest-dependencies run, `--isolated --python 3.11 --resolution lowest-direct`
+   - from PR 1 on, `uv run python scripts/icons/build_icon_bundle.py --check`
+3. I fix small problems directly and send larger ones back to the subagent. Then I push and open a draft PR with the GitHub MCP
+   tools.
+4. After PR 8, I render screenshots of the top of the stack in both themes and attach them to the PR description and the
+   final report.
+
+**Review checklist**
+- New public parameters are keyword-only and come after the existing ones.
+- New `Story` attributes are in `__slots__`.
+- Every new widget has a parent; nothing creates a parentless `QMenu` or `QDialog`.
+- Each composite control has an accessible name, a buddy or tooltip, and a focus policy that Tab reaches.
+- Colours come only from palette roles; icons only from the bundle; no emoji in labels; menus without icons.
+- `QSignalBlocker` for linked controls; no signal connected twice; slots that can run during teardown are guarded with
+  `shiboken6.isValid`.
+- Docstrings match the code; the changelog lists exactly the new public names.
+- No existing assertion is weakened. Changed tests are listed in the PR with their replacement assertions.
+
+**Tests across PRs**
+- `tests/test_package.py::test_public_api_is_exported` is exact. PR 4 adds `SizePreset`, PR 6 adds `ActionSink`.
+- `tests/test_examples.py` pins the example module names and their imports. New example signals (PR 6) stay in the existing
+  modules.
+- `tests/test_readme.py` runs README examples: new README code (PR 4 `SizePreset`, PR 6 `log_signal`) gets the same treatment.
+- **Focus and shortcut tests.** After `tests/test_app.py` ends an event loop, the offscreen platform stops activating windows
+  until another loop runs, and even in a fresh process a `QShortcut` does not fire from `qtbot.keyClick` until
+  `QApplication.activeWindow()` is the window (activation is asynchronous). PR 2 moves `tests/test_editors.py`'s module fixture
+  to `tests/conftest.py` as `restore_window_activation` (module-scoped), and adds a helper `show_active(qtbot, window)` that shows
+  the window, calls `activateWindow()` and waits with `qtbot.waitUntil(lambda: QApplication.activeWindow() is window,
+  timeout=5000)`. Every test module that drives a shortcut, Tab, F6 or asserts `hasFocus()` uses both (`test_editors`,
+  `test_sidebar`, `test_zoom`, `test_accessibility`, and window shortcut tests).
+- **Fixture restoring.** PR 8 extends `restore_application_look` to restore `QApplication.font()` too, before its 24 pt test.
+
+## PR 1: icons (#45), spec §1
+
+**Code**
+- `src/pyside6_storybook/resources/__init__.py` (empty, so the folder is package data) and `resources/icons/` containing:
+  - `icon_manifest.toml`: Phosphor 2.1.1 pinned as in PandaPlot, `weights = ["regular"]`, and the icon set of §1;
+  - `icon_bundle.json` and `licenses/phosphor-LICENSE.txt`, both generated by running the script.
+- `scripts/icons/build_icon_bundle.py` and `scripts/icons/icon_bundle/` (`bundle.py`, `cli.py`, `fetch.py`, `manifest.py`,
+  `notices.py`, `svg.py`, and `layouts.py` if still needed), ported from PandaPlot:
+  - drop `[overrides]` and Lucide from the manifest model, the bundle builder and the test helpers;
+  - repoint `REPO_ROOT` and `ICONS_DIR` at this repository, and replace the "PandaPlot" wording and the `pandaplot/...` licence
+    path in `notices.py`;
+  - `THIRD_PARTY_NOTICES.md` at the repository root.
+- **Configuration.**
+  - `.gitignore` gains `.icon-cache/`.
+  - `pyproject.toml`: `[tool.pytest.ini_options] pythonpath` gains `scripts/icons`, so the script's package imports in tests,
+    and `[tool.ty.environment] extra-paths = ["scripts/icons"]`, so `ty` resolves it too (pytest's setting does not reach `ty`).
+- **`src/pyside6_storybook/gui/icons.py`**, as §1 lists:
+  - `icon_svg`, `build_icon`, `clear_icon_cache`;
+  - `IconRole`, `palette_icon`, `ActionIcons`.
+- **`gui/window.py`:** an `ActionIcons` instance, and `changeEvent` handling `ApplicationPaletteChange` and `PaletteChange` by
+  calling `retint()`.
+- **`gui/error_panel.py`:** a `warning` icon in a `QLabel` beside the title, re-rendered on `PaletteChange`.
+- **CI** (`.github/workflows/tests.yml`, lint job): an `actions/cache@v4` step for `.icon-cache` keyed on
+  `hashFiles('src/pyside6_storybook/resources/icons/icon_manifest.toml')`, then `uv run --no-sync python
+  scripts/icons/build_icon_bundle.py --check`.
+
+**Tests**
+- `tests/icon_testing.py`: `strongest_pixel`, `assert_tinted`.
+- `tests/test_icons.py`, covering:
+  - the bundle loads;
+  - an unknown name raises `KeyError` naming the manifest;
+  - every manifest icon is in the bundle;
+  - the tint reaches the pixels;
+  - the disabled tint uses the Disabled group's colour;
+  - the cache is keyed on colour and on device pixel ratio (`clear_icon_cache` between tests);
+  - `ActionIcons.retint()` after a palette change re-tints, and drops a deleted target;
+  - the window calls `retint()` on a theme switch (a call-count spy: in PR 1 nothing is bound yet; PR 2 adds a pixel check on
+    the search field's icon);
+  - no module of the package imports `urllib`, `http`, `socket` or `ssl` (an `ast` walk over `src/`).
+- `tests/test_icon_bundle_script.py`, porting PandaPlot's script tests with an injected fetcher and no network:
+  - integrity mismatch;
+  - `--check` passes on fresh output, fails on drift, and fails on a stale licence file.
+- `tests/test_packaging.py`: a `@pytest.mark.full` test that builds the wheel into `tmp_path` (`uv build --wheel --out-dir`,
+  `timeout=300`) and checks it contains the bundle and licence, and no `scripts/`.
+- `tests/test_error_panel.py`: the icon is present and tinted.
+
+**Docs**
+- **README:** a short credits line for Phosphor Icons (MIT), pointing to `THIRD_PARTY_NOTICES.md`.
+- **`AGENTS.md`:**
+  - an "Icons" section with the #45 conventions and the script commands;
+  - the project structure gains `resources/`, `gui/icons.py` and `scripts/icons/`;
+  - the PR checklist gains the `--check` command.
+- **Changelog:** nothing public changes, except that the error panel shows an icon (`### Changed`).
+
+## PR 2: sidebar tree and search (#19), spec §2
+
+**Code**
+- `gui/sidebar.py`: `StorySidebar` and its proxy model. Its API:
+  - signals `storySelected(str)` and `loadErrorsSelected()`;
+  - `select_story(story_id) -> bool`;
+  - `set_registry(registry, *, load_errors=())`;
+  - `focus_search()`;
+  - `visible_story_ids() -> list[str]`, used by tests and by PR 8's next and previous story.
+- **`gui/window.py`:**
+  - The `QListWidget` is replaced by `StorySidebar`.
+  - New public methods: `select_story(story_id) -> bool`, which delegates to the sidebar; and `set_registry(registry, *,
+    load_errors=())`, which refreshes the sidebar and re-selects the story.
+  - For PR 2, `set_registry` keeps control values only when the story id is unchanged and every control accepts its value.
+    PR 7 adds the enum-by-name matching and the nearest-story fallback.
+  - `QShortcut`s for `Ctrl+F` and `/` (with the non-editable-combo guard from §8) call `focus_search()`.
+  - The window still selects the first story on start.
+- **`tests/conftest.py`:** the module-scoped `restore_window_activation` fixture, moved from `tests/test_editors.py`, which
+  uses it from there.
+
+**Tests** (`tests/test_sidebar.py`)
+- **Tree shape:** nested ids; registration order; collapsing a one-story component, and not collapsing at the top level; a
+  story that is also a branch; the "Load errors" row.
+- **Filtering:**
+  - case-insensitive substring;
+  - ancestors shown and expanded;
+  - expansion restored after clearing;
+  - empty state;
+  - "double" leaves only `Inputs/Double Spin Box` with the examples (`load_stories` through the `stories` fixture).
+- **Selection:**
+  - `select_story` emits `storySelected`, and `set_registry` does not;
+  - it survives a filter that keeps it;
+  - a filter that hides the current story does not emit and does not change the preview;
+  - `set_registry` keeps the selected id.
+- **Keyboard**, with `qtbot.keyClick`:
+  - Down from the search field moves to the first visible story, and Enter opens it;
+  - Escape clears the search, then moves to the tree;
+  - `Ctrl+F` and `/` focus the search from the tree;
+  - `/` typed into a `QLineEdit` stays there; from a `QSpinBox` it neither fires nor moves focus;
+  - the search field's icon retints on a theme switch.
+- **Accessibility:** the accessible names, and the Inactive-group `HighlightedText` against `Highlight` is at least 4.5:1 in
+  both themes.
+
+**Changed tests**
+- `tests/test_window.py` (24 uses of the sidebar) selects stories with `window.select_story(id)`.
+- Its `_sidebar_ids` helper reads `window.findChild(StorySidebar).visible_story_ids()`, and the "Load errors" tests read
+  `load_errors_label()` and select the row through the sidebar.
+- `test_changing_a_control_rebuilds_the_preview` takes the first visible `QLineEdit` in the window, which becomes the search
+  field: it finds the editor through `window.findChild(ControlsPanel).findChild(QLineEdit)` instead.
+- `tests/test_readme.py`'s `_section` helper finds a heading with `text.index("## X\n")`, which also matches `### X`. It changes
+  to a line-start regex (`re.search(rf"^## {re.escape(name)}\n", text, re.MULTILINE)`).
+- `tests/test_app.py` (3) and `tests/test_examples.py` (2) change the same way. Every assertion keeps its meaning; the PR lists
+  each test.
+
+**Docs**
+- **README:** a new "The gallery window" section with the sidebar, search and shortcuts so far.
+- **Changelog:** `### Added` (tree, search, `GalleryWindow.select_story`, `set_registry`); `### Changed` (the flat list
+  replaced).
+- **`AGENTS.md`:** structure.
+
+## PR 3: Docs tab (#23), spec §3
+
+**Code**
+- `Story.function`: a read-only property in `story_definition.py` that returns the stored callable.
+- `gui/docs_panel.py`: `DocsPanel` and the pure `controls_rows(controls, values) -> list[tuple[str, str, str, str]]`, which
+  covers all eight control types, plus a `storyRequested(str)` signal.
+- **`gui/window.py`:**
+  - the preview pane becomes a document-mode `QTabWidget` ("Canvas" holds today's scroll area, "Docs" holds `DocsPanel` in a
+    scroll area). Without document mode the tab frame takes 4 px of width and `test_a_widget_that_fits_does_not_scroll` loses
+    its slack;
+  - `show_story` is called on selection;
+  - `storyRequested` is connected to `select_story`.
+
+**Tests** (`tests/test_docs_panel.py`)
+- `controls_rows` for every control type, and for a variant's values.
+- Module and story docstrings shown; no heading for an empty docstring.
+- Source shown; Copy puts it on the clipboard.
+- The missing-source path: a story built from `functools.partial`, or `inspect.getsource` monkeypatched to raise `OSError`.
+- The sibling links:
+  - they list the base and the variants;
+  - the current story is not linked;
+  - activating a link selects that story through the window.
+- The tab updates on selection.
+- The labels are selectable by keyboard.
+- `Story.function` is the decorated function.
+
+**Changed tests:** none expected; window tests find widgets by `objectName`, which the tab does not change. A test checks that
+the Docs content refreshes after `set_registry`.
+
+**Docs:** README "The gallery window" (Docs tab), changelog `### Added` (Docs tab, `Story.function`), `AGENTS.md` structure.
+
+## PR 4: canvas controls (#20), spec §4
+
+**Code**
+- `registry/size_preset.py`: `SizePreset`, exported from `registry` and the package root.
+- `StoryRegistry.size_presets: list[SizePreset]`.
+- **`gui/canvas.py`:**
+  - `CanvasBackground` enum and `Canvas`, which takes over the scroll area, the surface, `_place_preview` and `_LAYOUT_*` from
+    `window.py`;
+  - the two control rows, the checkerboard `paintEvent` and fixed-size placement;
+  - `Canvas.place(widget, layout)`, `Canvas.clear()`, `Canvas.set_size_presets(presets)`.
+- **`gui/window.py`:** uses `Canvas`, and passes `registry.size_presets` on build and in `set_registry`.
+
+**Tests** (`tests/test_canvas.py`)
+- Each background sets the expected role, or paints the checkerboard, without changing the story widget's
+  `palette().window()`.
+- "Base" follows a theme switch.
+- Each built-in preset, and a custom size, gives a `FILL` story exactly W × H, also in a window smaller than the preset, with
+  scroll ranges above 0.
+- The size label is shown only for a preset.
+- Registry presets appear after the built-ins; a preset that disappears falls back to Fit.
+- `SizePreset` validation.
+- Settings survive switching story and theme.
+- At 1100 × 700, every canvas control is visible and at least its `minimumSizeHint()`.
+- Accessible names and buddies.
+
+**Changed tests**
+- Window layout tests that read `previewSurface` and `previewScroll` keep working, because `Canvas` keeps those object names.
+- Any test that called window-private placement methods moves to `Canvas`; the PR lists them.
+- `test_public_api_is_exported` gains `SizePreset`.
+
+**Docs**
+- README "The gallery window" (background, sizes, a `SizePreset` example with a `test_readme.py` check).
+- Changelog `### Added`.
+- `AGENTS.md` structure.
+
+## PR 5: zoom (#21), spec §5
+
+**Code**
+- `gui/canvas.py`:
+  - the stacked live and zoom pages;
+  - the zoom levels;
+  - the zoom buttons and level label in row 2;
+  - grab and scale with `FastTransformation`;
+  - re-grab after `place()` and on Fit-mode resize, with the surface resized to the viewport first;
+  - the pixmap cleared before returning to 100%;
+  - the "zoomed previews are images" line.
+- `Ctrl++`, `Ctrl+=`, `Ctrl+-` and `Ctrl+0` as `QShortcut`s with `WidgetWithChildrenShortcut` context on the preview pane.
+- Ctrl+wheel in an application-level event filter installed while the canvas is shown, handling events aimed at the canvas or
+  its descendants (a story's `QSpinBox` would otherwise take them), accumulating `angleDelta().y()`.
+- A 64-million-device-pixel budget for the zoomed image; levels beyond it are disabled for the current size.
+
+**Tests** (`tests/test_zoom.py`)
+- Each action moves one level and stops at the ends.
+- At 400%, a widget with a one-pixel `#000000` line drawn by `paintEvent` shows exactly four black device pixels across the
+  line, with no intermediate colour.
+- Reset returns to page 0 with no pixmap, and with the same scroll ranges as before zooming.
+- A control change while zoomed re-grabs, so the pixmap changes.
+- A theme switch while zoomed re-grabs.
+- Ctrl+wheel with 60 and then 60 more units zooms once.
+- The shortcuts.
+- At 100%, `current_preview_widget()` is visible inside the surface and the zoom page is hidden.
+
+- The "zoomed previews are images" line is visible only while zoomed.
+- At 50%, the scroll ranges follow the image, not the hidden live surface.
+
+**Changed tests:** `test_the_preview_surface_is_the_widget_of_a_scroll_area_and_owns_the_preview` asserts
+`scroll.widget() is surface`; with the stack it asserts that the surface is page 0 of `scroll.widget()`, a `QStackedWidget`.
+PR 4's fixed-size tests keep passing because the fixed size moves to the stack.
+
+**Docs:** README (zoom), changelog `### Added`.
+
+## PR 6: Actions panel (#22), spec §6
+
+**Code**
+- `registry/story_context.py`:
+  - `ActionSink` `Protocol`;
+  - `StoryContext.actions: ActionSink | None = None` (keyword-only, last);
+  - `log_signal(signal, name=None)` and `log(name, *args)`.
+  - The signal name is parsed from `repr(signal)`, taking the part before `(`, and the method raises `TypeError` when it
+    cannot.
+- `ActionSink` is exported from `registry` and the package root.
+- **`gui/actions_panel.py`:**
+  - `ActionsPanel`, with a `_GenerationSink` that the window creates per render;
+  - the 500-entry cap and `reprlib` truncation;
+  - Clear;
+  - the polite `QAccessibleAnnouncementEvent`, throttled to once per 500 ms.
+- **`gui/window.py`:**
+  - the side pane becomes the theme switch plus a `QTabWidget` ("Controls", "Actions");
+  - every render passes a new generation's sink in `StoryContext`;
+  - the panel is cleared on a story change.
+- **Examples:**
+  - `Buttons/Push Button/Default` calls `ctx.log_signal(button.clicked)`;
+  - `Inputs/Slider` calls `ctx.log_signal(slider.valueChanged)`.
+
+**Tests** (`tests/test_actions_panel.py`, `tests/test_registry.py`)
+- `log_signal` and `log` record, with the name taken from the signal or given.
+- A plain `StoryContext` does nothing, and a story using `log_signal` renders under it (#22's second acceptance criterion).
+- Arguments are shown and truncated, newest first.
+- The cap.
+- Clear.
+- A story change clears; the same story re-rendered keeps the log.
+- An old generation's entries are ignored.
+- The slot's captured objects are freed (`weakref`) after the preview is deleted.
+- Clicking the example button (`qtbot.mouseClick`) adds `clicked` with no arguments (`clicked()`): `QPushButton.clicked`
+  delivers none to a `*args` slot, on 6.8 and 6.12.
+- The announcement is sent once per burst (by monkeypatching `QAccessible.updateAccessibility`).
+
+**Changed tests:** `test_public_api_is_exported` gains `ActionSink`.
+
+**Docs**
+- README "Logging actions", with an example and a `test_readme.py` check.
+- Changelog `### Added`.
+- `AGENTS.md` structure.
+
+## PR 7: hot reload (#24), spec §7
+
+**Code**
+- **`discovery/reload.py`:**
+  - `ReloadSession` and `ReloadResult`;
+  - the module set (last load's modules and their parent packages, plus project modules under the roots);
+  - snapshot and restore of `sys.modules` and both `default_registry` bindings;
+  - the accept rule.
+- **`gui/reload_watcher.py`:**
+  - `ReloadWatcher`: files plus recursive folder watches;
+  - a story-file-set check for `directoryChanged`;
+  - a re-add and re-collect step after every event;
+  - a 300 ms debounce;
+  - the `trigger_now()` test hook;
+  - the `reloaded` signal.
+- **`gui/window.py`:**
+  - a status bar with the reload status label and icon;
+  - `set_registry` completes the spec's rules: nearest-story fallback, control values kept with the enum match by name, the
+    Actions log kept for the same story;
+  - a rejected reload shows the errors in the error panel.
+- **`app.py`, `cli.py`:**
+  - `run(..., reload=None)` takes a `ReloadSession` (keyword-only);
+  - the command line builds one with `initial=` its first `LoadResult`, unless `--no-reload` or `--list` is given.
+- **`tests/conftest.py`:** the `stories` fixture isolates `pyside6_storybook.default_registry` as well.
+
+**Tests** (`tests/test_reload.py`, `tests/test_reload_watcher.py`, `tests/test_cli.py`)
+- **`ReloadSession`, without a window:**
+  - edit a story's text;
+  - add a story;
+  - remove a story;
+  - edit a widget class in an imported module;
+  - a syntax error is rejected with the old registry restored, then the fix is accepted;
+  - `--examples` stories survive a reload;
+  - a package `__init__` that appends a decorator ends with exactly one decorator in the new registry;
+  - a package target whose stories live only in its `__init__.py` reloads;
+  - a same-length edit within the same modification-time second is picked up (stale bytecode removed);
+  - a rejected reload that added a new story module, then a fixed retry, registers that module's stories;
+  - zero stories is rejected.
+- **Window:** the selected story and its control values are kept; an enum control is matched by name; a removed story falls
+  back to the nearest; theme and canvas settings are untouched; the status text; a rejected reload shows the error panel and
+  the next accepted reload clears it.
+- **Watcher:**
+  - a rename-save is re-added;
+  - a new story file in a subfolder triggers a reload;
+  - an initially broken story file, fixed on disk, triggers a reload;
+  - a swap file does not;
+  - a burst is debounced into one reload;
+  - one real edit is picked up through `qtbot.waitUntil(timeout=5000)`, with `os.utime` bumping times.
+- **CLI:** `--no-reload` passes no session; `--list` never builds one.
+
+**Changed tests:** `tests/test_cli.py`'s `_RecordingRun.__call__` gains a keyword-only `reload` parameter (it records it), or
+every test using the `gallery` fixture fails with `TypeError`.
+
+**Docs**
+- README "Hot reload" (what reloads, `--no-reload`, limits), and `--no-reload` in the "Command line" usage block.
+- Changelog `### Added`.
+- `AGENTS.md` structure, and a note in "Test rules" that tests touching `default_registry` use the `stories` fixture, which now
+  isolates both bindings.
+
+## PR 8: keyboard and accessibility (#25), spec §8
+
+**Code**
+- **`gui/window.py`:**
+  - the tab order set explicitly;
+  - `F6` and `Shift+F6` pane cycling, which remembers each pane's last focused widget;
+  - `Ctrl+Alt+Down` and `Ctrl+Alt+Up` call `visible_story_ids()` and `select_story`;
+  - `Ctrl+T` selects the next theme;
+  - a Help menu with "Keyboard shortcuts" (`F1`) opening a `QDialog` with `open()` that lists every shortcut, deleted after it
+    closes;
+  - accessible names for the panes ("Story list", "Preview", "Controls and actions") and "Preview of <story id>" on the canvas
+    scroll area;
+  - focus moved to the canvas scroll area before the old preview is hidden, when focus was inside it.
+- **Themes:** `Highlight` and `Accent` adjusted in `light_theme.py` and `dark_theme.py`, so the rendered focus ring reaches 3:1
+  and `HighlightedText` stays at least 4.5:1.
+- **Chrome audit:** anything the other PRs missed (accessible names, buddies, fixed pixel heights).
+
+**Tests** (`tests/test_accessibility.py`)
+- **Tab order:** walked with `qtbot.keyClick(Tab)` from the search field through the panes.
+- **F6 and Shift+F6.**
+- **Accessible names:** every focusable chrome widget, outside the story's own widget, has an accessible name.
+- **Shortcuts and focus:**
+  - `/` does not fire in a `QLineEdit`, a `QSpinBox` or an editable `QComboBox`;
+  - `Alt+Down` still opens a combo box's popup;
+  - `Ctrl+Alt+Down` and `Ctrl+Alt+Up` move through the visible stories;
+  - `Ctrl+T` switches the theme;
+  - after a control edit, focus stays on the editor;
+  - `Ctrl+T` with focus in the preview leaves focus on the canvas.
+- **Contrast:**
+  - the rendered focus ring (grabbed after Tab onto a line edit and a button) is at least 3:1 against `Window` and `Base` in
+    both themes;
+  - selected text is at least 4.5:1 in the Active and Inactive groups;
+  - every chrome icon is at least 3:1 against its background.
+- **Font scaling:** at a 24 pt application font, no chrome label is clipped and no chrome widget has a fixed height.
+- **Help dialog:** it lists every shortcut that is registered.
+
+**Changed tests:** none expected; `tests/test_themes.py` asserts no exact `Highlight` colour. `restore_application_look` in
+`tests/conftest.py` also restores the application font.
+
+**Docs**
+- README "The gallery window": the full shortcut table.
+- Changelog `### Changed` (Highlight colours) and `### Added` (shortcuts, Help).
+- `AGENTS.md`: the accessibility rules gain the `/`-shortcut and combo-box lessons.
+- **A new `docs/images/gallery.png`**, rendered in the Light theme at 2× from the examples. The PR description and the final
+  report show it with a Dark counterpart.
+
+## After the stack
+
+- Each PR closes its issue. #66 stays open as the follow-up for automatic signal logging.
+- The user runs the Full test suite on `main` after the stack merges, because PRs 2, 4, 5 and 8 change platform-sensitive GUI
+  code.
