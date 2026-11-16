@@ -289,7 +289,7 @@ from, and the exit code is 1 if any story module failed to load.
 ## The gallery window
 
 The window has three panes: the story list on the left, the preview of the selected story in the middle, and the theme switch and
-the story's controls on the right.
+the story's controls on the right. The middle pane has two tabs: "Canvas", the rendered story, and "Docs", described below.
 
 The story list is a tree built from the story ids. Each `/`-separated segment but the last is a branch, and the stories are leaves,
 in the order they were registered. A component below the top level that has only one story, such as
@@ -309,6 +309,21 @@ search brings back the branches you had expanded or collapsed.
 | Escape in the search field | Clear the search; when it is empty, move focus to the tree. |
 | Escape in the tree | Clear the search. |
 | Left and Right in the tree | Collapse and expand a branch. |
+
+### The Docs tab
+
+The Docs tab describes the selected story, top to bottom:
+
+- the docstring of the module the story is defined in, and the story function's docstring (a heading appears only for a docstring
+  that exists);
+- a table of the story's controls with each control's type, its starting value and its range or options (a variant shows its own
+  starting values), or "No controls.";
+- for a story with variants, the list "Stories of <component>": the base story and its variants, each one a link that opens that
+  story, and the current one as plain text;
+- the source code of the story function in a read-only view, with a "Copy" button that puts it on the clipboard. A story whose source
+  cannot be read, such as one built from a `functools.partial`, shows "Source not available for this story." instead.
+
+The tab updates when you select another story, not when you change a control.
 
 ## Themes
 

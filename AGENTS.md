@@ -102,7 +102,8 @@ in the same pull request as the bump.
     patterns, names and messages)
   - `gui/` - the gallery's widgets, one module per widget: `window.py` (`GalleryWindow`), `sidebar.py` (`StorySidebar`: the search field
     and the tree of stories, with its filter model), `controls_panel.py` (`ControlsPanel`, the
-    labelled form over the editors of a story's controls) and `error_panel.py` (`ErrorPanel`, which the window shows in the preview for a
+    labelled form over the editors of a story's controls), `docs_panel.py` (`DocsPanel`, the Docs tab, and `controls_rows`, the pure
+    function behind its controls table) and `error_panel.py` (`ErrorPanel`, which the window shows in the preview for a
     story that fails and for the load errors). New gallery widgets go here, not at the package root.
     - `gui/icons.py` (internal, not in `__all__`): reads the bundle and renders icons (`icon_svg`, `build_icon`, `palette_icon`,
       `clear_icon_cache`), `IconRole` (the palette role that tints an icon) and `ActionIcons`, the registry the window retints when the
