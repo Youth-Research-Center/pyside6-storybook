@@ -189,7 +189,7 @@ class GalleryWindow(QMainWindow):
         """Render the chrome's icons again when the application's or the window's palette changes."""
         super().changeEvent(event)
         if event.type() in (QEvent.Type.ApplicationPaletteChange, QEvent.Type.PaletteChange):
-            self._icons.retint()
+            self._icons.retint(self.palette())
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Release the previewed widget when the window closes."""
