@@ -16,7 +16,7 @@ LIGHT_THEME = ThemeDefinition(
         _ROLE.Window: "#F0F0F0",
         _ROLE.WindowText: "#1B1B1B",
         _ROLE.Base: "#FFFFFF",
-        _ROLE.AlternateBase: "#F5F5F5",
+        _ROLE.AlternateBase: "#EDEDED",
         _ROLE.ToolTipBase: "#FFFFE1",
         _ROLE.ToolTipText: "#1B1B1B",
         _ROLE.PlaceholderText: "#6B6B6B",

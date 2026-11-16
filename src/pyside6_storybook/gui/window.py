@@ -101,11 +101,13 @@ class GalleryWindow(QMainWindow):
         self._preview_scroll.setObjectName("previewScroll")
         self._preview_scroll.setFrameShape(QFrame.Shape.StyledPanel)
         self._preview_scroll.setWidgetResizable(True)
-        self._preview_scroll.viewport().setBackgroundRole(QPalette.ColorRole.Base)
+        self._preview_scroll.viewport().setBackgroundRole(QPalette.ColorRole.Window)
         self._preview_surface = QFrame(self._preview_scroll)
         self._preview_surface.setObjectName("previewSurface")
         self._preview_surface.setFrameShape(QFrame.Shape.NoFrame)
-        self._preview_surface.setBackgroundRole(QPalette.ColorRole.Base)
+        # Window, not Base: stories are shown on the background they sit on in an application window, where Fusion's input fields
+        # and check boxes (drawn in Base with an outline derived from Window) stand out. On Base they vanish in the Dark theme.
+        self._preview_surface.setBackgroundRole(QPalette.ColorRole.Window)
         self._preview_surface.setAutoFillBackground(True)
         self._preview_layout = QVBoxLayout(self._preview_surface)
         self._preview_layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)

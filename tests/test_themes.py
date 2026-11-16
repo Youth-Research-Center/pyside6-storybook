@@ -41,6 +41,12 @@ def test_text_meets_aa_contrast_on_its_background(make_palette, foreground: QPal
 
 
 @pytest.mark.parametrize("make_palette", [light_palette, dark_palette])
+def test_alternate_rows_are_distinguishable_from_base(make_palette) -> None:
+    palette = make_palette()
+    assert contrast_ratio(_hex(palette, _ACTIVE, _ROLE.AlternateBase), _hex(palette, _ACTIVE, _ROLE.Base)) >= 1.15
+
+
+@pytest.mark.parametrize("make_palette", [light_palette, dark_palette])
 def test_placeholder_text_meets_aa_contrast_on_base(make_palette) -> None:
     palette = make_palette()
     assert contrast_ratio(_hex(palette, _ACTIVE, _ROLE.PlaceholderText), _hex(palette, _ACTIVE, _ROLE.Base)) >= 4.5

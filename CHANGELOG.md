@@ -55,3 +55,8 @@ All notable changes to this project are documented in this file.
   `FloatControl` an `int` or `float` (not a `bool`), `TextControl` and `ChoiceControl` a string. `Story.default_args()` returns each
   default passed through the control's `coerce`, so a `FloatControl` default given as `1` starts as `1.0`.
 - `FloatControl` rejects a default or bound that needs more than 10 decimals, which the editor used to show rounded.
+
+### Fixed
+- The Dark theme's input fields, unchecked check boxes and alternate table rows were almost invisible in the preview. The preview
+  surface now uses the window background, where a stock widget sits in an application, and the Dark palette separates `Window`,
+  `Base` and `AlternateBase` further; the Light theme's alternate rows are a little stronger too.
