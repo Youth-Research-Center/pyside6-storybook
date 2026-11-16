@@ -310,6 +310,31 @@ search brings back the branches you had expanded or collapsed.
 | Escape in the tree | Clear the search. |
 | Left and Right in the tree | Collapse and expand a branch. |
 
+### The canvas
+
+Above the preview, two menus change how a story is shown. Neither changes the story: it is built the same way and receives the same
+arguments.
+
+- **Background** is what the story sits on: "Window" (the default), "Base" or "Alternate Base" (a colour of the active theme, which a
+  theme switch keeps up to date) or "Checkerboard" (8-pixel squares of the theme's Base and Mid colours, to judge transparency).
+- **Size** is "Fit" (the default: the story is placed in the whole preview, as the story's `layout` says), one of the built-in sizes
+  "Phone portrait" (320 × 480), "Phone landscape" (480 × 320) and "Dialog" (800 × 600), your own sizes (below), or "Custom…", which
+  shows a Width and a Height field. With a size selected, the area the story is placed in is exactly that many pixels, so a `FILL`
+  story is exactly that size and a `CENTERED` story is centred in it. The area is outlined, centred in the preview, and the preview
+  scrolls when the window is smaller. The label at the right shows the size.
+
+The choices stay while you switch stories, switch themes or reload; they are not saved between runs.
+
+To list sizes of your own, such as the screens your application supports, append `SizePreset` objects (a name, a width and a height in
+pixels, each from 1 to 10 000) to `size_presets` of the registry. They follow the built-in sizes in the Size menu:
+
+```python
+from pyside6_storybook import SizePreset, default_registry
+
+default_registry.size_presets.append(SizePreset("Tablet", 768, 1024))
+default_registry.size_presets.append(SizePreset("Small laptop", 1280, 720))
+```
+
 ### The Docs tab
 
 The Docs tab describes the selected story, top to bottom:

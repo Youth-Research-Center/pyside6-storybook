@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Canvas controls: a Background menu (Window, Base, Alternate Base or Checkerboard) and a Size menu (Fit, Phone portrait 320 by 480,
+  Phone landscape 480 by 320, Dialog 800 by 600, the registry's presets, or a Custom width and height) above the preview. With a size
+  selected, the area a story is placed in is exactly that size, and the preview scrolls when it does not fit. The choices stay while
+  the story, the theme or the registry changes. New public `SizePreset(name, width, height)`, exported from the package, and
+  `StoryRegistry.size_presets`, the list of presets the Size menu shows after the built-in sizes; the window reads it when it is built and in
+  `GalleryWindow.set_registry`, and a size whose preset is gone returns to Fit.
 - The Docs tab: the preview pane has "Canvas" and "Docs" tabs. Docs shows the story module's and the story's docstrings, a table of the
   controls (type, starting value, range or options), links to the stories of the same component, and the story's source with a Copy
   button. `Story.function` is the callable the story was created with, as a read-only property.

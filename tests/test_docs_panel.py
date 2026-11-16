@@ -39,6 +39,7 @@ from pyside6_storybook import (
     load_stories,
 )
 from pyside6_storybook.gui import docs_panel
+from pyside6_storybook.gui.canvas import Canvas
 from pyside6_storybook.gui.controls_panel import ControlsPanel
 from pyside6_storybook.gui.docs_panel import NO_CONTROLS_MESSAGE, NO_SOURCE_MESSAGE, VARIANT_CAPTION, DocsPanel, controls_rows
 from pyside6_storybook.gui.window import GalleryWindow
@@ -436,7 +437,10 @@ def test_the_preview_pane_has_canvas_and_docs_tabs_in_document_mode(qtbot, regis
     assert tabs is not None
     assert tabs.documentMode()
     assert [tabs.tabText(index) for index in range(tabs.count())] == ["Canvas", "Docs"]
-    assert tabs.widget(0) is window.findChild(QWidget, "previewScroll")
+    canvas = window.findChild(Canvas, "canvas")
+    assert canvas is not None
+    assert tabs.widget(0) is canvas
+    assert canvas.findChild(QScrollArea, "previewScroll") is not None
     assert tabs.widget(1) is window.findChild(QWidget, "docsScroll")
     docs_scroll = tabs.widget(1)
     assert isinstance(docs_scroll, QScrollArea)

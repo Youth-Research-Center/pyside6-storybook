@@ -88,7 +88,8 @@ in the same pull request as the bump.
     - `story_definition.py`: `Story`, `StoryOrigin`; `Story.variant` registers a variant through the registry link that
       `StoryRegistry.register` sets;
     - `layout.py`: `Layout`, how the preview places a story's widget;
-    - `story_registry.py`: `StoryRegistry`, with `default_layout` and `decorators`;
+    - `size_preset.py`: `SizePreset`, a named canvas size;
+    - `story_registry.py`: `StoryRegistry`, with `default_layout`, `decorators` and `size_presets`;
     - `rendering.py` (internal): `render_story`, which builds a story's widget, applies its decorators and the registry's, and raises
       `StoryRenderError` with the error panel's title and details, deleting every widget it built when it fails;
     - `__init__.py` re-exports them and holds `default_registry` and the `@story` decorator.
@@ -100,7 +101,8 @@ in the same pull request as the bump.
     name that keeps it a single module), `load_result.py` (`LoadResult`, `LoadError`), `sources.py` (`resolve_story_sources`: the
     command line's targets or the default sources from `pyproject.toml`, entry points or the examples) and `constants.py` (file-name
     patterns, names and messages)
-  - `gui/` - the gallery's widgets, one module per widget: `window.py` (`GalleryWindow`), `sidebar.py` (`StorySidebar`: the search field
+  - `gui/` - the gallery's widgets, one module per widget: `window.py` (`GalleryWindow`), `canvas.py` (`Canvas`, the preview scroll area and
+    surface with the Background and Size controls above them, and `CanvasBackground`), `sidebar.py` (`StorySidebar`: the search field
     and the tree of stories, with its filter model), `controls_panel.py` (`ControlsPanel`, the
     labelled form over the editors of a story's controls), `docs_panel.py` (`DocsPanel`, the Docs tab, and `controls_rows`, the pure
     function behind its controls table) and `error_panel.py` (`ErrorPanel`, which the window shows in the preview for a

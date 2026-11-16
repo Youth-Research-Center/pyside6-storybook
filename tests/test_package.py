@@ -22,6 +22,7 @@ def test_public_api_is_exported() -> None:
         "Layout",
         "LoadError",
         "LoadResult",
+        "SizePreset",
         "Story",
         "StoryContext",
         "StoryRegistry",

@@ -15,7 +15,7 @@ from pyside6_storybook.controls import (
 )
 from pyside6_storybook.decorators import Decorator
 from pyside6_storybook.discovery import LoadError, LoadResult, load_stories
-from pyside6_storybook.registry import Layout, Story, StoryContext, StoryRegistry, default_registry, story
+from pyside6_storybook.registry import Layout, SizePreset, Story, StoryContext, StoryRegistry, default_registry, story
 
 try:
     __version__ = version("pyside6-storybook")
@@ -35,6 +35,7 @@ __all__ = [
     "Layout",
     "LoadError",
     "LoadResult",
+    "SizePreset",
     "Story",
     "StoryContext",
     "StoryRegistry",
