@@ -4,6 +4,7 @@ import typing
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QLabel, QListWidget, QWidget
 
 import pyside6_storybook.examples
@@ -84,6 +85,15 @@ def test_one_example_has_no_controls_and_shows_the_theme(qtbot, examples: StoryR
         widget = palette_story(StoryContext(args={}, theme=theme))
         qtbot.addWidget(widget)
         assert f"Theme: {theme}" in [label.text() for label in widget.findChildren(QLabel)]
+
+
+def test_the_file_path_example_shows_a_path_with_markup_verbatim(qtbot, examples: StoryRegistry) -> None:
+    file_story = examples.get("Inputs/File Path")
+    widget = file_story(StoryContext(args={"path": Path("<b>notes.txt")}))
+    qtbot.addWidget(widget)
+    assert isinstance(widget, QLabel)
+    assert widget.text() == "<b>notes.txt"
+    assert widget.textFormat() == Qt.TextFormat.PlainText
 
 
 def test_every_example_has_a_docstring(examples: StoryRegistry) -> None:

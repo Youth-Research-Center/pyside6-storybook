@@ -90,5 +90,6 @@ def file_path(ctx: StoryContext) -> QWidget:
     """A ``QLabel`` that shows the chosen path. The story receives a ``Path``, or ``None`` while the field is empty."""
     path = ctx.args["path"]
     widget = QLabel("No file chosen" if path is None else str(path))
+    widget.setTextFormat(Qt.TextFormat.PlainText)
     widget.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
     return widget

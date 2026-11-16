@@ -521,6 +521,19 @@ def test_color_editor_asks_for_alpha_only_when_the_control_allows_it(qtbot, monk
     assert _child(editor, QLineEdit).text() == "#33669980"
 
 
+def test_color_editor_keeps_a_finer_than_8_bit_colour_when_return_is_pressed_on_unchanged_text(qtbot) -> None:
+    fine = QColor.fromRgbF(0.1, 0.2, 0.3)
+    editor, recorder = _make(qtbot, ColorControl("c", "#336699"), fine)
+    line_edit = _child(editor, QLineEdit)
+    _focus(qtbot, line_edit)
+
+    qtbot.keyClick(line_edit, Qt.Key.Key_Return)
+
+    assert recorder.values == []
+    assert editor.value() == fine
+    assert line_edit.text() == "#1a334d"
+
+
 def test_color_editor_commits_a_typed_hex_value_once_even_after_focus_leaves(qtbot) -> None:
     editor, recorder = _make(qtbot, ColorControl("c", "#336699"), QColor("#336699"))
     line_edit = _child(editor, QLineEdit)
