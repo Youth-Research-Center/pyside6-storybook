@@ -7,8 +7,11 @@ manifest and rerun the script (see AGENTS.md).
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
+import weakref
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
@@ -58,9 +61,10 @@ def icon_svg(name: str) -> str:
     return icons[name]["weights"][_WEIGHT]
 
 
-def _device_pixel_ratio() -> float:
-    screen = QGuiApplication.primaryScreen()
-    return screen.devicePixelRatio() if screen is not None else 1.0
+def _device_pixel_ratios() -> tuple[float, ...]:
+    """Return every distinct device pixel ratio of the screens, ascending; ``(1.0,)`` when there is no screen."""
+    ratios = {screen.devicePixelRatio() for screen in QGuiApplication.screens()}
+    return tuple(sorted(ratios)) or (1.0,)
 
 
 @lru_cache(maxsize=256)
@@ -87,7 +91,7 @@ def _render_pixmap(name: str, color: str, size: int, ratio: float) -> QPixmap:
 
 
 def clear_icon_cache() -> None:
-    """Drop every cached icon render, for example after the primary screen's pixel ratio changed, and between tests."""
+    """Drop every cached icon render, for example after a screen's pixel ratio changed, and between tests."""
     _render_pixmap.cache_clear()
 
 
@@ -101,7 +105,8 @@ def build_icon(
 ) -> QIcon:
     """Render a bundled icon tinted with ``color``, and optionally another colour when disabled or selected.
 
-    Every call returns a new ``QIcon``; the pixmaps behind it come from a cache keyed by name, colour, size and pixel ratio.
+    Every call returns a new ``QIcon``; the pixmaps behind it come from a cache keyed by name, colour, size and pixel ratio. The icon holds
+    one pixmap per distinct device pixel ratio of the screens, so Qt picks the sharp one for each screen.
 
     Args:
         name: Icon name as listed in ``icon_manifest.toml``.
@@ -117,13 +122,13 @@ def build_icon(
         KeyError: If the icon is not bundled.
         ValueError: If a colour is invalid.
     """
-    ratio = _device_pixel_ratio()
     icon = QIcon()
-    icon.addPixmap(_render_pixmap(name, color, size, ratio), QIcon.Mode.Normal)
-    if disabled_color is not None:
-        icon.addPixmap(_render_pixmap(name, disabled_color, size, ratio), QIcon.Mode.Disabled)
-    if selected_color is not None:
-        icon.addPixmap(_render_pixmap(name, selected_color, size, ratio), QIcon.Mode.Selected)
+    for ratio in _device_pixel_ratios():
+        icon.addPixmap(_render_pixmap(name, color, size, ratio), QIcon.Mode.Normal)
+        if disabled_color is not None:
+            icon.addPixmap(_render_pixmap(name, disabled_color, size, ratio), QIcon.Mode.Disabled)
+        if selected_color is not None:
+            icon.addPixmap(_render_pixmap(name, selected_color, size, ratio), QIcon.Mode.Selected)
     return icon
 
 
@@ -155,6 +160,13 @@ def palette_icon(name: str, *, role: IconRole = IconRole.TEXT, palette: QPalette
     )
 
 
+def _release_binding(registry_ref: Callable[[], ActionIcons | None], target_id: int) -> None:
+    """Drop the bindings of a destroyed target; it holds the registry weakly and the target not at all."""
+    registry = registry_ref()
+    if registry is not None:
+        registry._release(target_id)
+
+
 @dataclass(frozen=True)
 class _Binding:
     """An action or button bound to a bundled icon."""
@@ -167,7 +179,8 @@ class _Binding:
 class ActionIcons:
     """Registry of actions and buttons whose bundled icons follow the palette.
 
-    Call ``retint()`` when the palette changes; the gallery window does it from its ``changeEvent``.
+    Call ``retint()`` when the palette changes; the gallery window does it from its ``changeEvent``. A target's binding is dropped when
+    the target is destroyed.
     """
 
     def __init__(self, *, size: int = DEFAULT_ICON_SIZE) -> None:
@@ -179,9 +192,12 @@ class ActionIcons:
         self._logger = logging.getLogger(self.__class__.__name__)
         self._size = size
         self._bound: list[_Binding] = []
+        self._palette: QPalette | None = None
 
     def bind(self, target: QAction | QAbstractButton, name: str, *, role: IconRole = IconRole.TEXT) -> None:
         """Set ``target``'s icon now and render it again on every ``retint()``.
+
+        The icon is tinted from the palette of the latest ``retint()``, or from the application's palette before the first one.
 
         Args:
             target: The action or button that gets the icon.
@@ -192,19 +208,29 @@ class ActionIcons:
             KeyError: If the icon is not bundled.
         """
         binding = _Binding(target, name, role)
-        self._apply(binding, None)
+        self._apply(binding, self._palette)
+        if not any(bound.target is target for bound in self._bound):
+            target.destroyed.connect(functools.partial(_release_binding, weakref.ref(self), id(target)))
         self._bound.append(binding)
+
+    def binding_count(self) -> int:
+        """Return how many bindings the registry holds."""
+        return len(self._bound)
+
+    def _release(self, target_id: int) -> None:
+        self._bound = [binding for binding in self._bound if id(binding.target) != target_id]
 
     def retint(self, palette: QPalette | None = None) -> None:
         """Render every bound icon again from a palette, dropping targets that no longer exist.
 
         Args:
-            palette: The palette to read; the application's palette when omitted.
+            palette: The palette to read, remembered for later ``bind()`` calls; the application's palette when omitted.
         """
         alive = [binding for binding in self._bound if shiboken6.isValid(binding.target)]
         if len(alive) != len(self._bound):
             self._logger.debug("Dropped %d deleted icon targets", len(self._bound) - len(alive))
         self._bound = alive
+        self._palette = palette
         for binding in alive:
             self._apply(binding, palette)
 
