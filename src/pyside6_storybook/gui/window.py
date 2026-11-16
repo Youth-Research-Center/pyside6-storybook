@@ -270,7 +270,6 @@ class GalleryWindow(QMainWindow):
 
     def _show_nothing(self, *, keep_actions: bool = False) -> None:
         self._clear_preview()
-        self._actions_panel.invalidate()
         if not keep_actions:
             self._actions_panel.clear()
         self._clear_controls()
@@ -343,6 +342,8 @@ class GalleryWindow(QMainWindow):
         self._canvas.place(self._error_panel, Layout.FILL)
 
     def _clear_preview(self) -> None:
+        """Remove the preview, first stopping its widget's actions from being logged, including signals it emits while it is hidden."""
+        self._actions_panel.invalidate()
         self._canvas.clear()
         self._preview_widget = None
         self._preview_root = None
