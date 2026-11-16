@@ -1,10 +1,25 @@
 import dataclasses
 import functools
+import importlib
+import sys
 
 import pytest
 from PySide6.QtWidgets import QLabel, QPushButton, QWidget
+from story_files import write
 
-from pyside6_storybook import BoolControl, FloatControl, IntControl, Story, StoryContext, StoryRegistry, TextControl, default_registry, story
+from pyside6_storybook import (
+    BoolControl,
+    FloatControl,
+    IntControl,
+    Layout,
+    Story,
+    StoryContext,
+    StoryRegistry,
+    TextControl,
+    default_registry,
+    load_stories,
+    story,
+)
 from pyside6_storybook import registry as registry_module
 from pyside6_storybook.registry import StoryOrigin
 
@@ -198,3 +213,355 @@ def test_default_args_are_the_coerced_defaults() -> None:
 
     assert args == {"ratio": 1.0, "count": 3}
     assert isinstance(args["ratio"], float)
+
+
+def _variant_registry() -> tuple[StoryRegistry, Story]:
+    registry = StoryRegistry()
+
+    @registry.story(
+        "Inputs/Button/Default",
+        controls=[TextControl("text", "Click"), BoolControl("enabled", default=True), FloatControl("ratio", 1, 0, 2)],
+    )
+    def button(ctx: StoryContext) -> QWidget:
+        """A button."""
+        return QLabel(str(ctx.args["text"]))
+
+    return registry, button
+
+
+def test_a_variant_has_the_components_id_and_shares_the_base_function_controls_and_origin() -> None:
+    registry, button = _variant_registry()
+
+    disabled = button.variant("Disabled", args={"enabled": False})
+
+    assert button.component == "Inputs/Button"
+    assert disabled.id == "Inputs/Button/Disabled"
+    assert disabled.name == "Disabled"
+    assert disabled.component == "Inputs/Button"
+    assert disabled.variant_of is button
+    assert button.variant_of is None
+    assert disabled.controls == button.controls
+    assert disabled.doc == "A button."
+    assert disabled.origin == button.origin
+    assert registry.get("Inputs/Button/Disabled") is disabled
+    assert Story("Solo", _widget).component is None
+
+
+def test_variant_args_are_the_starting_values_and_reach_the_render_function(qtbot) -> None:
+    _registry, button = _variant_registry()
+
+    variant = button.variant("Quiet", args={"enabled": False, "ratio": 2})
+
+    assert dict(variant.args) == {"enabled": False, "ratio": 2.0}
+    assert variant.default_args() == {"text": "Click", "enabled": False, "ratio": 2.0}
+    assert button.default_args() == {"text": "Click", "enabled": True, "ratio": 1.0}
+    assert dict(button.args) == {}
+    label = variant(StoryContext(args=variant.default_args()))
+    assert isinstance(label, QLabel)
+    assert label.text() == "Click"
+    label.deleteLater()
+
+
+@pytest.mark.parametrize("attribute", ["component", "args", "variant_of"])
+def test_variant_attributes_cannot_be_reassigned(attribute: str) -> None:
+    _registry, button = _variant_registry()
+    variant = button.variant("Quiet", args={"enabled": False})
+
+    with pytest.raises(AttributeError):
+        setattr(variant, attribute, None)
+    assert variant.variant_of is button
+    assert dict(variant.args) == {"enabled": False}
+    assert variant.component == "Inputs/Button"
+
+
+def test_variant_args_are_read_only_and_default_args_are_fresh_each_call() -> None:
+    _registry, button = _variant_registry()
+    variant = button.variant("Quiet", args={"enabled": False})
+
+    with pytest.raises(TypeError):
+        variant.args["enabled"] = True  # ty: ignore[invalid-assignment]
+    with pytest.raises(TypeError):
+        button.args["enabled"] = True  # ty: ignore[invalid-assignment]
+    first = variant.default_args()
+    first["enabled"] = True
+    assert variant.default_args()["enabled"] is False
+
+
+def test_variant_args_are_copied_from_the_callers_mapping() -> None:
+    _registry, button = _variant_registry()
+    given = {"enabled": False}
+
+    variant = button.variant("Quiet", args=given)
+    given["enabled"] = True
+
+    assert variant.default_args()["enabled"] is False
+
+
+def test_variants_register_after_their_base_in_order() -> None:
+    registry, button = _variant_registry()
+    button.variant("B")
+    button.variant("A")
+
+    assert registry.ids() == ["Inputs/Button/Default", "Inputs/Button/B", "Inputs/Button/A"]
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    [
+        ({"missing": 1}, r"Inputs/Button/Bad.*'missing' is not a control"),
+        ({"enabled": 1}, r"Inputs/Button/Bad.*invalid value for 'enabled'.*'enabled'"),
+        ({"ratio": 5}, r"Inputs/Button/Bad.*invalid value for 'ratio'"),
+        ({"text": 3}, r"Inputs/Button/Bad.*invalid value for 'text'"),
+        ({"ratio": 10**400}, r"Inputs/Button/Bad.*invalid value for 'ratio'.*too large for a float"),
+    ],
+)
+def test_invalid_variant_args_raise_a_value_error_naming_the_variant_and_key(args: dict[str, object], message: str) -> None:
+    registry, button = _variant_registry()
+
+    with pytest.raises(ValueError, match=message):
+        button.variant("Bad", args=args)
+    assert registry.ids() == ["Inputs/Button/Default"]
+
+
+@pytest.mark.parametrize("name", ["", "  ", "A/B"])
+def test_a_blank_variant_name_or_one_with_a_slash_is_rejected(name: str) -> None:
+    _registry, button = _variant_registry()
+    with pytest.raises(ValueError, match="Invalid variant name"):
+        button.variant(name)
+
+
+def test_a_variant_named_like_its_base_is_rejected() -> None:
+    _registry, button = _variant_registry()
+    with pytest.raises(ValueError, match="name of its base story"):
+        button.variant("Default")
+
+
+def test_a_base_without_a_component_cannot_have_variants() -> None:
+    registry = StoryRegistry()
+    solo = registry.register(Story("Button", _widget))
+    with pytest.raises(ValueError, match="needs|no component"):
+        solo.variant("Disabled")
+
+
+def test_a_variant_of_a_variant_is_a_type_error_pointing_at_the_base() -> None:
+    _registry, button = _variant_registry()
+    disabled = button.variant("Disabled")
+    with pytest.raises(TypeError, match=r"call \.variant\(\) on the base"):
+        disabled.variant("Other")
+
+
+def test_variant_on_an_unregistered_story_is_a_runtime_error() -> None:
+    with pytest.raises(RuntimeError, match="not registered"):
+        Story("Inputs/Button/Default", _widget).variant("Disabled")
+
+
+def test_a_variant_id_colliding_with_another_functions_story_raises() -> None:
+    registry, button = _variant_registry()
+    other = Story("Inputs/Button/Disabled", _widget)
+    registry.register(other)
+
+    with pytest.raises(ValueError, match="already registered"):
+        button.variant("Disabled")
+    assert registry.get("Inputs/Button/Disabled") is other
+
+
+def test_defining_the_same_variant_twice_replaces_it() -> None:
+    registry, button = _variant_registry()
+    first = button.variant("Quiet", args={"enabled": False})
+    second = button.variant("Quiet", args={"text": "Again"})
+
+    assert registry.get("Inputs/Button/Quiet") is second
+    assert second is not first
+    assert registry.ids() == ["Inputs/Button/Default", "Inputs/Button/Quiet"]
+
+
+def test_variants_are_not_public_constructor_parameters() -> None:
+    with pytest.raises(TypeError):
+        Story("A/B", _widget, args={})  # ty: ignore[unknown-argument]
+    with pytest.raises(TypeError):
+        Story("A/B", _widget, variant_of=None)  # ty: ignore[unknown-argument]
+
+
+def test_reloading_a_story_module_replaces_the_base_and_its_variants_in_place(stories: StoryRegistry, tmp_path) -> None:
+    source = """
+        from PySide6.QtWidgets import QLabel
+
+        from pyside6_storybook import BoolControl, story
+
+
+        @story("Inputs/Label/Default", controls=[BoolControl("loud", default=False)])
+        def label(ctx):
+            return QLabel("x")
+
+
+        label.variant("Loud", args={"loud": True})
+        label.variant("Quiet")
+
+
+        @story("Inputs/Other/Default")
+        def other(ctx):
+            return QLabel("y")
+    """
+    write(tmp_path, "stories/label_stories.py", source)
+    first = load_stories(["stories"], cwd=tmp_path)
+    assert first.errors == ()
+    ids = stories.ids()
+    old = stories.get("Inputs/Label/Loud")
+    assert ids == ["Inputs/Label/Default", "Inputs/Label/Loud", "Inputs/Label/Quiet", "Inputs/Other/Default"]
+
+    (module_name,) = [name for name in sys.modules if name.endswith("label_stories")]
+    importlib.reload(sys.modules[module_name])
+
+    assert stories.ids() == ids
+    assert stories.get("Inputs/Label/Loud") is not old
+    assert stories.get("Inputs/Label/Loud").variant_of is stories.get("Inputs/Label/Default")
+
+
+def test_layout_values() -> None:
+    assert [(member.name, member.value) for member in Layout] == [("CENTERED", "centered"), ("PADDED", "padded"), ("FILL", "fill")]
+    assert Layout("fill") is Layout.FILL
+    assert Layout.FILL == "fill"
+
+
+def _plain(ctx: StoryContext) -> QWidget:
+    return QLabel("x")
+
+
+@pytest.mark.parametrize(
+    ("declared", "expected"),
+    [(Layout.FILL, Layout.FILL), ("centered", Layout.CENTERED), ("padded", Layout.PADDED), (None, None)],
+)
+def test_a_story_keeps_the_layout_it_declared(declared: Layout | str | None, expected: Layout | None) -> None:
+    registry = StoryRegistry()
+
+    registered = registry.story("A/B", layout=declared)(_plain)
+
+    assert registered.layout is expected
+    assert Story("A/C", _plain, layout=declared).layout is expected
+
+
+@pytest.mark.parametrize("invalid", ["Fill", "stretch", "", 1, True, Layout])
+def test_an_invalid_layout_raises_at_registration_and_lists_the_valid_values(invalid: object) -> None:
+    registry = StoryRegistry()
+
+    with pytest.raises(ValueError, match=r"'centered', 'padded', 'fill'"):
+        registry.story("A/B", layout=invalid)  # ty: ignore[invalid-argument-type]
+    with pytest.raises(ValueError, match=r"'centered', 'padded', 'fill'"):
+        Story("A/B", _plain, layout=invalid)  # ty: ignore[invalid-argument-type]
+    assert len(registry) == 0
+
+
+def test_the_module_level_story_decorator_takes_a_layout(monkeypatch: pytest.MonkeyPatch) -> None:
+    isolated = StoryRegistry()
+    monkeypatch.setattr(registry_module, "default_registry", isolated)
+
+    registered = story("A/B", layout="fill")(_plain)
+
+    assert registered.layout is Layout.FILL
+    with pytest.raises(ValueError, match="Invalid layout"):
+        story("A/C", layout="nope")
+
+
+def test_the_default_layout_is_padded_and_the_setter_validates() -> None:
+    registry = StoryRegistry()
+    assert registry.default_layout is Layout.PADDED
+
+    registry.default_layout = Layout.FILL
+    assert registry.default_layout is Layout.FILL
+    registry.default_layout = "centered"
+    assert registry.default_layout is Layout.CENTERED
+    with pytest.raises(ValueError, match="stretch"):
+        registry.default_layout = "stretch"
+    assert registry.default_layout is Layout.CENTERED
+
+
+def test_a_variant_inherits_the_base_layout_and_can_override_it() -> None:
+    registry = StoryRegistry()
+    base = registry.story("A/B/Default", layout=Layout.CENTERED)(_plain)
+    plain_base = registry.story("A/C/Default")(_plain)
+
+    inherited = base.variant("Same")
+    overridden = base.variant("Other", layout="fill")
+    undeclared = plain_base.variant("Same")
+    declared = plain_base.variant("Padded", layout=Layout.PADDED)
+
+    assert inherited.layout is Layout.CENTERED
+    assert overridden.layout is Layout.FILL
+    assert base.layout is Layout.CENTERED
+    assert undeclared.layout is None
+    assert declared.layout is Layout.PADDED
+    with pytest.raises(ValueError, match="Invalid layout"):
+        base.variant("Bad", layout="nope")
+    assert "A/B/Bad" not in registry
+
+
+def _identity(widget: QWidget, ctx: StoryContext) -> QWidget:
+    return widget
+
+
+def _other(widget: QWidget, ctx: StoryContext) -> QWidget:
+    return widget
+
+
+def test_a_story_keeps_its_decorators_as_a_tuple_in_order() -> None:
+    registry = StoryRegistry()
+    decorators = [_identity, _other]
+
+    declared = registry.story("A/B", decorators=decorators)(_plain)
+    undeclared = registry.story("A/C")(_plain)
+    decorators.append(_identity)
+
+    assert declared.decorators == (_identity, _other)
+    assert undeclared.decorators == ()
+
+
+def test_the_registry_has_a_plain_list_of_decorators_that_starts_empty() -> None:
+    registry = StoryRegistry()
+
+    assert registry.decorators == []
+    registry.decorators.append(_identity)
+    assert registry.decorators == [_identity]
+    assert StoryRegistry().decorators == []
+
+
+@pytest.mark.parametrize("invalid", [[_identity, "padding"], [None], [42]])
+def test_a_decorator_that_is_not_callable_raises_a_type_error_naming_the_story(invalid: list[object]) -> None:
+    registry = StoryRegistry()
+
+    with pytest.raises(TypeError, match=r"Story 'A/B'.*is not callable"):
+        registry.story("A/B", decorators=invalid)(_plain)  # ty: ignore[invalid-argument-type]
+    assert "A/B" not in registry
+
+
+def test_a_single_decorator_instead_of_a_list_raises_a_type_error_asking_for_a_list() -> None:
+    registry = StoryRegistry()
+
+    with pytest.raises(TypeError, match="list of decorators"):
+        registry.story("A/B", decorators=_identity)(_plain)  # ty: ignore[invalid-argument-type]
+
+
+def test_the_module_level_story_decorator_takes_decorators(monkeypatch: pytest.MonkeyPatch) -> None:
+    isolated = StoryRegistry()
+    monkeypatch.setattr(registry_module, "default_registry", isolated)
+
+    declared = story("A/B", decorators=[_identity])(_plain)
+
+    assert declared.decorators == (_identity,)
+    assert isolated.get("A/B") is declared
+
+
+def test_a_variant_inherits_the_base_decorators_and_a_list_replaces_them() -> None:
+    registry = StoryRegistry()
+    base = registry.story("A/B/Default", decorators=[_identity])(_plain)
+
+    inherited = base.variant("Same")
+    replaced = base.variant("Other", decorators=[_other])
+    cleared = base.variant("None", decorators=[])
+
+    assert inherited.decorators == (_identity,)
+    assert replaced.decorators == (_other,)
+    assert cleared.decorators == ()
+    assert base.decorators == (_identity,)
+    with pytest.raises(TypeError, match="is not callable"):
+        base.variant("Bad", decorators=[3])  # ty: ignore[invalid-argument-type]
+    assert "A/B/Bad" not in registry

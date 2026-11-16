@@ -4,26 +4,49 @@ import typing
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QLabel, QListWidget, QWidget
 
 import pyside6_storybook.examples
-from pyside6_storybook import BoolControl, ChoiceControl, Control, FloatControl, IntControl, StoryContext, StoryRegistry, TextControl, load_stories
+from pyside6_storybook import (
+    BoolControl,
+    ChoiceControl,
+    ColorControl,
+    Control,
+    EnumControl,
+    FileControl,
+    FloatControl,
+    IntControl,
+    StoryContext,
+    StoryRegistry,
+    TextControl,
+    load_stories,
+)
 from pyside6_storybook.cli import EXAMPLES_MODULE
 from pyside6_storybook.gui import ErrorPanel, GalleryWindow
+from pyside6_storybook.registry.rendering import render_story
 from pyside6_storybook.themes import BUILTIN_THEME_NAMES, BuiltinThemes
 
 EXPECTED_IDS = [
-    "Buttons/Push Button",
+    "Buttons/Push Button/Default",
+    "Buttons/Push Button/Disabled",
+    "Buttons/Push Button/Checkable",
     "Buttons/Check Box",
     "Display/Label",
     "Display/Progress Bar",
     "Display/Palette",
+    "Display/Color Swatch",
+    "Display/Alignment",
+    "Display/Table",
     "Forms/Sign-in Form",
-    "Inputs/Line Edit",
+    "Inputs/Line Edit/Default",
+    "Inputs/Line Edit/Password",
+    "Inputs/Line Edit/Read-only",
     "Inputs/Spin Box",
     "Inputs/Double Spin Box",
     "Inputs/Combo Box",
     "Inputs/Slider",
+    "Inputs/File Path",
 ]
 _EXAMPLES_FOLDER = Path(pyside6_storybook.examples.__file__).parent
 
@@ -41,12 +64,12 @@ def test_the_examples_are_the_expected_stories(examples: StoryRegistry) -> None:
 
 def test_the_examples_use_every_control_type(examples: StoryRegistry) -> None:
     used = {type(control) for story in examples for control in story.controls}
-    assert used == {TextControl, BoolControl, ChoiceControl, IntControl, FloatControl}
+    assert used == {TextControl, BoolControl, ChoiceControl, IntControl, FloatControl, ColorControl, EnumControl, FileControl}
 
 
 def test_the_examples_use_every_control_option(examples: StoryRegistry) -> None:
     options = {field.name: field.default for control_type in typing.get_args(Control) for field in dataclasses.fields(control_type) if field.kw_only}
-    assert {"label", "description", "multiline", "step", "decimals", "slider"} <= set(options)
+    assert {"label", "description", "multiline", "step", "decimals", "slider", "alpha", "filter"} <= set(options)
     used = {
         name
         for story in examples
@@ -64,6 +87,15 @@ def test_one_example_has_no_controls_and_shows_the_theme(qtbot, examples: StoryR
         widget = palette_story(StoryContext(args={}, theme=theme))
         qtbot.addWidget(widget)
         assert f"Theme: {theme}" in [label.text() for label in widget.findChildren(QLabel)]
+
+
+def test_the_file_path_example_shows_a_path_with_markup_verbatim(qtbot, examples: StoryRegistry) -> None:
+    file_story = examples.get("Inputs/File Path")
+    widget = file_story(StoryContext(args={"path": Path("<b>notes.txt")}))
+    qtbot.addWidget(widget)
+    assert isinstance(widget, QLabel)
+    assert widget.text() == "<b>notes.txt"
+    assert widget.textFormat() == Qt.TextFormat.PlainText
 
 
 def test_every_example_has_a_docstring(examples: StoryRegistry) -> None:
@@ -111,3 +143,13 @@ def test_example_modules_are_story_files_that_import_only_pyside6_and_the_librar
         imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)}
         imported |= {alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names}
         assert {module.split(".")[0] for module in imported if module} <= {"__future__", "PySide6", "pyside6_storybook"}, name
+
+
+def test_the_sign_in_example_uses_a_decorator(qtbot, examples: StoryRegistry) -> None:
+    form = examples.get("Forms/Sign-in Form")
+
+    assert [repr(decorator) for decorator in form.decorators] == ["padding(24)"]
+    rendered = render_story(form, StoryContext(args=form.default_args()), registry=examples)
+    qtbot.addWidget(rendered.root)
+    assert rendered.root is not rendered.widget
+    assert rendered.root.isAncestorOf(rendered.widget)

@@ -1,4 +1,4 @@
-"""``StoryContext``, what a story function receives, and the ``StoryFunction`` type."""
+"""``StoryContext``, what a story function receives, and the ``StoryFunction`` and ``Decorator`` types."""
 
 from __future__ import annotations
 
@@ -30,5 +30,9 @@ class StoryContext:
 StoryFunction = Callable[[StoryContext], QWidget]
 """A story function: builds one widget in one state from a ``StoryContext``."""
 
+Decorator = Callable[[QWidget, StoryContext], QWidget]
+"""A decorator: receives the widget built so far and the story's context, and returns the widget to show instead. It returns the same
+widget after configuring it, or a new wrapper that contains the received widget as a descendant."""
 
-__all__ = ["StoryContext", "StoryFunction"]
+
+__all__ = ["Decorator", "StoryContext", "StoryFunction"]

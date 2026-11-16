@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import logging
-import traceback
 from collections.abc import Sequence
-from pathlib import Path
-from types import TracebackType
 
-from PySide6.QtCore import QSignalBlocker, Qt
+from PySide6.QtCore import QSignalBlocker, QSize, Qt
 from PySide6.QtGui import QCloseEvent, QFont, QPalette
 from PySide6.QtWidgets import (
     QComboBox,
@@ -26,27 +23,34 @@ from PySide6.QtWidgets import (
 from pyside6_storybook.discovery import LoadError
 from pyside6_storybook.gui.controls_panel import ControlsPanel
 from pyside6_storybook.gui.error_panel import ErrorPanel
-from pyside6_storybook.registry import Story, StoryContext, StoryRegistry
+from pyside6_storybook.registry import Layout, Story, StoryContext, StoryRegistry
+from pyside6_storybook.registry.rendering import StoryRenderError, render_story
 from pyside6_storybook.themes import BuiltinThemes
 
 NO_STORIES_MESSAGE = "No stories are registered."
 LOAD_ERRORS_HEADING = "Load errors"
 
-_PACKAGE_FOLDER = Path(__file__).resolve().parents[1]
-"""The ``pyside6_storybook`` package folder: frames from files below it are library code, trimmed from story tracebacks."""
 _ENTRY_KIND_ROLE = Qt.ItemDataRole.UserRole + 1
 _LOAD_ERRORS_ENTRY = "load-errors"
 
 _MARGIN = 10
 _SPACING = 8
 _SECTION_SPACING = 6
+_LAYOUT_ALIGNMENTS = {
+    Layout.PADDED: Qt.AlignmentFlag.AlignTop,
+    Layout.CENTERED: Qt.AlignmentFlag.AlignCenter,
+    Layout.FILL: Qt.AlignmentFlag(0),
+}
+"""The alignment of the previewed widget inside the surface's margins. An empty alignment lets the widget grow in each direction its
+size policy allows; where it cannot grow, the layout centres it."""
+_SCROLLABLE_LAYOUTS = frozenset({Layout.PADDED, Layout.CENTERED})
 
 
 class GalleryWindow(QMainWindow):
     """Three panes in a splitter: the story list, the selected story's preview and the theme and controls pane.
 
-    The preview is rebuilt from scratch whenever a control value or the theme changes. A story that raises, or returns something
-    that is not a ``QWidget``, shows an ``ErrorPanel`` in the preview instead; nothing it raises reaches the Qt event loop. Story
+    The preview is rebuilt from scratch whenever a control value or the theme changes. A story or decorator that raises, or returns
+    something that is not a ``QWidget``, shows an ``ErrorPanel`` in the preview instead; nothing it raises reaches the Qt event loop. Story
     sources that failed to load are listed under a "Load errors" entry at the end of the story list. The chrome is drawn from
     palette roles, so it follows whatever palette the application has.
     """
@@ -76,6 +80,7 @@ class GalleryWindow(QMainWindow):
         self._current_story: Story | None = None
         self._controls_panel: ControlsPanel | None = None
         self._preview_widget: QWidget | None = None
+        self._preview_root: QWidget | None = None
         self._error_panel: ErrorPanel | None = None
 
         self._sidebar = QListWidget(self)
@@ -92,26 +97,31 @@ class GalleryWindow(QMainWindow):
         self._heading.setObjectName("previewHeading")
         self._heading.setFont(self._bold_font(self._heading))
 
-        self._preview_surface = QFrame(self)
+        self._preview_scroll = QScrollArea(self)
+        self._preview_scroll.setObjectName("previewScroll")
+        self._preview_scroll.setFrameShape(QFrame.Shape.StyledPanel)
+        self._preview_scroll.setWidgetResizable(True)
+        self._preview_scroll.viewport().setBackgroundRole(QPalette.ColorRole.Base)
+        self._preview_surface = QFrame(self._preview_scroll)
         self._preview_surface.setObjectName("previewSurface")
-        self._preview_surface.setFrameShape(QFrame.Shape.StyledPanel)
+        self._preview_surface.setFrameShape(QFrame.Shape.NoFrame)
         self._preview_surface.setBackgroundRole(QPalette.ColorRole.Base)
         self._preview_surface.setAutoFillBackground(True)
         self._preview_layout = QVBoxLayout(self._preview_surface)
         self._preview_layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
-        self._preview_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._preview_scroll.setWidget(self._preview_surface)
         self._empty_label = QLabel(NO_STORIES_MESSAGE, self._preview_surface)
         self._empty_label.setObjectName("previewEmptyState")
         self._empty_label.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         self._empty_label.setVisible(len(registry) == 0 and not self._load_errors)
-        self._preview_layout.addWidget(self._empty_label)
+        self._preview_layout.addWidget(self._empty_label, alignment=Qt.AlignmentFlag.AlignTop)
 
         preview_pane = QWidget(self)
         preview_layout = QVBoxLayout(preview_pane)
         preview_layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
         preview_layout.setSpacing(_SPACING)
         preview_layout.addWidget(self._heading)
-        preview_layout.addWidget(self._preview_surface, stretch=1)
+        preview_layout.addWidget(self._preview_scroll, stretch=1)
 
         self._theme_switch = QComboBox(self)
         self._theme_switch.setObjectName("themeSwitch")
@@ -150,7 +160,7 @@ class GalleryWindow(QMainWindow):
             self._sidebar.setCurrentRow(0)
 
     def current_preview_widget(self) -> QWidget | None:
-        """Return the story widget currently shown in the preview, or ``None`` if there is none (also while an error is shown)."""
+        """Return the widget the story built, without its decorators, or ``None`` if there is none (also while an error is shown)."""
         return self._preview_widget
 
     def current_story_id(self) -> str | None:
@@ -203,6 +213,7 @@ class GalleryWindow(QMainWindow):
         if current is None:
             self._current_story = None
             self._heading.setText("")
+            self._place_preview(None, Layout.FILL)
             return
         if current.data(_ENTRY_KIND_ROLE) == _LOAD_ERRORS_ENTRY:
             self._current_story = None
@@ -224,7 +235,7 @@ class GalleryWindow(QMainWindow):
     def _rebuild_preview(self) -> None:
         """Build the selected story's widget with the current arguments and theme and show it in place of the previous one.
 
-        If the story raises, or returns something that is not a ``QWidget``, the error is logged and shown in an ``ErrorPanel``.
+        If the story or a decorator fails, the error is logged and shown in an ``ErrorPanel``.
         """
         story = self._current_story
         panel = self._controls_panel
@@ -232,30 +243,57 @@ class GalleryWindow(QMainWindow):
             return
         self._clear_preview()
         try:
-            widget = story(StoryContext(args=panel.values(), theme=self._themes.current))
-        except Exception as error:  # stories are user code: any error is logged and shown in the preview, never raised into Qt
-            self._logger.exception("Story %r raised while rendering", story.id)
-            self._show_error(f"{story.id} raised {type(error).__name__}: {error}", _story_traceback(error))
+            rendered = render_story(story, StoryContext(args=panel.values(), theme=self._themes.current), registry=self._registry)
+        except StoryRenderError as error:
+            self._logger.error("Story %r failed to render: %s", story.id, error.title, exc_info=error)
+            self._show_error(error.title, error.details)
             return
-        if not isinstance(widget, QWidget):
-            self._logger.error("Story %r returned %r, expected a QWidget", story.id, widget)
-            self._show_error(f"{story.id} returned {widget!r}, expected a QWidget", "A story function must return the widget it builds.")
-            return
-        self._preview_layout.addWidget(widget)
-        self._preview_widget = widget
+        self._preview_widget = rendered.widget
+        self._preview_root = rendered.root
+        self._place_preview(rendered.root, story.layout if story.layout is not None else self._registry.default_layout)
 
     def _show_error(self, title: str, details: str) -> None:
         self._clear_preview()
         self._error_panel = ErrorPanel(title, details, self._preview_surface)
-        self._preview_layout.addWidget(self._error_panel)
+        self._place_preview(self._error_panel, Layout.FILL)
+
+    def _place_preview(self, widget: QWidget | None, layout: Layout) -> None:
+        """Put ``widget`` in the preview surface for ``layout``, or reset the surface when ``widget`` is ``None``.
+
+        This sets the widget's alignment in the surface, the surface's minimum size and the scroll bar policies. In ``PADDED`` and
+        ``CENTERED`` the surface is at least as large as the widget's natural size plus the margins, so the preview scrolls instead
+        of squashing the widget. In ``FILL`` there is no minimum and no scroll bar.
+
+        Args:
+            widget: A child of the preview surface, or ``None`` to reset the surface.
+            layout: How to place the widget.
+        """
+        policy = Qt.ScrollBarPolicy.ScrollBarAsNeeded if layout in _SCROLLABLE_LAYOUTS else Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        self._preview_scroll.setHorizontalScrollBarPolicy(policy)
+        self._preview_scroll.setVerticalScrollBarPolicy(policy)
+        self._preview_surface.setMinimumSize(0, 0)
+        if widget is None:
+            return
+        self._preview_layout.addWidget(widget)
+        self._preview_layout.setAlignment(widget, _LAYOUT_ALIGNMENTS[layout])
+        if layout not in _SCROLLABLE_LAYOUTS:
+            return
+        margins = self._preview_layout.contentsMargins()
+        extra = QSize(margins.left() + margins.right(), margins.top() + margins.bottom())
+        if widget.hasHeightForWidth():
+            self._preview_surface.setMinimumWidth(widget.minimumSizeHint().width() + extra.width())
+        else:
+            natural = widget.sizeHint().expandedTo(widget.minimumSize()).boundedTo(widget.maximumSize())
+            self._preview_surface.setMinimumSize(natural + extra)
 
     def _clear_preview(self) -> None:
-        for widget in (self._preview_widget, self._error_panel):
+        for widget in (self._preview_root, self._error_panel):
             if widget is not None:
                 self._preview_layout.removeWidget(widget)
                 widget.hide()
                 widget.deleteLater()
         self._preview_widget = None
+        self._preview_root = None
         self._error_panel = None
 
     def _clear_controls(self) -> None:
@@ -265,18 +303,6 @@ class GalleryWindow(QMainWindow):
             self._controls_host_layout.removeWidget(panel)
             panel.hide()
             panel.deleteLater()
-
-
-def _story_traceback(error: BaseException) -> str:
-    """Format ``error``'s traceback starting at the story's own code, without the library frames that called it."""
-    frames: TracebackType | None = error.__traceback__
-    while frames is not None and frames.tb_next is not None and _is_library_file(frames.tb_frame.f_code.co_filename):
-        frames = frames.tb_next
-    return "".join(traceback.format_exception(type(error), error, frames))
-
-
-def _is_library_file(filename: str) -> bool:
-    return Path(filename).resolve().is_relative_to(_PACKAGE_FOLDER)
 
 
 def _load_errors_title(errors: Sequence[LoadError]) -> str:
