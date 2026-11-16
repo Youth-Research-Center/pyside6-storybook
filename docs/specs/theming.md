@@ -1,9 +1,9 @@
 # Theming hook (milestone 4): design spec
 
-Status: draft. Covers issues #26 (`ThemeProvider` protocol), #27 (design tokens), #30 ("System" theme), #28 (choosing a provider),
-#29 (chrome under an application style sheet) and #31 (guide and worked example). The issues hold the scope and acceptance
-criteria; this document fixes the decisions they leave open and how the six pull requests fit together. Where this spec and an
-issue differ, the issue is updated to match.
+Status: reviewed; ready for implementation. Covers issues #26 (`ThemeProvider` protocol), #29 (chrome under an application style
+sheet), #27 (design tokens), #30 ("System" theme), #28 (choosing a provider) and #31 (guide and worked example). The issues hold
+the scope and acceptance criteria; this document fixes the decisions they leave open and how the six pull requests fit together.
+Where this spec and an issue differ, the issue is updated to match.
 
 ## Goals and constraints
 
@@ -49,7 +49,10 @@ class ThemeProvider(Protocol):
    colour scheme if it set one.
    - The original style is read in `activate`. While an application style sheet is set, `QApplication.style().name()` is empty,
      so it is read with the style sheet briefly cleared, as `BuiltinThemes` already does.
-   - After `deactivate`, no callback is called again.
+   - The built-in provider calls its callbacks synchronously inside `set_theme`, so `GalleryWindow.set_theme` has re-rendered by
+     the time it returns, as the existing tests expect. A provider may also call them later; the window does not rely on timing.
+   - `deactivate` clears the registered callbacks, so no callback is called again; a provider reused by a second `run()` starts
+     with none.
 6. **A style sheet needs a palette.** A provider that sets an application-wide style sheet also sets a matching `QPalette`. The
    gallery chrome is drawn from palette roles, and a style sheet alone leaves `QApplication.palette()` unchanged.
 7. Every method is called on the main thread, and callbacks must be called on it too.
@@ -64,7 +67,8 @@ It is exported from the package root. `BuiltinThemes` is removed, since it was n
 with a mechanical rename, and `themes.names`/`themes.current` become `theme_names()`/`current_theme()`.
 
 **The window** (`GalleryWindow(registry, theme_provider, ...)`; the second positional parameter keeps its position, now typed
-`ThemeProvider`):
+`ThemeProvider`). It registers one callback, which checks `shiboken6.isValid(self)` first and never raises, because a provider can
+outlive a window (two windows in one test, or `run()` twice with one provider):
 - **Theme switch.** It fills the switch from `theme_names()` and selects `current_theme()`.
   - Choosing a theme calls `set_theme`.
   - The provider's notification then sets the switch to `current_theme()` inside a `QSignalBlocker`, reads the tokens and colour
@@ -82,6 +86,9 @@ with a mechanical rename, and `themes.names`/`themes.current` become `theme_name
 ```python
 def run(registry=None, argv=None, *, theme=None, load_errors=(), reload=None, theme_provider: ThemeProvider | None = None) -> int
 ```
+
+`reload` stays internal and is documented as such; `theme_provider` is new and public. The changelog lists `run`, `ThemeProvider`
+and `BuiltinThemeProvider` under `### Added`, and `BuiltinThemes`' removal needs no entry because it was never public.
 
 - The provider defaults to a new `BuiltinThemeProvider()`.
 - If `theme` is given, it must be in `theme_provider.theme_names()`; otherwise `run` raises `ValueError` listing the names. It is
@@ -126,18 +133,22 @@ def run(registry=None, argv=None, *, theme=None, load_errors=(), reload=None, th
 ## 3. The System theme (#30)
 
 - **The theme.** `BuiltinThemeProvider.theme_names()` returns `("Light", "Dark", "System")`. Light stays the default.
-- **Applying System.** It restores the style, palette and style sheet found at `activate`, and unsets the colour-scheme override
-  (`QStyleHints.unsetColorScheme()`) so the platform decides.
+- **Applying System.** It restores the style, palette and style sheet found at `activate`, and puts back the colour scheme found
+  at `activate` with the existing `_restore_color_scheme` (unset the override, then force the original only if it differs), so a
+  scheme the application forced stays forced and one that followed the system follows it again.
   - It connects `QStyleHints.colorSchemeChanged` while System is active, and disconnects it when switching away and on
     `deactivate`.
-  - A scheme change calls the callbacks, so the gallery re-renders.
-  - On some platforms Qt then also updates the application palette. The tokens are re-read in the callback, so they follow.
+  - A scheme change calls the callbacks with `QTimer.singleShot(0, ...)`, not directly: Qt emits `colorSchemeChanged` before it
+    updates the application palette on platforms that do, so tokens read inside the signal would be stale.
+  - Offscreen, `setColorScheme` does nothing, `colorScheme()` is `Unknown` and the signal never fires. Tests simulate a change with
+    `app.styleHints().colorSchemeChanged.emit(Qt.ColorScheme.Dark)` (available on 6.8), and set a non-Fusion style
+    (`app.setStyle("Windows")`) before `activate`, because the offscreen default is already Fusion.
 - **Switching back** to Light or Dark reapplies Fusion and the theme's palette, exactly as today.
 - **`StoryContext.color_scheme`.** A keyword-only `Qt.ColorScheme` field, default `Qt.ColorScheme.Unknown`. The window fills it
   from the provider's optional `color_scheme()`, or else from a heuristic: `Dark` when the application palette's `Window` colour
   has lightness below 128, otherwise `Light`. The built-in provider returns:
   - `Light` and `Dark` for those themes;
-  - `QStyleHints.colorScheme()` for System, which can be `Unknown`.
+  - `QStyleHints.colorScheme()` for System, and the palette heuristic when that is `Unknown`.
 - **Limitation, documented:** on the offscreen platform, and on platforms without a colour-scheme setting, System is whatever Qt
   defaults to.
 
@@ -148,16 +159,23 @@ def run(registry=None, argv=None, *, theme=None, load_errors=(), reload=None, th
 2. `theme_provider = "module:attribute"` in `[tool.pyside6-storybook]`.
 3. `BuiltinThemeProvider()`.
 
-`--theme NAME` and `theme = "NAME"` choose the starting theme the same way; the command line wins. `_KNOWN_KEYS` in
-`discovery/sources.py` gains `theme_provider` and `theme`, validated as non-empty strings.
+`--theme NAME` and `theme = "NAME"` choose the starting theme the same way; the command line wins. `--theme` loses its argparse
+`choices` and is validated after the provider loads.
+
+`discovery/sources.py`: `_KNOWN_KEYS` gains `theme_provider` and `theme`, validated as non-empty strings, and `StorySources` gains
+keyword-only `theme_provider: str | None = None` and `theme: str | None = None`. Unlike `stories`, these two keys are read from
+`pyproject.toml` **also when the command line names targets**: the project's theme applies to whatever stories are opened.
 
 **Loading** (`themes/provider_loader.py`): `load_theme_provider(spec: str) -> ThemeProvider`.
 - The spec is `module:attribute`, and the attribute may be dotted (`app.theming:Theme.provider`).
 - The module is imported after `put_on_sys_path` and after the `QApplication` exists, so the configured `pythonpath` and the
   working directory apply, as for stories.
 - The attribute is an instance, or a callable taking no arguments that returns one. A callable is called once the
-  `QApplication` exists.
-- The result must pass `isinstance(obj, ThemeProvider)`.
+  `QApplication` exists. A class passes `isinstance(cls, ThemeProvider)` (its methods are attributes), so the loader calls the
+  attribute when it is a class (`isinstance(obj, type)`) or when it fails the check, and checks the result.
+- `isinstance` only says yes or no, so the "missing methods" message is built by checking `callable(getattr(obj, name, None))` for
+  each protocol method.
+- The loader records the `sys.modules` names that importing and calling the provider added, and returns them with the provider.
 
 **Errors.** Each is a `ThemeProviderError` whose message names the spec. The command line prints it and exits 1, and never falls
 back to the built-in themes.
@@ -174,8 +192,11 @@ back to the built-in themes.
 **`--list`** prints `pyside6-storybook: theme provider <spec or "built-in"> (themes: A, B)` on standard error, after the line about
 where the stories came from. Reading the names does not activate the provider (§1, rule 1).
 
-**Reload.** The provider is not reloaded (#24's reload does not recreate it), even when its module is under the project. The README
-says to restart the gallery after editing the provider.
+**Reload.** The provider and its modules are not reloaded. Otherwise a story edit would re-import the application's theme module,
+and the stories and the provider would hold different copies of its singletons (the theme manager). `ReloadSession` gains a
+keyword-only `keep: Collection[str] = ()`: the module names the provider loader recorded. They are excluded from the modules a
+reload drops and from the watched files, so editing the provider triggers nothing. The README says to restart the gallery after
+editing the provider.
 
 **`run` from code** takes `theme_provider=` (§1). The three ways (code, command line, `pyproject.toml`) are documented together.
 
@@ -186,26 +207,41 @@ selection and focus indicators stay readable. Qt cannot exempt a subtree from an
 try.
 
 **Marking the chrome**
-- Every chrome widget the gallery creates (window, sidebar, search, tree, tabs, canvas controls, scroll areas, side pane, theme
-  switch, controls panel, Docs and Actions panels, status bar) gets:
-  - an object name with the prefix `sbk`, in camel case: today's `storySidebar` becomes `sbkStorySidebar`, `previewSurface`
-    becomes `sbkPreviewSurface`, and so on;
-  - the dynamic property `sbkChrome = True`.
-- A style sheet cannot match an object-name prefix, but it can match a property. `*[sbkChrome="true"]` is the documented selector
-  for "the gallery's chrome", and a rule with it outweighs the application's plain type selectors, so an application can exclude
-  the chrome from one of its rules by restating it for the chrome.
-- The preview surface's descendants (the story's widget) never get the property, and `sbkPreviewSurface` itself keeps the
-  property but is styled by no gallery rule.
-- The renamed object names are listed in the README. The tests move to the new names; the change is mechanical.
+- **Names.** Every widget the gallery creates gets an object name with the prefix `sbk`, in camel case: `storySidebar` becomes
+  `sbkStorySidebar`, `previewSurface` becomes `sbkPreviewSurface`, and so on. That is about 40 names and some 170 test references,
+  renamed in one mechanical commit. The README lists them, and a test checks the README list against the widgets of a shown
+  window. `#sbkName` is the strongest selector an application can use.
+- **The property.** The dynamic property `sbkChrome = True` goes only on widgets an application might style and that contain no
+  story widget:
+  - the sidebar and its children: search field, tree, the tree's viewport;
+  - the canvas control rows and their combo boxes, spin boxes, buttons and labels;
+  - the tab bars, but not the tab widgets;
+  - the side pane and everything in it: theme switch, side tab bar, controls panel and every editor, Actions panel;
+  - the Docs panel's widgets, the status bar's widgets, the error panel and the empty-state label.
+  The error panel and the empty-state label live inside the surface but are chrome.
+- **Never on the surface's ancestors.** The window, the splitter, the preview pane, the preview tab widget, the canvas, the scroll
+  area and its viewport, the stack and the surface get names only. Otherwise `*[sbkChrome="true"] QPushButton` would match a
+  story's buttons.
+- **Setting it.** One helper, `gui/chrome.py::mark_chrome(widget, name)`, sets the name and the property. Widgets made after
+  polish (editors, Docs content, the error panel) call it in their constructors. When the property is set after polish, the helper
+  calls `style().unpolish(widget)` and `style().polish(widget)`. The property is not inherited, so internal children (tab bars,
+  viewports) are marked explicitly.
+- **Specificity, documented.** `QPushButton[sbkChrome="true"]` beats `QPushButton` and `QWidget QPushButton`, but loses to
+  `QPushButton[flat="false"]` and to pseudo-state rules such as `:hover` or `::tab:selected`. The guide therefore recommends
+  type-plus-property selectors or `#sbkName`, and restating the same pseudo-states.
 
-**Colours the gallery sets itself**, computed at paint time against the background actually drawn:
-- **Sidebar selection.** A `QStyledItemDelegate` paints selected rows' text in `pick_contrasting_text(<the selection background
-  the style will paint>)`. That background comes from the option's palette `Highlight`, which `QStyleSheetStyle` updates from
-  `selection-background-color`.
-- **Error panel title** and **checkerboard size label**, and any other gallery-set text: the same rule.
-- **The checkerboard** keeps its palette colours (`Base` and `Mid`).
+**Inventory of colours.** The chrome sets no colours of its own today; everything is a palette role. Only one place needs code:
+- **Sidebar selection.** An application rule may set the selected row's background with `selection-background-color` (which does
+  reach the option palette's `Highlight`) or with `QTreeView::item:selected { background: ... }` (which does not: the option still
+  holds the old `Highlight`). A `QStyledItemDelegate` therefore finds the real background by drawing `PE_PanelItemViewItem` with the
+  option into a small `QImage` and sampling its centre, cached per (palette key, state, size). It paints the selected text in
+  `pick_contrasting_text(<that colour>)`. When the application's rule also sets `color` for selected items, the style sheet wins
+  and the delegate's colour is ignored; the guide says so.
+- **Everything else** (the error panel, labels, the checkerboard in `Base` and `Mid`) is covered by the palette contract and checked
+  by the grab tests. No widget-local style sheet is added: the library's rules forbid them.
 
-**Test style sheet.** `tests/fixtures/aggressive.qss` restyles `QWidget`, `QComboBox`, `QListView`, `QTreeView`, `QPushButton`,
+**Test style sheet.** `tests/fixtures/aggressive.qss` sets the selection both ways (`selection-background-color` on the views
+and `::item:selected { background }` on the tree) and restyles `QWidget`, `QComboBox`, `QListView`, `QTreeView`, `QPushButton`,
 `QTabBar`, `QLineEdit`, `QLabel` and `QScrollArea`: dark backgrounds, a saturated selection colour, and an 18 pt font. A test
 provider (`tests/fake_providers.py`) applies it with a matching palette in two themes. Under it, in each theme:
 - sidebar selection text, control labels and the error panel title reach 4.5:1, measured on grabs;
@@ -227,11 +263,11 @@ chrome is unreadable, and with one. They are rendered by a script and committed 
     attribute is a callable returning one.
   - `pyproject.toml` with `[tool.pyside6-storybook]`: `stories`, `pythonpath = ["."]` and
     `theme_provider = "themed_app.storybook:provider"`.
-- **Tests**, `tests/test_themed_app.py`, which run the example the way CI does:
-  - `pyside6-storybook --list` in that folder, in a subprocess with a timeout. Its output names the provider and both themes.
-  - In-process, through the `stories` fixture: each story renders in both themes, and switching theme restyles both widgets
-    (pixel checks).
-  - The subprocess test is `full`; the in-process test is core.
+- **Tests**, `tests/test_themed_app.py`, so CI runs the example on every push:
+  - core, in-process: `cli.main(["--list"])` with `monkeypatch.chdir(<the example folder>)` and the `stories` fixture; the output
+    names the provider and both themes;
+  - core, in-process: each story renders in both themes, and switching theme restyles both widgets (pixel checks);
+  - `full`: the installed `pyside6-storybook --list` in that folder, in a subprocess with a timeout.
 - **`docs/theming.md`**, the guide:
   - the built-in themes;
   - when to write a provider;
@@ -249,16 +285,20 @@ chrome is unreadable, and with one. They are rendered by a script and committed 
 
 ## 7. Pull requests
 
-Six stacked PRs, one per issue:
+Six stacked PRs, one per issue. The mass rename comes second, so later review fixes do not have to be merged through it:
 
 | # | Issue | Branch | Adds |
 | --- | --- | --- | --- |
 | 1 | #26 | `claude/pyside6-storybook-theme-provider` | protocol, `BuiltinThemeProvider`, window and `run` integration, public `run` |
-| 2 | #27 | `claude/pyside6-storybook-design-tokens` | `StoryContext.tokens`, built-in tokens, Token Badge example |
-| 3 | #30 | `claude/pyside6-storybook-system-theme` | System theme, `StoryContext.color_scheme` |
-| 4 | #28 | `claude/pyside6-storybook-provider-config` | `--theme-provider`, `theme_provider`/`theme` keys, loader, `--list` |
-| 5 | #29 | `claude/pyside6-storybook-chrome-styling` | `sbk` names and property, contrast delegate, aggressive style sheet tests |
+| 2 | #29 | `claude/pyside6-storybook-chrome-styling` | `sbk` names, `mark_chrome`, selection delegate, aggressive style sheet tests |
+| 3 | #27 | `claude/pyside6-storybook-design-tokens` | `StoryContext.tokens`, built-in tokens, Token Badge example |
+| 4 | #30 | `claude/pyside6-storybook-system-theme` | System theme, `StoryContext.color_scheme` |
+| 5 | #28 | `claude/pyside6-storybook-provider-config` | `--theme-provider`, `theme_provider`/`theme` keys, loader, `keep=`, `--list` |
 | 6 | #31 | `claude/pyside6-storybook-themed-app` | `examples/themed_app/`, `docs/theming.md`, README links |
+
+**Changelog.** Every PR adds its entries under `## [Unreleased]`: the new public names (`ThemeProvider`, `BuiltinThemeProvider`,
+`run`, `StoryContext.tokens` and `color_scheme`), the command-line flag and keys, the System theme, and the renamed object names
+(`### Changed`).
 
 **Merging.** Squash-merging a stacked PR hides the commits the next branch already contains, and the next PR then conflicts.
 Every PR description therefore asks for a merge commit ("Create a merge commit") for the whole stack.
