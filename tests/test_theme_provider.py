@@ -26,7 +26,7 @@ def _delete_closed_windows() -> Iterator[None]:
     """Delete the windows qtbot closed, as the event loop would, before the next test changes the application style sheet.
 
     Without it, closed windows from many tests stay pending deletion across several style sheet changes, and Qt can crash in
-    ``setStyleSheet`` once they are deleted (an issue tracks it; ``pyside6_storybook.polishing`` covers the case a running gallery hits).
+    ``setStyleSheet`` once they are deleted (#80; ``pyside6_storybook.polishing`` covers the case a running gallery hits).
     """
     yield
     QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)

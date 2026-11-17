@@ -46,6 +46,7 @@ from pyside6_storybook.gui.icons import ActionIcons
 from pyside6_storybook.gui.reload_status import ReloadStatus
 from pyside6_storybook.gui.reload_watcher import ReloadWatcher
 from pyside6_storybook.gui.sidebar import LOAD_ERRORS_HEADING, StorySidebar
+from pyside6_storybook.polishing import polish_all_widgets
 from pyside6_storybook.registry import Layout, Story, StoryContext, StoryRegistry
 from pyside6_storybook.registry.rendering import StoryRenderError, render_story
 from pyside6_storybook.themes import ThemeProvider
@@ -302,6 +303,7 @@ class GalleryWindow(QMainWindow):
             return
         if name not in names:
             raise ValueError(f"Unknown theme {name!r}; expected one of {tuple(names)}")
+        polish_all_widgets()  # the provider may change the application style sheet; see pyside6_storybook.polishing
         self._call_provider(self._theme_provider.set_theme, name, default=None)
 
     def _call_provider(self, function: Callable[..., _T], *args: object, default: _T, report: bool = True) -> _T:
