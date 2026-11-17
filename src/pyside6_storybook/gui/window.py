@@ -39,6 +39,7 @@ from pyside6_storybook.discovery import LoadError
 from pyside6_storybook.discovery.reload import ReloadResult, ReloadSession
 from pyside6_storybook.gui.actions_panel import ActionsPanel
 from pyside6_storybook.gui.canvas import Canvas
+from pyside6_storybook.gui.chrome import mark_chrome
 from pyside6_storybook.gui.controls_panel import ControlsPanel
 from pyside6_storybook.gui.docs_panel import DocsPanel
 from pyside6_storybook.gui.error_panel import ErrorPanel
@@ -131,11 +132,11 @@ class GalleryWindow(QMainWindow):
         self._icons = ActionIcons()
 
         self._sidebar = StorySidebar(self, icons=self._icons)
-        self._sidebar.setObjectName("storySidebar")
+        mark_chrome(self._sidebar, "sbkStorySidebar")
         self._sidebar.set_registry(registry, load_errors=self._load_errors)
 
         self._heading = QLabel("", self)
-        self._heading.setObjectName("previewHeading")
+        mark_chrome(self._heading, "sbkPreviewHeading")
         self._heading.setFont(self._bold_font(self._heading))
 
         self._canvas = Canvas(self, icons=self._icons)
@@ -144,7 +145,7 @@ class GalleryWindow(QMainWindow):
 
         self._docs_panel = DocsPanel(self, icons=self._icons)
         self._docs_scroll = QScrollArea(self)
-        self._docs_scroll.setObjectName("docsScroll")
+        mark_chrome(self._docs_scroll, "sbkDocsScroll")
         self._docs_scroll.setAccessibleName("Docs")
         self._docs_scroll.setFrameShape(QFrame.Shape.StyledPanel)
         self._docs_scroll.setWidgetResizable(True)
@@ -153,7 +154,7 @@ class GalleryWindow(QMainWindow):
 
         # Document mode keeps the tab frame from taking width away from the preview.
         self._preview_tabs = QTabWidget(self)
-        self._preview_tabs.setObjectName("previewTabs")
+        mark_chrome(self._preview_tabs, "sbkPreviewTabs", chrome=False)
         self._preview_tabs.tabBar().setAccessibleName("Preview tabs")
         self._preview_tabs.setDocumentMode(True)
         self._preview_tabs.addTab(self._canvas, "Canvas")
@@ -168,7 +169,7 @@ class GalleryWindow(QMainWindow):
         preview_layout.addWidget(self._preview_tabs, stretch=1)
 
         self._theme_switch = QComboBox(self)
-        self._theme_switch.setObjectName("themeSwitch")
+        mark_chrome(self._theme_switch, "sbkThemeSwitch")
         self._theme_switch.setAccessibleName("Theme")
         # A provider that fails while the window is built is shown in the preview once the window is complete.
         self._startup_provider_error: Exception | None = None
@@ -184,7 +185,7 @@ class GalleryWindow(QMainWindow):
         self._controls_host_layout.setContentsMargins(0, 0, 0, 0)
         self._controls_host_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self._controls_scroll = QScrollArea(self)
-        self._controls_scroll.setObjectName("controlsScroll")
+        mark_chrome(self._controls_scroll, "sbkControlsScroll")
         # The editors in it take focus and the scroll area follows them, so it is not a stop of its own.
         self._controls_scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._controls_scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -194,7 +195,7 @@ class GalleryWindow(QMainWindow):
 
         self._actions_panel = ActionsPanel(self, icons=self._icons)
         self._side_tabs = QTabWidget(self)
-        self._side_tabs.setObjectName("sideTabs")
+        mark_chrome(self._side_tabs, "sbkSideTabs")
         self._side_tabs.tabBar().setAccessibleName("Controls and actions tabs")
         self._side_tabs.setDocumentMode(True)
         self._side_tabs.addTab(self._controls_scroll, "Controls")
@@ -491,11 +492,11 @@ class GalleryWindow(QMainWindow):
             existing.activateWindow()
             return
         dialog = QDialog(self)
-        dialog.setObjectName("shortcutsDialog")
+        mark_chrome(dialog, "sbkShortcutsDialog")
         dialog.setWindowTitle("Keyboard shortcuts")
         rows = self.shortcut_rows()
         table = QTableWidget(len(rows), len(SHORTCUTS_HEADERS), dialog)
-        table.setObjectName("shortcutsTable")
+        mark_chrome(table, "sbkShortcutsTable")
         table.setAccessibleName("Keyboard shortcuts")
         table.setHorizontalHeaderLabels(list(SHORTCUTS_HEADERS))
         table.verticalHeader().setVisible(False)

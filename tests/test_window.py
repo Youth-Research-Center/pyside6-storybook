@@ -66,13 +66,13 @@ def test_first_story_is_selected_and_previewed_on_start(qtbot, registry: StoryRe
 
     assert _sidebar(window).selected_story_id() == "Inputs/Button"
     assert window.current_story_id() == "Inputs/Button"
-    heading = window.findChild(QLabel, "previewHeading")
+    heading = window.findChild(QLabel, "sbkPreviewHeading")
     assert heading is not None
     assert heading.text() == "Inputs/Button"
     preview = window.current_preview_widget()
     assert isinstance(preview, QPushButton)
     assert preview.text() == "Click me"
-    surface = window.findChild(QFrame, "previewSurface")
+    surface = window.findChild(QFrame, "sbkPreviewSurface")
     assert surface is not None
     assert preview.parent() is surface
 
@@ -83,7 +83,7 @@ def test_selecting_a_story_updates_heading_preview_and_controls(qtbot, registry:
 
     window.select_story("Display/Label")
 
-    heading = window.findChild(QLabel, "previewHeading")
+    heading = window.findChild(QLabel, "sbkPreviewHeading")
     assert heading is not None
     assert heading.text() == "Display/Label"
     preview = window.current_preview_widget()
@@ -99,7 +99,7 @@ def test_a_story_without_controls_shows_the_empty_state(qtbot, registry: StoryRe
 
     panels = [panel for panel in window.findChildren(ControlsPanel) if panel.isVisibleTo(window)]
     assert len(panels) == 1
-    empty_label = panels[0].findChild(QLabel, "controlsEmptyState")
+    empty_label = panels[0].findChild(QLabel, "sbkControlsEmptyState")
     assert empty_label is not None
     assert empty_label.text() == NO_CONTROLS_MESSAGE
 
@@ -127,7 +127,7 @@ def test_switching_theme_rebuilds_the_preview_and_changes_the_palette(qtbot, reg
     window.select_story("Display/Label")
     first = window.current_preview_widget()
     window_color = qapp.palette().window().color().name()
-    switch = window.findChild(QComboBox, "themeSwitch")
+    switch = window.findChild(QComboBox, "sbkThemeSwitch")
     assert switch is not None
     assert [switch.itemText(i) for i in range(switch.count())] == ["Light", "Dark"]
     assert switch.currentText() == "Light"
@@ -148,7 +148,7 @@ def test_set_theme_updates_the_switch_and_the_preview(qtbot, registry: StoryRegi
 
     window.set_theme("Dark")
 
-    switch = window.findChild(QComboBox, "themeSwitch")
+    switch = window.findChild(QComboBox, "sbkThemeSwitch")
     assert switch is not None
     assert switch.currentText() == "Dark"
     assert themes.current_theme() == "Dark"
@@ -222,7 +222,7 @@ def test_an_empty_registry_shows_an_empty_state(qtbot, themes: BuiltinThemeProvi
     assert _sidebar(window).load_errors_label() is None
     assert window.current_preview_widget() is None
     assert window.current_story_id() is None
-    empty_label = window.findChild(QLabel, "previewEmptyState")
+    empty_label = window.findChild(QLabel, "sbkPreviewEmptyState")
     assert empty_label is not None
     assert empty_label.text() == NO_STORIES_MESSAGE
     assert empty_label.isVisible()
@@ -236,9 +236,9 @@ def test_the_empty_state_sits_at_the_top_of_the_preview(qtbot, themes: BuiltinTh
     window.show()
     qtbot.waitExposed(window)
     QApplication.processEvents()
-    empty_label = window.findChild(QLabel, "previewEmptyState")
+    empty_label = window.findChild(QLabel, "sbkPreviewEmptyState")
     assert empty_label is not None
-    surface = window.findChild(QWidget, "previewSurface")
+    surface = window.findChild(QWidget, "sbkPreviewSurface")
     assert surface is not None
     assert empty_label.height() == empty_label.sizeHint().height()
     assert empty_label.geometry().bottom() < surface.height() // 2
@@ -247,7 +247,7 @@ def test_the_empty_state_sits_at_the_top_of_the_preview(qtbot, themes: BuiltinTh
 def test_the_empty_state_is_hidden_when_there_are_stories(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, registry, themes)
     window.show()
-    empty_label = window.findChild(QLabel, "previewEmptyState")
+    empty_label = window.findChild(QLabel, "sbkPreviewEmptyState")
     assert empty_label is not None
     assert not empty_label.isVisible()
 
@@ -269,7 +269,7 @@ def test_every_widget_has_an_owner(qtbot, registry: StoryRegistry, themes: Built
 
 def test_the_story_list_and_theme_switch_have_accessible_names(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, registry, themes)
-    switch = window.findChild(QComboBox, "themeSwitch")
+    switch = window.findChild(QComboBox, "sbkThemeSwitch")
     assert switch is not None
     assert _tree(window).accessibleName() == "Stories"
     assert switch.accessibleName() == "Theme"
@@ -399,7 +399,7 @@ def test_selecting_the_load_errors_entry_shows_every_error(qtbot, registry: Stor
 
     assert _sidebar(window).select_load_errors()
 
-    heading = window.findChild(QLabel, "previewHeading")
+    heading = window.findChild(QLabel, "sbkPreviewHeading")
     assert heading is not None
     assert heading.text() == "Load errors"
     assert window.current_story_id() is None
@@ -426,7 +426,7 @@ def test_with_only_load_errors_the_errors_are_shown_on_start(qtbot, themes: Buil
     panel = _error_panel(window)
     assert panel is not None
     assert panel.title() == "1 story source failed to load"
-    empty_label = window.findChild(QLabel, "previewEmptyState")
+    empty_label = window.findChild(QLabel, "sbkPreviewEmptyState")
     assert empty_label is not None
     assert not empty_label.isVisible()
 
@@ -482,7 +482,7 @@ def test_the_controls_section_scrolls_when_there_are_many_controls(qtbot, themes
     window.resize(900, 400)
     window.show()
     qtbot.waitExposed(window)
-    scroll = window.findChild(QScrollArea, "controlsScroll")
+    scroll = window.findChild(QScrollArea, "sbkControlsScroll")
     assert scroll is not None
     host = scroll.widget()
     assert host is not None
@@ -502,7 +502,7 @@ def test_the_controls_section_does_not_scroll_for_a_few_controls(qtbot, registry
     window.resize(900, 600)
     window.show()
     qtbot.waitExposed(window)
-    scroll = window.findChild(QScrollArea, "controlsScroll")
+    scroll = window.findChild(QScrollArea, "sbkControlsScroll")
     assert scroll is not None
 
     assert scroll.verticalScrollBar().maximum() == 0
@@ -573,13 +573,13 @@ def _layout_window(
 
 
 def _surface(window: GalleryWindow) -> QFrame:
-    surface = window.findChild(QFrame, "previewSurface")
+    surface = window.findChild(QFrame, "sbkPreviewSurface")
     assert surface is not None
     return surface
 
 
 def _scroll(window: GalleryWindow) -> QScrollArea:
-    scroll = window.findChild(QScrollArea, "previewScroll")
+    scroll = window.findChild(QScrollArea, "sbkPreviewScroll")
     assert scroll is not None
     return scroll
 
@@ -974,7 +974,7 @@ def test_inputs_stand_out_from_the_preview_surface(qtbot, themes: BuiltinThemePr
     window.show()
     qtbot.waitExposed(window)
     QApplication.processEvents()
-    surface = window.findChild(QFrame, "previewSurface")
+    surface = window.findChild(QFrame, "sbkPreviewSurface")
     preview = window.current_preview_widget()
     assert surface is not None and preview is not None
     edit = preview.findChild(QLineEdit, "QLineEdit")

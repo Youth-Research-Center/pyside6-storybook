@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from pyside6_storybook.gui.chrome import mark_chrome
 from pyside6_storybook.gui.icons import ActionIcons
 from pyside6_storybook.registry import Layout, SizePreset
 from pyside6_storybook.registry.size_preset import MAX_SIZE
@@ -142,7 +143,7 @@ class Canvas(QWidget):
                 again when its palette changes.
         """
         super().__init__(parent)
-        self.setObjectName("canvas")
+        mark_chrome(self, "sbkCanvas", chrome=False)
         self._owns_icons = icons is None
         self._icons = ActionIcons() if icons is None else icons
         self._zoom = _DEFAULT_ZOOM
@@ -164,13 +165,13 @@ class Canvas(QWidget):
         self._shown_size: QSize | None = None
 
         self._toolbar = QWidget(self)
-        self._toolbar.setObjectName("canvasToolbar")
-        self._background_combo = self._build_combo("canvasBackground", "Background", _COMBO_MINIMUM_LENGTH)
+        mark_chrome(self._toolbar, "sbkCanvasToolbar")
+        self._background_combo = self._build_combo("sbkCanvasBackground", "Background", _COMBO_MINIMUM_LENGTH)
         for background in CanvasBackground:
             self._background_combo.addItem(background.value, background)
-        self._size_combo = self._build_combo("canvasSize", "Size", _SIZE_COMBO_MINIMUM_LENGTH)
-        self._width_spin = self._build_spin("canvasWidth", "Width", _DEFAULT_CUSTOM_SIZE[0])
-        self._height_spin = self._build_spin("canvasHeight", "Height", _DEFAULT_CUSTOM_SIZE[1])
+        self._size_combo = self._build_combo("sbkCanvasSize", "Size", _SIZE_COMBO_MINIMUM_LENGTH)
+        self._width_spin = self._build_spin("sbkCanvasWidth", "Width", _DEFAULT_CUSTOM_SIZE[0])
+        self._height_spin = self._build_spin("sbkCanvasHeight", "Height", _DEFAULT_CUSTOM_SIZE[1])
         self._custom_widgets = (
             self._labelled("Width", self._width_spin),
             self._width_spin,
@@ -178,7 +179,7 @@ class Canvas(QWidget):
             self._height_spin,
         )
         self._size_label = QLabel(self._toolbar)
-        self._size_label.setObjectName("canvasSizeLabel")
+        mark_chrome(self._size_label, "sbkCanvasSizeLabel")
         self._size_label.setAccessibleName("Canvas size")
         self._size_label.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         self._size_label.hide()
@@ -195,12 +196,14 @@ class Canvas(QWidget):
         for widget in self._custom_widgets:
             custom_row.addWidget(widget)
         custom_row.addStretch(1)
-        self._zoom_out_button = self._build_zoom_button("canvasZoomOut", "Zoom out", "Zoom out (Ctrl+-)", "magnifying-glass-minus")
+        self._zoom_out_button = self._build_zoom_button("sbkCanvasZoomOut", "Zoom out", "Zoom out (Ctrl+-)", "magnifying-glass-minus")
         self._zoom_level_label = QLabel(self._toolbar)
-        self._zoom_level_label.setObjectName("canvasZoomLevel")
+        mark_chrome(self._zoom_level_label, "sbkCanvasZoomLevel")
         self._zoom_level_label.setAccessibleName("Zoom level")
-        self._zoom_in_button = self._build_zoom_button("canvasZoomIn", "Zoom in", "Zoom in (Ctrl++)", "magnifying-glass-plus")
-        self._zoom_reset_button = self._build_zoom_button("canvasZoomReset", "Reset zoom", "Reset zoom to 100% (Ctrl+0)", "arrow-counter-clockwise")
+        self._zoom_in_button = self._build_zoom_button("sbkCanvasZoomIn", "Zoom in", "Zoom in (Ctrl++)", "magnifying-glass-plus")
+        self._zoom_reset_button = self._build_zoom_button(
+            "sbkCanvasZoomReset", "Reset zoom", "Reset zoom to 100% (Ctrl+0)", "arrow-counter-clockwise"
+        )
         second_row = QHBoxLayout()
         second_row.setSpacing(_CONTROL_SPACING)
         second_row.addWidget(self._zoom_out_button)
@@ -218,22 +221,22 @@ class Canvas(QWidget):
         self._show_custom_controls(visible=False)
 
         self._zoom_note = QLabel(_ZOOM_NOTE, self)
-        self._zoom_note.setObjectName("canvasZoomNote")
+        mark_chrome(self._zoom_note, "sbkCanvasZoomNote")
         self._zoom_note.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         self._zoom_note.setWordWrap(True)  # unwrapped, a wide font made the canvas, and the window, wider while zoomed
         self._zoom_note.hide()
 
         self._scroll = QScrollArea(self)
-        self._scroll.setObjectName("previewScroll")
+        mark_chrome(self._scroll, "sbkPreviewScroll", chrome=False)
         self._scroll.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.set_preview_name(None)
         self._scroll.setFrameShape(QFrame.Shape.StyledPanel)
         self._scroll.setWidgetResizable(True)
         self._scroll.viewport().setBackgroundRole(QPalette.ColorRole.Window)
         self._stack = QStackedWidget(self._scroll)
-        self._stack.setObjectName("previewStack")
+        mark_chrome(self._stack, "sbkPreviewStack", chrome=False)
         self._surface = _Surface(self._stack)
-        self._surface.setObjectName("previewSurface")
+        mark_chrome(self._surface, "sbkPreviewSurface", chrome=False)
         self._surface.setFrameShape(QFrame.Shape.NoFrame)
         # Window, not Base, by default: stories are shown on the background they sit on in an application window, where Fusion's input
         # fields and check boxes (drawn in Base with an outline derived from Window) stand out. On Base they vanish in the Dark theme.
@@ -243,7 +246,7 @@ class Canvas(QWidget):
         self._layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
         self._surface_policy = self._surface.sizePolicy()
         self._zoom_label = QLabel(self._stack)
-        self._zoom_label.setObjectName("previewZoomImage")
+        mark_chrome(self._zoom_label, "sbkPreviewZoomImage", chrome=False)
         self._zoom_label.setFrameShape(QFrame.Shape.NoFrame)
         self._zoom_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self._zoom_label.setAccessibleName("Zoomed preview")
@@ -251,7 +254,7 @@ class Canvas(QWidget):
         self._stack.insertWidget(_ZOOM_PAGE, self._zoom_label)
         self._scroll.setWidget(self._stack)
         self._empty_label = QLabel("", self._surface)
-        self._empty_label.setObjectName("previewEmptyState")
+        mark_chrome(self._empty_label, "sbkPreviewEmptyState")
         self._empty_label.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         self._empty_label.hide()
         self._layout.addWidget(self._empty_label, alignment=Qt.AlignmentFlag.AlignTop)
@@ -490,7 +493,7 @@ class Canvas(QWidget):
 
     def _build_zoom_button(self, name: str, accessible_name: str, tooltip: str, icon: str) -> QToolButton:
         button = QToolButton(self._toolbar)
-        button.setObjectName(name)
+        mark_chrome(button, name)
         button.setAccessibleName(accessible_name)
         button.setToolTip(tooltip)
         button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -569,7 +572,7 @@ class Canvas(QWidget):
 
     def _build_combo(self, name: str, accessible_name: str, minimum_length: int) -> QComboBox:
         combo = QComboBox(self._toolbar)
-        combo.setObjectName(name)
+        mark_chrome(combo, name)
         combo.setAccessibleName(accessible_name)
         combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         combo.setMinimumContentsLength(minimum_length)
@@ -577,7 +580,7 @@ class Canvas(QWidget):
 
     def _build_spin(self, name: str, accessible_name: str, value: int) -> QSpinBox:
         spin = QSpinBox(self._toolbar)
-        spin.setObjectName(name)
+        mark_chrome(spin, name)
         spin.setAccessibleName(accessible_name)
         spin.setRange(1, MAX_SIZE)
         spin.setValue(value)

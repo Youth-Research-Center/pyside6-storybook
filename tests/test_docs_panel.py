@@ -87,7 +87,7 @@ def _header(table: QTableWidget, column: int) -> str:
 
 
 def _headings(panel: DocsPanel) -> list[str]:
-    return [label.text() for label in panel.findChildren(QLabel, "docsHeading")]
+    return [label.text() for label in panel.findChildren(QLabel, "sbkDocsHeading")]
 
 
 def _register(registry: StoryRegistry, story_id: str, **kwargs) -> Story:
@@ -167,11 +167,11 @@ def test_a_variant_shows_its_own_starting_values_and_says_so(qtbot) -> None:
     ]
     variant_panel = _panel(qtbot, variant, registry)
     base_panel = _panel(qtbot, base, registry)
-    table = variant_panel.findChild(QTableWidget, "docsControlsTable")
+    table = variant_panel.findChild(QTableWidget, "sbkDocsControlsTable")
     assert table is not None
     assert _cell(table, 0, 2) == "7"
-    assert _label(variant_panel, "docsVariantCaption").text() == VARIANT_CAPTION
-    assert base_panel.findChild(QLabel, "docsVariantCaption") is None
+    assert _label(variant_panel, "sbkDocsVariantCaption").text() == VARIANT_CAPTION
+    assert base_panel.findChild(QLabel, "sbkDocsVariantCaption") is None
 
 
 def test_the_table_lists_the_controls_read_only(qtbot) -> None:
@@ -179,7 +179,7 @@ def test_the_table_lists_the_controls_read_only(qtbot) -> None:
     story = _register(registry, "Box/Default", controls=[IntControl("size", 1, 0, 9)])
 
     panel = _panel(qtbot, story, registry)
-    table = panel.findChild(QTableWidget, "docsControlsTable")
+    table = panel.findChild(QTableWidget, "sbkDocsControlsTable")
 
     assert table is not None
     assert [_header(table, column) for column in range(table.columnCount())] == [
@@ -198,7 +198,7 @@ def test_a_story_without_controls_says_so(qtbot) -> None:
 
     panel = _panel(qtbot, story, registry)
 
-    assert _label(panel, "docsNoControls").text() == NO_CONTROLS_MESSAGE
+    assert _label(panel, "sbkDocsNoControls").text() == NO_CONTROLS_MESSAGE
     assert panel.findChild(QTableWidget) is None
 
 
@@ -226,8 +226,8 @@ def test_module_and_story_docstrings_are_shown(qtbot, stories: StoryRegistry, tm
 
     panel = _panel(qtbot, result.registry.get("Button/Default"), result.registry)
 
-    module_doc = _label(panel, "docsModuleDoc")
-    story_doc = _label(panel, "docsStoryDoc")
+    module_doc = _label(panel, "sbkDocsModuleDoc")
+    story_doc = _label(panel, "sbkDocsStoryDoc")
     assert module_doc.text() == "Buttons of the toolkit."
     assert story_doc.text() == "Shows a button.\n\nSecond paragraph."
     assert module_doc.textFormat() == Qt.TextFormat.PlainText
@@ -257,8 +257,8 @@ def test_there_is_no_heading_for_an_empty_docstring(qtbot, stories: StoryRegistr
 
     panel = _panel(qtbot, result.registry.get("Plain/Default"), result.registry)
 
-    assert panel.findChild(QLabel, "docsModuleDoc") is None
-    assert panel.findChild(QLabel, "docsStoryDoc") is None
+    assert panel.findChild(QLabel, "sbkDocsModuleDoc") is None
+    assert panel.findChild(QLabel, "sbkDocsStoryDoc") is None
     assert _headings(panel) == ["Controls", "Source"]
 
 
@@ -283,7 +283,7 @@ def test_docstring_labels_are_selectable_by_keyboard_and_mouse(qtbot, stories: S
     result = load_stories(["select_stories"], cwd=tmp_path)
     panel = _panel(qtbot, result.registry.get("Doc/Default"), result.registry)
 
-    for name in ("docsModuleDoc", "docsStoryDoc"):
+    for name in ("sbkDocsModuleDoc", "sbkDocsStoryDoc"):
         flags = _label(panel, name).textInteractionFlags()
         assert flags & Qt.TextInteractionFlag.TextSelectableByKeyboard
         assert flags & Qt.TextInteractionFlag.TextSelectableByMouse
@@ -295,7 +295,7 @@ def test_the_source_is_shown_in_a_read_only_fixed_font_view(qtbot) -> None:
 
     panel = _panel(qtbot, story, registry)
 
-    view = panel.findChild(QPlainTextEdit, "docsSource")
+    view = panel.findChild(QPlainTextEdit, "sbkDocsSource")
     assert view is not None
     assert view.toPlainText() == inspect.getsource(_build)
     assert panel.source_text() == inspect.getsource(_build)
@@ -311,7 +311,7 @@ def test_copy_puts_the_source_on_the_clipboard(qtbot) -> None:
     panel = _panel(qtbot, story, registry)
     QApplication.clipboard().setText("before")
 
-    button = panel.findChild(QPushButton, "docsCopyButton")
+    button = panel.findChild(QPushButton, "sbkDocsCopyButton")
     assert button is not None
     assert button.text() == "Copy"
     assert not button.icon().isNull()
@@ -326,9 +326,9 @@ def test_a_story_built_from_a_partial_has_no_source(qtbot) -> None:
 
     panel = _panel(qtbot, story, registry)
 
-    assert _label(panel, "docsNoSource").text() == NO_SOURCE_MESSAGE
+    assert _label(panel, "sbkDocsNoSource").text() == NO_SOURCE_MESSAGE
     assert panel.findChild(QPlainTextEdit) is None
-    assert panel.findChild(QPushButton, "docsCopyButton") is None
+    assert panel.findChild(QPushButton, "sbkDocsCopyButton") is None
     assert panel.source_text() == ""
 
 
@@ -343,7 +343,7 @@ def test_a_story_whose_source_cannot_be_read_has_no_source(qtbot, monkeypatch: p
 
     panel = _panel(qtbot, story, registry)
 
-    assert _label(panel, "docsNoSource").text() == NO_SOURCE_MESSAGE
+    assert _label(panel, "sbkDocsNoSource").text() == NO_SOURCE_MESSAGE
 
 
 def test_a_variant_shares_its_bases_source(qtbot) -> None:
@@ -370,9 +370,9 @@ def test_siblings_list_the_base_and_the_variants(qtbot) -> None:
     panel = _panel(qtbot, base, registry)
 
     assert "Stories of Inputs/Button" in _headings(panel)
-    links = panel.findChildren(QLabel, "docsSiblingLink")
+    links = panel.findChildren(QLabel, "sbkDocsSiblingLink")
     assert [label.accessibleName() for label in links] == ["Open Inputs/Button/Disabled", "Open Inputs/Button/Wide"]
-    assert _label(panel, "docsSiblingCurrent").text() == "Default (this story)"
+    assert _label(panel, "sbkDocsSiblingCurrent").text() == "Default (this story)"
     assert disabled.id in links[0].text()
     assert wide.id in links[1].text()
 
@@ -382,12 +382,12 @@ def test_the_current_story_is_not_linked_and_a_variant_lists_its_base(qtbot) -> 
 
     panel = _panel(qtbot, disabled, registry)
 
-    assert _label(panel, "docsSiblingCurrent").text() == "Disabled (this story)"
-    assert [label.accessibleName() for label in panel.findChildren(QLabel, "docsSiblingLink")] == [
+    assert _label(panel, "sbkDocsSiblingCurrent").text() == "Disabled (this story)"
+    assert [label.accessibleName() for label in panel.findChildren(QLabel, "sbkDocsSiblingLink")] == [
         "Open Inputs/Button/Default",
         "Open Inputs/Button/Wide",
     ]
-    link = panel.findChildren(QLabel, "docsSiblingLink")[0]
+    link = panel.findChildren(QLabel, "sbkDocsSiblingLink")[0]
     assert link.textFormat() == Qt.TextFormat.RichText
     assert link.textInteractionFlags() & Qt.TextInteractionFlag.LinksAccessibleByKeyboard
     assert link.textInteractionFlags() & Qt.TextInteractionFlag.LinksAccessibleByMouse
@@ -398,14 +398,14 @@ def test_a_story_without_siblings_has_no_list(qtbot) -> None:
 
     panel = _panel(qtbot, registry.get("Inputs/Other/Default"), registry)
 
-    assert panel.findChild(QLabel, "docsSiblingLink") is None
-    assert panel.findChild(QLabel, "docsSiblingCurrent") is None
+    assert panel.findChild(QLabel, "sbkDocsSiblingLink") is None
+    assert panel.findChild(QLabel, "sbkDocsSiblingCurrent") is None
 
 
 def test_activating_a_link_requests_that_story(qtbot) -> None:
     registry, base, *_ = _siblings_registry()
     panel = _panel(qtbot, base, registry)
-    link = panel.findChildren(QLabel, "docsSiblingLink")[1]
+    link = panel.findChildren(QLabel, "sbkDocsSiblingLink")[1]
     requested: list[str] = []
     panel.storyRequested.connect(requested.append)
 
@@ -419,29 +419,29 @@ def test_activating_a_link_selects_that_story_in_the_window(qtbot, themes: Built
     window = _window(qtbot, registry, themes)
     window.select_story(base.id)
     _flush()
-    link = next(label for label in _window_panel(window).findChildren(QLabel, "docsSiblingLink") if "Wide" in label.text())
+    link = next(label for label in _window_panel(window).findChildren(QLabel, "sbkDocsSiblingLink") if "Wide" in label.text())
 
     href = link.text().split('"')[1]
     link.linkActivated.emit(href)
     _flush()
 
     assert window.current_story_id() == "Inputs/Button/Wide"
-    assert _label(_window_panel(window), "docsSiblingCurrent").text() == "Wide (this story)"
+    assert _label(_window_panel(window), "sbkDocsSiblingCurrent").text() == "Wide (this story)"
 
 
 def test_the_preview_pane_has_canvas_and_docs_tabs_in_document_mode(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _window(qtbot, registry, themes)
 
-    tabs = window.findChild(QTabWidget, "previewTabs")
+    tabs = window.findChild(QTabWidget, "sbkPreviewTabs")
 
     assert tabs is not None
     assert tabs.documentMode()
     assert [tabs.tabText(index) for index in range(tabs.count())] == ["Canvas", "Docs"]
-    canvas = window.findChild(Canvas, "canvas")
+    canvas = window.findChild(Canvas, "sbkCanvas")
     assert canvas is not None
     assert tabs.widget(0) is canvas
-    assert canvas.findChild(QScrollArea, "previewScroll") is not None
-    assert tabs.widget(1) is window.findChild(QWidget, "docsScroll")
+    assert canvas.findChild(QScrollArea, "sbkPreviewScroll") is not None
+    assert tabs.widget(1) is window.findChild(QWidget, "sbkDocsScroll")
     docs_scroll = tabs.widget(1)
     assert isinstance(docs_scroll, QScrollArea)
     assert docs_scroll.widget() is _window_panel(window)
@@ -457,7 +457,7 @@ def test_the_docs_follow_the_selection(qtbot, registry: StoryRegistry, themes: B
 
     assert 'QLabel("plain")' in panel.source_text()
     assert 'QPushButton(str(ctx.args["text"]))' not in panel.source_text()
-    assert _label(panel, "docsNoControls").text() == NO_CONTROLS_MESSAGE
+    assert _label(panel, "sbkDocsNoControls").text() == NO_CONTROLS_MESSAGE
 
 
 def test_a_control_change_does_not_rebuild_the_docs(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
@@ -465,7 +465,7 @@ def test_a_control_change_does_not_rebuild_the_docs(qtbot, registry: StoryRegist
     window.select_story("Display/Label")
     _flush()
     panel = _window_panel(window)
-    table = panel.findChild(QTableWidget, "docsControlsTable")
+    table = panel.findChild(QTableWidget, "sbkDocsControlsTable")
     assert table is not None
     controls_panel = window.findChild(ControlsPanel)
     assert controls_panel is not None
@@ -475,7 +475,7 @@ def test_a_control_change_does_not_rebuild_the_docs(qtbot, registry: StoryRegist
     spin_box.setValue(spin_box.value() + 1)
     _flush()
 
-    assert panel.findChild(QTableWidget, "docsControlsTable") is table
+    assert panel.findChild(QTableWidget, "sbkDocsControlsTable") is table
 
 
 def test_the_docs_refresh_after_set_registry(qtbot, themes: BuiltinThemeProvider) -> None:
@@ -484,14 +484,14 @@ def test_the_docs_refresh_after_set_registry(qtbot, themes: BuiltinThemeProvider
     new = StoryRegistry()
     new.story("Box/Default", controls=[IntControl("size", 2, 0, 99), BoolControl("on", default=True)])(_build)
     window = _window(qtbot, old, themes)
-    old_table = _window_panel(window).findChild(QTableWidget, "docsControlsTable")
+    old_table = _window_panel(window).findChild(QTableWidget, "sbkDocsControlsTable")
     assert old_table is not None
     assert old_table.rowCount() == 1
 
     window.set_registry(new)
     _flush()
 
-    table = _window_panel(window).findChild(QTableWidget, "docsControlsTable")
+    table = _window_panel(window).findChild(QTableWidget, "sbkDocsControlsTable")
     assert table is not None
     assert [_cell(table, row, 3) for row in range(table.rowCount())] == ["0..99", ""]
     assert _cell(table, 0, 2) == "2"
@@ -502,7 +502,7 @@ def test_the_docs_are_empty_without_a_story(qtbot, themes: BuiltinThemeProvider)
 
     panel = _window_panel(window)
 
-    assert panel.findChild(QLabel, "docsHeading") is None
+    assert panel.findChild(QLabel, "sbkDocsHeading") is None
     assert panel.source_text() == ""
 
 
@@ -521,7 +521,7 @@ def test_headings_are_plain_text_even_with_markup_in_the_component_name(qtbot) -
 
     panel = _panel(qtbot, base, registry)
 
-    headings = panel.findChildren(QLabel, "docsHeading")
+    headings = panel.findChildren(QLabel, "sbkDocsHeading")
     assert all(heading.textFormat() == Qt.TextFormat.PlainText for heading in headings)
     assert "Stories of Box <b>Bold" in [heading.text() for heading in headings]
 
@@ -545,7 +545,7 @@ def test_tab_reaches_a_description_label(qtbot) -> None:
 
     qtbot.keyClick(field, Qt.Key.Key_Tab)
 
-    assert QApplication.focusWidget() is _label(panel, "docsStoryDoc")
+    assert QApplication.focusWidget() is _label(panel, "sbkDocsStoryDoc")
 
 
 def test_the_controls_table_is_at_least_as_wide_as_its_columns(qtbot) -> None:
@@ -555,7 +555,7 @@ def test_the_controls_table_is_at_least_as_wide_as_its_columns(qtbot) -> None:
     panel.resize(200, 400)
     panel.show()
 
-    table = panel.findChild(QTableWidget, "docsControlsTable")
+    table = panel.findChild(QTableWidget, "sbkDocsControlsTable")
     assert table is not None
     columns = sum(table.columnWidth(column) for column in range(table.columnCount()))
     assert columns > 300
@@ -577,7 +577,7 @@ def test_selecting_many_stories_keeps_at_most_one_copy_binding(qtbot, themes: Bu
         _flush()
 
     assert window._icons.binding_count() <= baseline
-    assert len(window.findChildren(QPushButton, "docsCopyButton")) == 1
+    assert len(window.findChildren(QPushButton, "sbkDocsCopyButton")) == 1
 
 
 def test_the_source_view_follows_a_pixel_sized_application_font(qtbot) -> None:
@@ -590,7 +590,7 @@ def test_the_source_view_follows_a_pixel_sized_application_font(qtbot) -> None:
     try:
         assert QApplication.font().pointSizeF() <= 0
         panel = _panel(qtbot, story, registry)
-        view = panel.findChild(QPlainTextEdit, "docsSource")
+        view = panel.findChild(QPlainTextEdit, "sbkDocsSource")
         assert view is not None
         assert view.font().pixelSize() == 30
     finally:
@@ -611,7 +611,7 @@ def test_a_partial_story_describes_the_module_of_the_wrapped_function(qtbot, mon
 
     panel = _panel(qtbot, story, registry)
 
-    assert _label(panel, "docsModuleDoc").text() == "The real module."
+    assert _label(panel, "sbkDocsModuleDoc").text() == "The real module."
 
 
 def test_a_partial_story_without_a_real_module_has_no_component_description(qtbot) -> None:
@@ -624,7 +624,7 @@ def test_a_partial_story_without_a_real_module_has_no_component_description(qtbo
 
     panel = _panel(qtbot, story, registry)
 
-    assert panel.findChild(QLabel, "docsModuleDoc") is None
+    assert panel.findChild(QLabel, "sbkDocsModuleDoc") is None
     assert "Component description" not in _headings(panel)
 
 
@@ -635,8 +635,8 @@ def test_the_controls_table_and_the_source_view_are_as_tall_as_their_rows_and_li
     panel.resize(700, 800)
     panel.show()
     qtbot.waitUntil(panel.isVisible, timeout=5000)
-    table = panel.findChild(QTableWidget, "docsControlsTable")
-    view = panel.findChild(QPlainTextEdit, "docsSource")
+    table = panel.findChild(QTableWidget, "sbkDocsControlsTable")
+    view = panel.findChild(QPlainTextEdit, "sbkDocsSource")
     assert table is not None
     assert view is not None
 

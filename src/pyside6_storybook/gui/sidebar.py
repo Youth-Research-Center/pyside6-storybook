@@ -12,6 +12,7 @@ from PySide6.QtGui import QAction, QKeyEvent, QPalette, QStandardItem, QStandard
 from PySide6.QtWidgets import QAbstractItemView, QFrame, QLabel, QLineEdit, QTreeView, QVBoxLayout, QWidget
 
 from pyside6_storybook.discovery import LoadError
+from pyside6_storybook.gui.chrome import mark_chrome
 from pyside6_storybook.gui.icons import ActionIcons, IconRole
 from pyside6_storybook.registry import Story, StoryRegistry
 
@@ -140,7 +141,7 @@ class StorySidebar(QWidget):
         self._known_paths: set[str] = set()
 
         self._search = QLineEdit(self)
-        self._search.setObjectName("storySearch")
+        mark_chrome(self._search, "sbkStorySearch")
         self._search.setPlaceholderText("Search stories")
         self._search.setAccessibleName("Search stories")
         self._search.setClearButtonEnabled(True)
@@ -156,7 +157,7 @@ class StorySidebar(QWidget):
         self._proxy.setSourceModel(self._model)
 
         self._tree = QTreeView(self)
-        self._tree.setObjectName("storyTree")
+        mark_chrome(self._tree, "sbkStoryTree")
         self._tree.setAccessibleName("Stories")
         self._tree.setModel(self._proxy)
         self._tree.setHeaderHidden(True)
@@ -169,7 +170,7 @@ class StorySidebar(QWidget):
         self._tree.selectionModel().currentChanged.connect(self._on_current_changed)
 
         self._empty_label = QLabel("", self)
-        self._empty_label.setObjectName("storySearchEmptyState")
+        mark_chrome(self._empty_label, "sbkStorySearchEmptyState")
         self._empty_label.setWordWrap(True)
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self._empty_label.setForegroundRole(QPalette.ColorRole.PlaceholderText)

@@ -304,7 +304,7 @@ def test_an_accepted_reload_keeps_the_story_and_its_control_values_and_reports_t
 
     assert window.current_story_id() == "Inputs/A"
     assert _preview_text(window) == "typed:two"
-    label = window.findChild(QLabel, "reloadStatus")
+    label = window.findChild(QLabel, "sbkReloadStatus")
     assert label is not None
     assert re.fullmatch(r"Reloaded \d\d:\d\d:\d\d", label.text())
     assert label.accessibleName() == "Reload status"
@@ -373,7 +373,7 @@ def test_theme_canvas_settings_and_the_actions_log_are_untouched_by_a_reload(
     canvas = window.findChild(Canvas)
     assert canvas is not None
     canvas.set_zoom(200)
-    background = window.findChild(QComboBox, "canvasBackground")
+    background = window.findChild(QComboBox, "sbkCanvasBackground")
     assert background is not None
     background.setCurrentIndex(1)
     panel = window.findChild(ActionsPanel)
@@ -392,7 +392,7 @@ def test_theme_canvas_settings_and_the_actions_log_are_untouched_by_a_reload(
 def test_size_presets_are_read_again_after_a_reload(qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     source = _TEXT_STORY.format(story_id="Inputs/A", marker="one")
     window, watcher = _started(qtbot, tmp_path, themes, {"stories/a_story.py": source})
-    size = window.findChild(QComboBox, "canvasSize")
+    size = window.findChild(QComboBox, "sbkCanvasSize")
     assert size is not None
     assert _has_item(size, "Tablet") is False
 

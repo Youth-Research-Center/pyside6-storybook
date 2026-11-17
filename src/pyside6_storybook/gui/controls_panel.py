@@ -9,6 +9,7 @@ from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QFormLayout, QLabel, QVBoxLayout, QWidget
 
 from pyside6_storybook.controls import Control
+from pyside6_storybook.gui.chrome import mark_chrome
 from pyside6_storybook.gui.editors import ControlEditor, create_editor
 
 NO_CONTROLS_MESSAGE = "No configurable properties for this component."
@@ -75,7 +76,7 @@ class ControlsPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         label = QLabel(NO_CONTROLS_MESSAGE, self)
-        label.setObjectName("controlsEmptyState")
+        mark_chrome(label, "sbkControlsEmptyState")
         label.setWordWrap(True)
         label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         font = label.font()

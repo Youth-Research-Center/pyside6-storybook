@@ -11,7 +11,7 @@ def test_shows_the_title_and_the_details(qtbot) -> None:
 
     assert panel.title() == "Story raised ValueError"
     assert panel.details().endswith("ValueError: bad")
-    title = panel.findChild(QLabel, "errorTitle")
+    title = panel.findChild(QLabel, "sbkErrorTitle")
     assert title is not None
     assert title.text() == "Story raised ValueError"
 
@@ -19,7 +19,7 @@ def test_shows_the_title_and_the_details(qtbot) -> None:
 def test_details_are_read_only_selectable_monospace_text(qtbot) -> None:
     panel = ErrorPanel("Title", "line one\nline two")
     qtbot.addWidget(panel)
-    details = panel.findChild(QPlainTextEdit, "errorDetails")
+    details = panel.findChild(QPlainTextEdit, "sbkErrorDetails")
     assert details is not None
 
     assert details.isReadOnly()
@@ -32,7 +32,7 @@ def test_empty_details_are_hidden(qtbot) -> None:
     panel = ErrorPanel("Only a title", "")
     qtbot.addWidget(panel)
     panel.show()
-    details = panel.findChild(QPlainTextEdit, "errorDetails")
+    details = panel.findChild(QPlainTextEdit, "sbkErrorDetails")
     assert details is not None
     assert not details.isVisible()
 
@@ -40,7 +40,7 @@ def test_empty_details_are_hidden(qtbot) -> None:
 def test_accessible_names_describe_the_error(qtbot) -> None:
     panel = ErrorPanel("Story raised ValueError", "trace")
     qtbot.addWidget(panel)
-    details = panel.findChild(QPlainTextEdit, "errorDetails")
+    details = panel.findChild(QPlainTextEdit, "sbkErrorDetails")
     assert details is not None
 
     assert panel.accessibleName() == "Error: Story raised ValueError"
@@ -59,8 +59,8 @@ def test_a_warning_icon_tinted_with_the_text_colour_sits_beside_the_title(qtbot)
     panel = ErrorPanel("Story raised ValueError", "trace")
     qtbot.addWidget(panel)
     panel.show()
-    icon = panel.findChild(QLabel, "errorIcon")
-    title = panel.findChild(QLabel, "errorTitle")
+    icon = panel.findChild(QLabel, "sbkErrorIcon")
+    title = panel.findChild(QLabel, "sbkErrorTitle")
     assert icon is not None
     assert title is not None
     pixmap = icon.pixmap()
@@ -73,7 +73,7 @@ def test_a_warning_icon_tinted_with_the_text_colour_sits_beside_the_title(qtbot)
 def test_the_icon_is_rendered_again_when_the_palette_changes(qtbot) -> None:
     panel = ErrorPanel("Title", "details")
     qtbot.addWidget(panel)
-    icon = panel.findChild(QLabel, "errorIcon")
+    icon = panel.findChild(QLabel, "sbkErrorIcon")
     assert icon is not None
     palette = QPalette(panel.palette())
     palette.setColor(QPalette.ColorGroup.Active, QPalette.ColorRole.WindowText, QColor("#ff0000"))

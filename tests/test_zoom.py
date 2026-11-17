@@ -77,7 +77,7 @@ def _make_window(qtbot, themes: BuiltinThemeProvider, story: str = "Zoom/Line", 
 
 
 def _canvas(window: QWidget) -> Canvas:
-    canvas = window.findChild(Canvas, "canvas")
+    canvas = window.findChild(Canvas, "sbkCanvas")
     assert canvas is not None
     return canvas
 
@@ -89,19 +89,19 @@ def _button(window: QWidget, name: str) -> QToolButton:
 
 
 def _scroll(window: QWidget) -> QScrollArea:
-    scroll = window.findChild(QScrollArea, "previewScroll")
+    scroll = window.findChild(QScrollArea, "sbkPreviewScroll")
     assert scroll is not None
     return scroll
 
 
 def _stack(window: QWidget) -> QStackedWidget:
-    stack = window.findChild(QStackedWidget, "previewStack")
+    stack = window.findChild(QStackedWidget, "sbkPreviewStack")
     assert stack is not None
     return stack
 
 
 def _image_label(window: QWidget) -> QLabel:
-    label = window.findChild(QLabel, "previewZoomImage")
+    label = window.findChild(QLabel, "sbkPreviewZoomImage")
     assert label is not None
     return label
 
@@ -118,7 +118,7 @@ def _ranges(window: QWidget) -> tuple[int, int]:
 
 
 def _choose_size(window: QWidget, text: str) -> None:
-    combo = window.findChild(QComboBox, "canvasSize")
+    combo = window.findChild(QComboBox, "sbkCanvasSize")
     assert combo is not None
     combo.setCurrentIndex(next(i for i in range(combo.count()) if combo.itemText(i).startswith(text)))
     QApplication.processEvents()
@@ -164,7 +164,7 @@ def _wheel_to(widget: QWidget, delta: int, *, ctrl: bool = True) -> None:
 
 def _set_custom_size(window: QWidget, width: int, height: int) -> None:
     _choose_size(window, "Custom")
-    for name, value in (("canvasWidth", width), ("canvasHeight", height)):
+    for name, value in (("sbkCanvasWidth", width), ("sbkCanvasHeight", height)):
         spin = window.findChild(QSpinBox, name)
         assert spin is not None
         spin.setValue(value)
@@ -191,7 +191,7 @@ def test_the_canvas_starts_at_100_percent_with_the_live_surface_shown(qtbot, the
     assert preview is not None
 
     assert canvas.zoom() == 100
-    assert _label(window, "canvasZoomLevel").text() == "100%"
+    assert _label(window, "sbkCanvasZoomLevel").text() == "100%"
     stack = _stack(window)
     assert stack.currentIndex() == 0
     assert stack.currentWidget() is canvas.surface
@@ -204,8 +204,8 @@ def test_the_canvas_starts_at_100_percent_with_the_live_surface_shown(qtbot, the
 def test_each_action_moves_one_level_and_stops_at_the_ends(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     canvas = _canvas(window)
-    zoom_in = _button(window, "canvasZoomIn")
-    zoom_out = _button(window, "canvasZoomOut")
+    zoom_in = _button(window, "sbkCanvasZoomIn")
+    zoom_out = _button(window, "sbkCanvasZoomOut")
     seen = [canvas.zoom()]
 
     for _ in range(len(ZOOM_LEVELS)):
@@ -215,7 +215,7 @@ def test_each_action_moves_one_level_and_stops_at_the_ends(qtbot, themes: Builti
     assert seen == [100, 150, 200, 300, 400, 400, 400, 400]
     assert not zoom_in.isEnabled()
     assert zoom_out.isEnabled()
-    assert _label(window, "canvasZoomLevel").text() == "400%"
+    assert _label(window, "sbkCanvasZoomLevel").text() == "400%"
 
     seen = []
     for _ in range(len(ZOOM_LEVELS) + 1):
@@ -225,16 +225,16 @@ def test_each_action_moves_one_level_and_stops_at_the_ends(qtbot, themes: Builti
     assert seen == [300, 200, 150, 100, 67, 50, 50, 50]
     assert not zoom_out.isEnabled()
     assert zoom_in.isEnabled()
-    assert _label(window, "canvasZoomLevel").text() == "50%"
+    assert _label(window, "sbkCanvasZoomLevel").text() == "50%"
 
 
 def test_the_zoom_buttons_are_accessible_and_have_icons(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
 
     expected = {
-        "canvasZoomOut": ("Zoom out", "Ctrl+-"),
-        "canvasZoomIn": ("Zoom in", "Ctrl++"),
-        "canvasZoomReset": ("Reset zoom", "Ctrl+0"),
+        "sbkCanvasZoomOut": ("Zoom out", "Ctrl+-"),
+        "sbkCanvasZoomIn": ("Zoom in", "Ctrl++"),
+        "sbkCanvasZoomReset": ("Reset zoom", "Ctrl+0"),
     }
     for name, (accessible, keys) in expected.items():
         button = _button(window, name)
@@ -249,7 +249,7 @@ def test_a_standalone_canvas_keeps_its_own_icons(qtbot) -> None:
     canvas = Canvas()
     qtbot.addWidget(canvas)
 
-    button = canvas.findChild(QToolButton, "canvasZoomIn")
+    button = canvas.findChild(QToolButton, "sbkCanvasZoomIn")
     assert button is not None
     assert not button.icon().isNull()
 
@@ -288,7 +288,7 @@ def test_the_zoom_note_wraps_instead_of_widening_the_canvas(qtbot, themes: Built
     canvas.set_zoom(300)
     QApplication.processEvents()
 
-    note = window.findChild(QLabel, "canvasZoomNote")
+    note = window.findChild(QLabel, "sbkCanvasZoomNote")
     assert note is not None
     assert note.isVisible()
     assert canvas.minimumSizeHint().width() == minimum
@@ -303,7 +303,7 @@ def test_reset_returns_to_the_live_page_without_a_pixmap_and_with_the_same_scrol
     canvas.set_zoom(300)
     QApplication.processEvents()
     assert _ranges(window) != before
-    qtbot.mouseClick(_button(window, "canvasZoomReset"), Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(_button(window, "sbkCanvasZoomReset"), Qt.MouseButton.LeftButton)
     QApplication.processEvents()
 
     assert canvas.zoom() == 100
@@ -368,7 +368,7 @@ def test_a_background_change_while_zoomed_grabs_again(qtbot, themes: BuiltinThem
     QApplication.processEvents()
     before = _shown_image(window)
 
-    combo = window.findChild(QComboBox, "canvasBackground")
+    combo = window.findChild(QComboBox, "sbkCanvasBackground")
     assert combo is not None
     combo.setCurrentIndex(combo.findText("Base"))
     QApplication.processEvents()
@@ -418,7 +418,7 @@ def test_the_zoom_shortcuts_step_one_level_with_focus_in_the_canvas(
 ) -> None:
     window = _make_window(qtbot, themes)
     show_active(qtbot, window)
-    combo = window.findChild(QComboBox, "canvasBackground")
+    combo = window.findChild(QComboBox, "sbkCanvasBackground")
     assert combo is not None
     combo.setFocus()
     qtbot.waitUntil(combo.hasFocus, timeout=5000)
@@ -432,7 +432,7 @@ def test_ctrl_zero_resets_the_zoom(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     show_active(qtbot, window)
     _canvas(window).set_zoom(300)
-    button = _button(window, "canvasZoomIn")
+    button = _button(window, "sbkCanvasZoomIn")
     button.setFocus()
     qtbot.waitUntil(button.hasFocus, timeout=5000)
 
@@ -445,7 +445,7 @@ def test_ctrl_zero_resets_the_zoom(qtbot, themes: BuiltinThemeProvider) -> None:
 def test_the_zoom_shortcuts_do_nothing_with_focus_outside_the_canvas(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     show_active(qtbot, window)
-    target = window.findChild(QLineEdit, "storySearch")
+    target = window.findChild(QLineEdit, "sbkStorySearch")
     assert target is not None
     target.setFocus()
     qtbot.waitUntil(target.hasFocus, timeout=5000)
@@ -457,7 +457,7 @@ def test_the_zoom_shortcuts_do_nothing_with_focus_outside_the_canvas(qtbot, them
 
 def test_the_zoomed_preview_note_is_visible_only_while_zoomed(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
-    note = _label(window, "canvasZoomNote")
+    note = _label(window, "sbkCanvasZoomNote")
     canvas = _canvas(window)
     assert not note.isVisible()
 
@@ -593,7 +593,7 @@ def test_zooming_keeps_a_centred_widget_in_view(qtbot, themes: BuiltinThemeProvi
 def test_zooming_in_then_out_returns_to_the_same_scroll_values(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
     _choose_size(window, "Custom")
-    for name, value in (("canvasWidth", 1600), ("canvasHeight", 1200)):
+    for name, value in (("sbkCanvasWidth", 1600), ("sbkCanvasHeight", 1200)):
         spin = window.findChild(QSpinBox, name)
         assert spin is not None
         spin.setValue(value)
@@ -641,8 +641,8 @@ def test_a_zoom_level_beyond_the_pixel_budget_is_not_reachable(qtbot, themes: Bu
     _wheel(window, 240)
 
     assert canvas.zoom() == 100
-    assert not _button(window, "canvasZoomIn").isEnabled()
-    assert not _button(window, "canvasZoomOut").isEnabled()
+    assert not _button(window, "sbkCanvasZoomIn").isEnabled()
+    assert not _button(window, "sbkCanvasZoomOut").isEnabled()
     assert all(pixels <= PIXEL_BUDGET for pixels in grabbed)
 
 
@@ -660,8 +660,8 @@ def test_zoom_in_stops_at_the_last_level_within_the_budget(qtbot, themes: Builti
     canvas.zoom_in()
 
     assert canvas.zoom() == 150
-    assert not _button(window, "canvasZoomIn").isEnabled()
-    assert _button(window, "canvasZoomOut").isEnabled()
+    assert not _button(window, "sbkCanvasZoomIn").isEnabled()
+    assert _button(window, "sbkCanvasZoomOut").isEnabled()
     assert grabbed
     assert all(pixels * (max(canvas.zoom(), 100) / 100) ** 2 <= PIXEL_BUDGET for pixels in grabbed)
 
@@ -677,7 +677,7 @@ def test_a_size_change_lowers_a_zoom_the_new_size_cannot_afford(qtbot, themes: B
     _set_custom_size(window, 5_000, 5_000)
 
     assert canvas.zoom() == 150
-    assert _label(window, "canvasZoomLevel").text() == "150%"
+    assert _label(window, "sbkCanvasZoomLevel").text() == "150%"
     assert all(pixels * 2.25 <= PIXEL_BUDGET for pixels in grabbed[-1:])
 
 

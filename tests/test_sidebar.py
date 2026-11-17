@@ -37,7 +37,7 @@ def _tree(sidebar: StorySidebar) -> QTreeView:
 
 
 def _search(sidebar: StorySidebar) -> QLineEdit:
-    search = sidebar.findChild(QLineEdit, "storySearch")
+    search = sidebar.findChild(QLineEdit, "sbkStorySearch")
     assert search is not None
     return search
 
@@ -220,7 +220,7 @@ def test_a_search_with_no_match_shows_the_empty_state_instead_of_the_tree(qtbot)
 
     _type(qtbot, sidebar, "xyz")
 
-    label = sidebar.findChild(QLabel, "storySearchEmptyState")
+    label = sidebar.findChild(QLabel, "sbkStorySearchEmptyState")
     assert label is not None
     assert label.isVisible()
     assert label.text() == "No stories match 'xyz'."
@@ -611,7 +611,7 @@ def test_slash_from_a_spin_box_neither_fires_nor_moves_focus(qtbot, registry: St
 
 def test_slash_from_a_non_editable_combo_box_does_nothing(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window, sidebar = _window(qtbot, registry, themes)
-    combo = window.findChild(QComboBox, "themeSwitch")
+    combo = window.findChild(QComboBox, "sbkThemeSwitch")
     assert combo is not None
     combo.setFocus()
     qtbot.waitUntil(combo.hasFocus, timeout=5000)
@@ -654,7 +654,7 @@ def test_window_select_story_opens_the_story_and_reports_unknown_ids(qtbot, regi
 
 def test_window_set_registry_keeps_the_story_and_its_values_and_renders_once(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window, _ = _window(qtbot, registry, themes)
-    editor = next(e for e in window.findChildren(QLineEdit) if e.objectName() != "storySearch" and e.isVisibleTo(window))
+    editor = next(e for e in window.findChildren(QLineEdit) if e.objectName() != "sbkStorySearch" and e.isVisibleTo(window))
     editor.selectAll()
     qtbot.keyClicks(editor, "Save")
     replacement = StoryRegistry()
@@ -693,7 +693,7 @@ def test_window_set_registry_selects_the_story_at_the_same_row_when_the_story_is
     assert window.current_story_id() == "X/Two"
     window.set_registry(StoryRegistry(), load_errors=(LoadError("a.py", "boom"),))
     assert window.current_story_id() is None
-    heading = window.findChild(QLabel, "previewHeading")
+    heading = window.findChild(QLabel, "sbkPreviewHeading")
     assert heading is not None
     assert heading.text() == "Load errors"
 

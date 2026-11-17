@@ -7,6 +7,7 @@ from datetime import datetime
 from PySide6.QtCore import QEvent, QSize
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
+from pyside6_storybook.gui.chrome import mark_chrome
 from pyside6_storybook.gui.icons import DEFAULT_ICON_SIZE, IconRole, palette_icon
 
 STATUS_NAME = "Reload status"
@@ -32,9 +33,9 @@ class ReloadStatus(QWidget):
         super().__init__(parent)
         self._icon_name: str | None = None
         self._icon = QLabel(self)
-        self._icon.setObjectName("reloadStatusIcon")
+        mark_chrome(self._icon, "sbkReloadStatusIcon")
         self._text = QLabel("", self)
-        self._text.setObjectName("reloadStatus")
+        mark_chrome(self._text, "sbkReloadStatus")
         self._text.setAccessibleName(STATUS_NAME)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(_SPACING, 0, _SPACING, 0)
