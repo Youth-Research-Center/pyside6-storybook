@@ -27,6 +27,9 @@ class ThemeProvider(Protocol):
     7. ``tokens() -> Mapping[str, object]`` is optional and not part of this protocol, so a provider without it still satisfies
        it. When present, the gallery reads it after ``activate`` and after every change notification and gives the result to each
        story as ``StoryContext.tokens``; a provider without it gives stories an empty mapping.
+    8. ``color_scheme() -> Qt.ColorScheme`` is optional and not part of this protocol either. When present, the gallery reads it
+       with the tokens and gives the result to each story as ``StoryContext.color_scheme``. Without it the gallery guesses: ``Dark``
+       when the application palette's ``Window`` colour has a lightness below 128, otherwise ``Light``.
     """
 
     def theme_names(self) -> Sequence[str]:

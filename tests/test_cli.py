@@ -64,7 +64,7 @@ def test_help_describes_targets_and_options(capsys: pytest.CaptureFixture[str]) 
         cli.main(["--help"])
     assert exit_info.value.code == 0
     help_text = capsys.readouterr().out
-    for expected in ("TARGET", "--list", "--no-reload", "--theme", "--version", "Light", "Dark"):
+    for expected in ("TARGET", "--list", "--no-reload", "--theme", "--version", "Light", "Dark", "System"):
         assert expected in help_text
 
 

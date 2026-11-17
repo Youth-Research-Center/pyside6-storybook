@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- System theme: `BuiltinThemeProvider` has a third theme, System, which restores the style, palette and style sheet the application had
+  when the gallery started and lets the colour scheme follow the operating system (unless the application forced one), including a
+  change while the gallery runs. `Ctrl+T` cycles Light, Dark, System. `StoryContext.color_scheme` (a `Qt.ColorScheme`, `Unknown` by
+  default) tells a story whether the theme is light or dark; a provider supplies it with an optional `color_scheme()` method, and the
+  gallery guesses from the application palette without one. On the offscreen platform and where Qt has no colour-scheme setting, System
+  is whatever Qt defaults to.
 - Design tokens: `StoryContext.tokens` is a read-only mapping of the active theme's tokens, empty by default. A theme provider supplies
   it through an optional `tokens()` method, which the gallery reads after activation and after every change notification (a provider
   without it, or one that raises, gives an empty mapping). `BuiltinThemeProvider.tokens()` returns twelve `#rrggbb` colours read from the
