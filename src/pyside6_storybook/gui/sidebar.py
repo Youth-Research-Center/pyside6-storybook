@@ -121,6 +121,7 @@ class _StoryFilterModel(QSortFilterProxyModel):
 
 
 _MIN_TEXT_CONTRAST = 4.5
+_SELECTION_CACHE_LIMIT = 64  # every row width is a new key while the sidebar is resized, so the cache is cleared when it grows past this
 _SelectionKey = tuple[int, str, int, int, int]
 
 
@@ -132,7 +133,7 @@ class _SelectionDelegate(QStyledItemDelegate):
     ``Highlight``. The delegate therefore draws ``PE_PanelItemViewItem`` with the option into a small image, reads the colour at its
     centre and uses it as the background. The palette's ``HighlightedText`` is kept when it reads on that colour, else black or white
     is used. A style sheet ``color`` rule for selected items wins over this colour. The sampled colour is cached by palette, application
-    style sheet, state and size.
+    style sheet, state and size, and the cache is cleared when it holds 64 entries.
     """
 
     def __init__(self, parent: QObject | None = None) -> None:
@@ -165,6 +166,8 @@ class _SelectionDelegate(QStyledItemDelegate):
         cached = self._cache.get(key)
         if cached is None:
             cached = self._sample(option)
+            if len(self._cache) >= _SELECTION_CACHE_LIMIT:
+                self._cache.clear()
             self._cache[key] = cached
         return cached
 

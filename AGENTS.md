@@ -110,10 +110,8 @@ in the same pull request as the bump.
     `StoryContext.log` and `log_signal`, and the per-render sink that drops entries from an older render) and
     `error_panel.py` (`ErrorPanel`, which the window shows in the preview for a story that fails and for the load errors),
     `reload_watcher.py` (`ReloadWatcher`, a `QFileSystemWatcher` with a 300 ms debounce that runs a `ReloadSession`),
-    `reload_status.py` (`ReloadStatus`, the status bar's message and icon) and
-    `chrome.py` (`mark_chrome`, which names a widget
-    of the gallery and sets its `sbkChrome` property). New gallery widgets go
-    here, not at the package root.
+    `reload_status.py` (`ReloadStatus`, the status bar's message and icon) and `chrome.py` (`mark_chrome`, which names a widget of
+    the gallery and sets its `sbkChrome` property). New gallery widgets go here, not at the package root.
     - `gui/icons.py` (internal, not in `__all__`): reads the bundle and renders icons (`icon_svg`, `build_icon`, `palette_icon`,
       `clear_icon_cache`), `IconRole` (the palette role that tints an icon) and `ActionIcons`, the registry the window retints when the
       palette changes

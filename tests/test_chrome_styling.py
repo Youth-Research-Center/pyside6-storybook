@@ -6,15 +6,15 @@ from pathlib import Path
 import pytest
 from conftest import show_active
 from fake_providers import AggressiveProvider
-from PySide6.QtCore import QEvent
+from PySide6.QtCore import QRect
 from PySide6.QtGui import QFont, QImage
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QTreeView, QWidget
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QStyle, QStyleOptionViewItem, QTreeView, QWidget
 
 from pyside6_storybook import BuiltinThemeProvider, StoryContext, StoryRegistry, TextControl
 from pyside6_storybook.contrast import contrast_ratio
 from pyside6_storybook.gui.chrome import CHROME_PROPERTY, mark_chrome
 from pyside6_storybook.gui.controls_panel import ControlsPanel
-from pyside6_storybook.gui.sidebar import _SelectionDelegate
+from pyside6_storybook.gui.sidebar import _SELECTION_CACHE_LIMIT, _SelectionDelegate
 from pyside6_storybook.gui.window import GalleryWindow
 from pyside6_storybook.polishing import polish_all_widgets
 
@@ -24,13 +24,6 @@ _ROOT = Path(__file__).resolve().parent.parent
 _THEMES = ("Midnight", "Daylight")
 _SELECTION_FORMS = ("highlight", "item", "both")
 _MINIMUM_CONTRAST = 4.5
-
-
-@pytest.fixture(autouse=True)
-def _delete_closed_windows() -> Iterator[None]:
-    """Delete the windows qtbot closed before the next test changes the application style sheet (#80, as in ``test_theme_provider.py``)."""
-    yield
-    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 @pytest.fixture
@@ -215,6 +208,23 @@ def test_the_delegate_samples_the_selected_row_once_and_reuses_it_for_the_next_p
 
     assert delegate.sample_count == sampled
     assert second == first
+
+
+def test_the_delegate_cache_stays_bounded_while_the_sidebar_is_resized(qtbot, aggressive: Callable[[str], AggressiveProvider]) -> None:
+    window = _window(qtbot, aggressive("item"), "Daylight")
+    tree = _tree(window)
+    delegate = _delegate(window)
+    option = QStyleOptionViewItem()
+    option.widget = tree
+    option.palette = tree.palette()
+    option.state = QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_Enabled
+
+    for width in range(100, 400):
+        option.rect = QRect(0, 0, width, 20)
+        delegate.selected_background(option)
+
+    assert delegate.sample_count == 300
+    assert len(delegate._cache) <= _SELECTION_CACHE_LIMIT
 
 
 def test_changing_only_an_item_selected_rule_samples_again(qtbot, aggressive: Callable[[str], AggressiveProvider]) -> None:
