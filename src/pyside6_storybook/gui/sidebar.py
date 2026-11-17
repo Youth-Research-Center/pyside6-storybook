@@ -303,7 +303,7 @@ class StorySidebar(QWidget):
         self._search.selectAll()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        """Handle Down and Escape in the search field, and Escape in the tree."""
+        """Handle Down and Escape in the search field, and Return, Enter and Escape in the tree."""
         if event.type() != QEvent.Type.KeyPress or not isinstance(event, QKeyEvent):
             return super().eventFilter(watched, event)
         if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.MetaModifier):
@@ -323,6 +323,12 @@ class StorySidebar(QWidget):
             return True
         if watched is self._tree and key == Qt.Key.Key_Escape:
             self._search.clear()
+            return True
+        if watched is self._tree and key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            # Qt's item views emit activated on Return everywhere except macOS, where Return starts editing instead.
+            current = self._tree.currentIndex()
+            if current.isValid():
+                self._emit_for(current)
             return True
         return super().eventFilter(watched, event)
 

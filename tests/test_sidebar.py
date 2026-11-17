@@ -1,7 +1,7 @@
 import pytest
 from conftest import show_active
 from icon_testing import assert_tinted, strongest_pixel
-from PySide6.QtCore import QEvent, QSortFilterProxyModel, Qt
+from PySide6.QtCore import QEvent, QSignalBlocker, QSortFilterProxyModel, Qt
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QLineEdit, QSpinBox, QTreeView
 
@@ -532,6 +532,22 @@ def test_enter_in_the_tree_opens_the_current_story(qtbot) -> None:
 
     assert recorder.selected == ["A/Two"]
 
+
+
+def test_enter_opens_the_story_without_the_trees_activated_signal(qtbot) -> None:
+    # On macOS Qt's item views start editing on Return and never emit activated; blocking the tree's signals does the same here.
+    sidebar = _sidebar(qtbot, _registry("A/One", "A/Two"))
+    show_active(qtbot, sidebar)
+    sidebar.select_story("A/Two")
+    recorder = _Recorder(sidebar)
+    tree = _tree(sidebar)
+    tree.setFocus()
+
+    with QSignalBlocker(tree):
+        qtbot.keyClick(tree, Qt.Key.Key_Return)
+        qtbot.keyClick(tree, Qt.Key.Key_Enter)
+
+    assert recorder.selected == ["A/Two", "A/Two"]
 
 # The window's shortcuts
 

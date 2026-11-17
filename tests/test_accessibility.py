@@ -535,6 +535,11 @@ def test_the_help_menu_has_a_plain_text_keyboard_shortcuts_entry(qtbot, themes: 
     assert all(entry.icon().isNull() for entry in [*menus, *entries])
 
 
+def _native(keys: str) -> str:
+    """Return ``keys`` as the dialog shows them: native text, with the Command key symbol on macOS."""
+    return QKeySequence(keys).toString(QKeySequence.SequenceFormat.NativeText)
+
+
 def test_f1_opens_a_dialog_listing_every_shortcut_and_it_is_deleted_after_it_closes(qtbot, themes: BuiltinThemes) -> None:
     window = _make(qtbot, themes)
     assert window.findChild(QDialog, "shortcutsDialog") is None
@@ -549,7 +554,8 @@ def test_f1_opens_a_dialog_listing_every_shortcut_and_it_is_deleted_after_it_clo
     rows = _dialog_rows(dialog)
     listed = {key for keys, _action in rows for key in keys.split(" or ")}
     assert _shortcut_keys(window) <= listed
-    assert {keys for keys, _action in rows} >= {"Ctrl+Alt+Down", "Ctrl+Alt+Up", "Ctrl+T", "F6", "Shift+F6", "F1", "Ctrl+F"}
+    expected = ("Ctrl+Alt+Down", "Ctrl+Alt+Up", "Ctrl+T", "F6", "Shift+F6", "F1", "Ctrl+F")
+    assert {keys for keys, _action in rows} >= {_native(keys) for keys in expected}
     assert all(action for _keys, action in rows)
 
     dialog.close()
@@ -740,7 +746,11 @@ def test_the_canvas_lists_its_shortcuts_from_the_table_that_creates_them(qtbot, 
     canvas = window.findChild(Canvas)
     assert canvas is not None
 
-    assert canvas.shortcut_help() == [("Ctrl++ or Ctrl+=", "Zoom in"), ("Ctrl+-", "Zoom out"), ("Ctrl+0", "Reset zoom to 100%")]
+    assert canvas.shortcut_help() == [
+        (f"{_native('Ctrl++')} or {_native('Ctrl+=')}", "Zoom in"),
+        (_native("Ctrl+-"), "Zoom out"),
+        (_native("Ctrl+0"), "Reset zoom to 100%"),
+    ]
     native = QKeySequence.SequenceFormat.NativeText
     created = {shortcut.key().toString(native) for shortcut in canvas.findChildren(QShortcut)}
     assert created == {key for keys, _description in canvas.shortcut_help() for key in keys.split(" or ")}
