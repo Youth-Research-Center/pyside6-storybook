@@ -27,9 +27,9 @@ uv run pyside6-storybook --examples                 # the built-in example stori
 uv run pyside6-storybook --list path/to/stories     # print the story ids and exit, without a window or a display
 uv run python -m pyside6_storybook path/to/stories  # the same command line
 ```
-Without a target or `--examples` the command uses the default sources: `[tool.pyside6-storybook]` (`stories`, `pythonpath`) in the
-working directory's `pyproject.toml`, then the `pyside6_storybook.stories` entry points, then the built-in examples. The README documents
-both settings.
+Without a target or `--examples` the command uses the default sources: `[tool.pyside6-storybook]` (`stories`, `pythonpath`,
+`theme_provider`, `theme`) in the working directory's `pyproject.toml`, then the `pyside6_storybook.stories` entry points, then the
+built-in examples. The README documents the settings.
 
 ## Tests
 There is no display in CI or in agent sandboxes: set `QT_QPA_PLATFORM=offscreen` for every test run. `tests/conftest.py` also sets it as a
@@ -101,7 +101,8 @@ in the same pull request as the bump.
     load the targets into a fresh registry and accept or roll back the result), `file_search.py` (which files are stories),
     `module_import.py` (importing one file under the module name that keeps it a single module), `load_result.py` (`LoadResult`,
     `LoadError`), `sources.py` (`resolve_story_sources`: the command line's targets or the default sources from `pyproject.toml`, entry
-    points or the examples) and `constants.py` (file-name patterns, names and messages)
+    points or the examples; the `pythonpath`, `theme_provider` and `theme` keys are read in every case) and `constants.py` (file-name
+    patterns, names and messages)
   - `gui/` - the gallery's widgets, one module per widget: `window.py` (`GalleryWindow`), `canvas.py` (`Canvas`, the preview scroll area and
     surface with the Background, Size and zoom controls above them, and `CanvasBackground`), `sidebar.py` (`StorySidebar`: the search field
     and the tree of stories, with its filter model), `controls_panel.py` (`ControlsPanel`, the
@@ -126,7 +127,8 @@ in the same pull request as the bump.
     idiomatic.
   - `themes/` - the built-in themes: `theme_definition.py` (`ThemeDefinition`: name, colour scheme and palette colours), one module
     per theme (`light_theme.py`, `dark_theme.py`), `provider.py` (`ThemeProvider`, the protocol an application implements) and
-    `builtin_theme_provider.py` (`BuiltinThemeProvider`, which applies the built-in themes and returns their design tokens)
+    `builtin_theme_provider.py` (`BuiltinThemeProvider`, which applies the built-in themes and returns their design tokens), and
+    `provider_loader.py` (internal: `load_theme_provider`, which imports a `module:attribute` spec, and `ThemeProviderError`)
   - `contrast.py` - WCAG contrast helpers
   - `polishing.py` (internal) - `polish_all_widgets`, the workaround for a Qt crash when the application style sheet changes while a
     widget was never polished

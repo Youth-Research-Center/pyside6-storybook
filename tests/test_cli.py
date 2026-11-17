@@ -10,6 +10,7 @@ from story_files import story_source, write
 from pyside6_storybook import LoadError, StoryRegistry, __version__, cli
 from pyside6_storybook.discovery import sources
 from pyside6_storybook.discovery.reload import ReloadSession
+from pyside6_storybook.themes import ThemeProvider
 
 
 class _RecordingRun:
@@ -18,6 +19,7 @@ class _RecordingRun:
     def __init__(self, exit_code: int = 0) -> None:
         self.exit_code = exit_code
         self.calls: list[tuple[list[str], str | None]] = []
+        self.theme_providers: list[ThemeProvider | None] = []
         self.load_errors: list[tuple[LoadError, ...]] = []
         self.reloads: list[ReloadSession | None] = []
 
@@ -29,10 +31,12 @@ class _RecordingRun:
         theme: str | None = None,
         load_errors: tuple[LoadError, ...] = (),
         reload: ReloadSession | None = None,
+        theme_provider: ThemeProvider | None = None,
     ) -> int:
         self.calls.append((registry.ids(), theme))
         self.load_errors.append(load_errors)
         self.reloads.append(reload)
+        self.theme_providers.append(theme_provider)
         return self.exit_code
 
 
@@ -64,15 +68,19 @@ def test_help_describes_targets_and_options(capsys: pytest.CaptureFixture[str]) 
         cli.main(["--help"])
     assert exit_info.value.code == 0
     help_text = capsys.readouterr().out
-    for expected in ("TARGET", "--list", "--no-reload", "--theme", "--version", "Light", "Dark", "System"):
+    for expected in ("TARGET", "--list", "--no-reload", "--theme", "--theme-provider", "--version", "Light", "Dark", "System"):
         assert expected in help_text
 
 
-def test_an_unknown_theme_is_a_usage_error(capsys: pytest.CaptureFixture[str], gallery: _RecordingRun) -> None:
-    with pytest.raises(SystemExit) as exit_info:
-        cli.main(["--theme", "Sepia", "stories"])
-    assert exit_info.value.code == 2
-    assert "Sepia" in capsys.readouterr().err
+def test_an_unknown_theme_is_an_error_before_any_story_loads(project: Path, capsys: pytest.CaptureFixture[str], gallery: _RecordingRun) -> None:
+    write(project, "stories/c_story.py", "raise RuntimeError('boom at import')\n")
+
+    assert cli.main(["--theme", "Sepia", "stories"]) == 1
+
+    error = capsys.readouterr().err
+    assert "Sepia" in error
+    assert "Light, Dark, System" in error
+    assert "boom at import" not in error
     assert gallery.calls == []
 
 
@@ -117,7 +125,9 @@ def test_list_prints_story_ids_and_does_not_open_the_gallery(project: Path, gall
     assert cli.main(["--list", "stories"]) == 0
     captured = capsys.readouterr()
     assert captured.out.splitlines() == ["Inputs/A", "Inputs/B"]
-    assert captured.err == "pyside6-storybook: stories from the command line\n"
+    assert captured.err == (
+        "pyside6-storybook: stories from the command line\npyside6-storybook: theme provider built-in (themes: Light, Dark, System)\n"
+    )
     assert gallery.calls == []
 
 
@@ -234,6 +244,184 @@ def test_list_says_where_the_stories_came_from(
     captured = capsys.readouterr()
     assert captured.out.splitlines() == ["Inputs/A", "Inputs/B"]
     assert f"stories from [tool.pyside6-storybook] in {project / 'pyproject.toml'}" in captured.err
+
+
+
+def _provider_source(*, names: str = '("Paper", "Ink")', activate: str = "pass") -> str:
+    return f"""
+from collections.abc import Callable
+
+from PySide6.QtWidgets import QApplication
+
+
+class Provider:
+    def theme_names(self) -> tuple[str, ...]:
+        {"return " + names if not names.startswith("raise") else names}
+
+    def current_theme(self) -> str:
+        return "Paper"
+
+    def activate(self, app: QApplication) -> None:
+        {activate}
+
+    def set_theme(self, name: str) -> None:
+        pass
+
+    def on_changed(self, callback: Callable[[], None]) -> None:
+        pass
+
+    def deactivate(self) -> None:
+        pass
+
+
+provider = Provider()
+"""
+
+
+def _write_provider(root: Path, *, name: str = "demo_theming", relative: str | None = None, names: str = '("Paper", "Ink")') -> Path:
+    """Write a theme provider module whose ``provider`` is an instance with the given themes."""
+    return write(root, relative or f"{name}.py", _provider_source(names=names))
+
+
+def test_the_theme_provider_option_loads_the_provider_before_the_stories(
+    project: Path, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write_provider(project)
+
+    assert cli.main(["--theme-provider", "demo_theming:provider", "--theme", "Ink", "stories"]) == 0
+
+    assert gallery.calls == [(["Inputs/A", "Inputs/B"], "Ink")]
+    (provider,) = gallery.theme_providers
+    assert provider is sys.modules["demo_theming"].provider
+    (session,) = gallery.reloads
+    assert session is not None
+    assert session.watched_files().isdisjoint({project / "demo_theming.py"})
+
+
+def test_a_story_importing_the_provider_module_still_shares_it_after_a_reload(project: Path, gallery: _RecordingRun) -> None:
+    _write_provider(project)
+    write(project, "stories/themed_story.py", story_source("Inputs/Themed", imports="import demo_theming"))
+
+    assert cli.main(["--theme-provider", "demo_theming:provider", "stories"]) == 0
+
+    (session,) = gallery.reloads
+    assert session is not None
+    module = sys.modules["demo_theming"]
+    assert session.reload().accepted
+    assert sys.modules["demo_theming"] is module
+    assert gallery.theme_providers[0] is module.provider
+
+
+def test_pyproject_chooses_the_provider_and_the_theme(project: Path, gallery: _RecordingRun) -> None:
+    _write_provider(project)
+    write(project, "pyproject.toml", '[tool.pyside6-storybook]\ntheme_provider = "demo_theming:provider"\ntheme = "Ink"\n')
+
+    assert cli.main(["stories"]) == 0
+
+    assert gallery.calls == [(["Inputs/A", "Inputs/B"], "Ink")]
+    assert gallery.theme_providers[0] is sys.modules["demo_theming"].provider
+
+
+def test_the_command_line_wins_over_pyproject(project: Path, gallery: _RecordingRun) -> None:
+    _write_provider(project)
+    _write_provider(project, name="other_theming", names='("Paper", "Night")')
+    write(project, "pyproject.toml", '[tool.pyside6-storybook]\ntheme_provider = "demo_theming:provider"\ntheme = "Ink"\n')
+
+    assert cli.main(["--theme-provider", "other_theming:provider", "--theme", "Night", "stories"]) == 0
+
+    assert gallery.calls == [(["Inputs/A", "Inputs/B"], "Night")]
+    assert gallery.theme_providers[0] is sys.modules["other_theming"].provider
+    assert "demo_theming" not in sys.modules
+
+
+def test_the_built_in_themes_are_used_when_nothing_chooses_a_provider(project: Path, gallery: _RecordingRun) -> None:
+    assert cli.main(["--theme", "Dark", "stories"]) == 0
+
+    assert gallery.theme_providers == [None]
+
+
+def test_the_configured_pythonpath_applies_to_the_provider(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stories: StoryRegistry, gallery: _RecordingRun
+) -> None:
+    _write_provider(tmp_path, relative="src/demo_theming.py")
+    write(tmp_path, "gallery/a_story.py", story_source("Inputs/A"))
+    write(tmp_path, "pyproject.toml", '[tool.pyside6-storybook]\npythonpath = ["src"]\ntheme_provider = "demo_theming:provider"\n')
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main(["gallery"]) == 0
+
+    assert gallery.theme_providers[0] is sys.modules["demo_theming"].provider
+
+
+def test_an_unknown_theme_lists_the_providers_themes(project: Path, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]) -> None:
+    _write_provider(project)
+
+    assert cli.main(["--theme-provider", "demo_theming:provider", "--theme", "Light", "stories"]) == 1
+
+    error = capsys.readouterr().err
+    assert "'Light'" in error
+    assert "Paper, Ink" in error
+    assert gallery.calls == []
+
+
+def test_an_unknown_configured_theme_is_an_error(project: Path, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]) -> None:
+    write(project, "pyproject.toml", '[tool.pyside6-storybook]\ntheme = "Sepia"\n')
+
+    assert cli.main(["stories"]) == 1
+
+    error = capsys.readouterr().err
+    assert "'Sepia'" in error
+    assert "Light, Dark, System" in error
+    assert gallery.calls == []
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [("demo_theming", "expected 'module:attribute'"), ("no_such_module:provider", "no_such_module"), ("demo_theming:missing", "missing")],
+)
+def test_a_provider_that_cannot_be_loaded_is_an_error_not_the_built_in_themes(
+    project: Path, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str], spec: str, expected: str
+) -> None:
+    _write_provider(project)
+
+    assert cli.main(["--theme-provider", spec, "stories"]) == 1
+
+    error = capsys.readouterr().err
+    assert spec in error
+    assert expected in error
+    assert gallery.calls == []
+
+
+def test_a_provider_whose_theme_names_raises_is_an_error(project: Path, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]) -> None:
+    _write_provider(project, name="bad_theming", names='raise RuntimeError("no names")')
+
+    assert cli.main(["--theme-provider", "bad_theming:provider", "stories"]) == 1
+
+    assert "no names" in capsys.readouterr().err
+    assert gallery.calls == []
+
+
+def test_list_names_the_provider_and_does_not_activate_it(project: Path, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]) -> None:
+    write(project, "demo_theming.py", _provider_source(activate='raise AssertionError("activated")'))
+
+    assert cli.main(["--list", "--theme-provider", "demo_theming:provider", "stories"]) == 0
+
+    captured = capsys.readouterr()
+    assert captured.out.splitlines() == ["Inputs/A", "Inputs/B"]
+    assert captured.err.splitlines() == [
+        "pyside6-storybook: stories from the command line",
+        "pyside6-storybook: theme provider demo_theming:provider (themes: Paper, Ink)",
+    ]
+
+
+def test_a_broken_pyproject_is_an_error_with_targets(project: Path, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]) -> None:
+    write(project, "pyproject.toml", "[tool.pyside6-storybook\n")
+
+    assert cli.main(["stories"]) == 1
+
+    assert "not valid TOML" in capsys.readouterr().err
+    assert gallery.calls == []
+
 
 def test_examples_open_the_gallery_with_the_example_stories(stories: StoryRegistry, gallery: _RecordingRun) -> None:
     assert cli.main(["--examples"]) == 0

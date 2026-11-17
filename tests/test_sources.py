@@ -111,10 +111,65 @@ def test_configuration_errors_name_the_key_and_the_file(tmp_path: Path, no_entry
     assert expected in str(error_info.value)
 
 
-def test_command_line_targets_skip_reading_a_broken_pyproject(tmp_path: Path, no_entry_points: None) -> None:
+def test_a_broken_pyproject_is_an_error_even_with_command_line_targets(tmp_path: Path, no_entry_points: None) -> None:
     write(tmp_path, "pyproject.toml", "[tool.pyside6-storybook\n")
 
-    assert resolve_story_sources(["given"], examples=False, cwd=tmp_path).targets == ("given",)
+    with pytest.raises(StorySourcesError, match="not valid TOML"):
+        resolve_story_sources(["given"], examples=False, cwd=tmp_path)
+
+
+def test_theme_keys_are_read(tmp_path: Path, no_entry_points: None) -> None:
+    write(tmp_path, "pyproject.toml", '[tool.pyside6-storybook]\nstories = ["s"]\ntheme_provider = "app.theming:provider"\ntheme = "Ink"\n')
+
+    resolved = resolve_story_sources([], examples=False, cwd=tmp_path)
+
+    assert (resolved.theme_provider, resolved.theme) == ("app.theming:provider", "Ink")
+
+
+def test_theme_keys_default_to_none(tmp_path: Path, no_entry_points: None) -> None:
+    resolved = resolve_story_sources([], examples=False, cwd=tmp_path)
+
+    assert (resolved.theme_provider, resolved.theme) == (None, None)
+
+
+def test_theme_keys_and_pythonpath_are_read_with_command_line_targets(tmp_path: Path, no_entry_points: None) -> None:
+    (tmp_path / "src").mkdir()
+    write(
+        tmp_path,
+        "pyproject.toml",
+        '[tool.pyside6-storybook]\nstories = ["ignored"]\npythonpath = ["src"]\ntheme_provider = "a:b"\ntheme = "Ink"\n',
+    )
+
+    resolved = resolve_story_sources(["given"], examples=False, cwd=tmp_path)
+
+    assert resolved.targets == ("given",)
+    assert resolved.origin == "the command line"
+    assert resolved.pythonpath == ((tmp_path / "src").resolve(),)
+    assert (resolved.theme_provider, resolved.theme) == ("a:b", "Ink")
+
+
+def test_theme_keys_are_read_with_examples(tmp_path: Path, no_entry_points: None) -> None:
+    write(tmp_path, "pyproject.toml", '[tool.pyside6-storybook]\ntheme = "Dark"\n')
+
+    assert resolve_story_sources([], examples=True, cwd=tmp_path).theme == "Dark"
+
+
+def test_a_theme_only_table_still_falls_back_to_the_examples(tmp_path: Path, no_entry_points: None) -> None:
+    write(tmp_path, "pyproject.toml", '[tool.pyside6-storybook]\ntheme = "Dark"\n')
+
+    resolved = resolve_story_sources([], examples=False, cwd=tmp_path)
+
+    assert resolved.theme == "Dark"
+    assert "built-in examples" in resolved.origin
+
+
+@pytest.mark.parametrize("key", ["theme_provider", "theme"])
+@pytest.mark.parametrize("value", ['""', "3", "[]"])
+def test_a_theme_key_must_be_a_non_empty_string(tmp_path: Path, no_entry_points: None, key: str, value: str) -> None:
+    write(tmp_path, "pyproject.toml", f'[tool.pyside6-storybook]\nstories = ["s"]\n{key} = {value}\n')
+
+    with pytest.raises(StorySourcesError, match=f"'{key}' must be a non-empty string"):
+        resolve_story_sources(["given"], examples=False, cwd=tmp_path)
 
 
 def test_an_empty_pythonpath_is_the_same_as_none(tmp_path: Path, no_entry_points: None) -> None:

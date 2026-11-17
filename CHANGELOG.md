@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Choosing a theme provider: `--theme-provider module:attribute` on the command line, or `theme_provider = "module:attribute"` in
+  `[tool.pyside6-storybook]`, loads an application's own `ThemeProvider` (an instance, a class or a no-argument function; the attribute
+  may be dotted), and `theme` in `pyproject.toml` chooses the starting theme like `--theme`. The command line wins. The provider is
+  loaded before the stories, an error in it or an unknown theme exits with code 1 and never falls back to the built-in themes, and
+  `--list` names the provider and its themes on standard error without activating it. A reload keeps the provider's modules (and those
+  it imports in `activate`) instead of re-importing them, so the stories and the provider share the application's theme manager;
+  restart the gallery after editing the provider.
 - System theme: `BuiltinThemeProvider` has a third theme, System, which restores the style, palette and style sheet the application had
   when the gallery started and lets the colour scheme follow the operating system (unless the application forced one), including a
   change while the gallery runs. `Ctrl+T` cycles Light, Dark, System. `StoryContext.color_scheme` (a `Qt.ColorScheme`, `Unknown` by
@@ -102,6 +109,9 @@ All notable changes to this project are documented in this file.
   `pyside6-storybook --examples`.
 
 ### Changed
+- `--theme` no longer limits its value with argparse: an unknown name prints an error and exits with code 1 (was 2) after the theme
+  provider has loaded, and the valid names are the provider's. `pythonpath`, `theme_provider` and `theme` in `pyproject.toml` are read
+  also when the command line names targets, so an invalid `pyproject.toml` is an error then too (it was ignored).
 - The Light theme's `Highlight` and `Accent` are `#1F5FC4` (was `#2A6FDB`). Fusion draws the focus ring in a colour derived from
   `Highlight`, which was `#5391ED` and reached only 2.77:1 against the Light `Window`; the ring is now `#194C9D` (7.2:1), and
   selected text on the highlight is 6.0:1. The Dark theme's ring was already above 3:1 and its colours are unchanged.

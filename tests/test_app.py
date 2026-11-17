@@ -1,15 +1,20 @@
 import functools
+import sys
+from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QEventLoop, QTimer
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication, QComboBox, QLabel
+from story_files import story_source, write
 
-from pyside6_storybook import LoadError, StoryRegistry
+from pyside6_storybook import LoadError, StoryRegistry, load_stories
 from pyside6_storybook.app import run
+from pyside6_storybook.discovery.reload import ReloadSession
 from pyside6_storybook.gui.sidebar import StorySidebar
 from pyside6_storybook.gui.window import GalleryWindow
 from pyside6_storybook.themes import DARK_THEME
+from pyside6_storybook.themes.provider_loader import load_theme_provider
 
 
 def test_run_shows_the_window_themes_the_app_and_restores_it(qapp: QApplication, restore_application_look: None, registry: StoryRegistry) -> None:
@@ -115,3 +120,67 @@ def test_run_lists_load_errors_in_the_gallery(qapp: QApplication, restore_applic
 
     assert run(registry, argv=["pyside6-storybook"], load_errors=errors) == 0
     assert seen["entries"] == ["Inputs/Button", "Display/Label", "Display/Plain", "Load errors (1)"]
+
+
+def test_run_keeps_the_modules_a_provider_imports_in_activate(
+    qapp: QApplication, restore_application_look: None, tmp_path: Path, stories: StoryRegistry
+) -> None:
+    write(tmp_path, "lazy_manager.py", "MANAGER = object()\n")
+    write(
+        tmp_path,
+        "lazy_theming.py",
+        """
+class Provider:
+    def theme_names(self):
+        return ("Paper",)
+
+    def current_theme(self):
+        return "Paper"
+
+    def activate(self, app):
+        import lazy_manager
+
+        self.manager = lazy_manager.MANAGER
+
+    def set_theme(self, name):
+        pass
+
+    def on_changed(self, callback):
+        pass
+
+    def deactivate(self):
+        pass
+
+
+provider = Provider()
+""",
+    )
+    write(tmp_path, "stories/a_story.py", story_source("Inputs/A", "str(id(__import__('lazy_manager').MANAGER))"))
+    sys.path.insert(0, str(tmp_path))
+    loaded = load_theme_provider("lazy_theming:provider")
+    provider = loaded.provider
+    assert "lazy_manager" not in sys.modules
+    result = load_stories(("stories",), cwd=tmp_path)
+    assert result.errors == ()
+    session = ReloadSession(("stories",), cwd=tmp_path, initial=result, keep=loaded.modules)
+    seen: dict[str, object] = {}
+
+    # The stories import the manager only when a story is built, after activate() imported it.
+    def reload_and_quit() -> None:
+        seen["manager"] = sys.modules["lazy_manager"]
+        write(tmp_path, "stories/a_story.py", story_source("Inputs/A", "str(id(__import__('lazy_manager').MANAGER)) + 'x'"))
+        seen["accepted"] = session.reload().accepted
+        seen["after"] = sys.modules["lazy_manager"]
+        qapp.quit()
+
+    QTimer.singleShot(0, reload_and_quit)
+    assert run(result.registry, argv=["pyside6-storybook"], reload=session, theme_provider=provider) == 0
+
+    assert seen["accepted"] is True
+    assert seen["after"] is seen["manager"]
+    assert sys.modules["lazy_manager"].MANAGER is sys.modules["lazy_theming"].provider.manager
+
+
+def test_run_without_a_reload_session_does_not_need_one(qapp: QApplication, restore_application_look: None, registry: StoryRegistry) -> None:
+    QTimer.singleShot(0, qapp.quit)
+    assert run(registry, argv=["pyside6-storybook"], reload=None) == 0

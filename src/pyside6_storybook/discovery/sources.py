@@ -3,6 +3,8 @@
 The order is: targets on the command line (and ``--examples``), then ``[tool.pyside6-storybook]`` in the working directory's
 ``pyproject.toml``, then the ``pyside6_storybook.stories`` entry points of installed packages, then the built-in examples. The
 examples are used only when nothing is configured, never because configured stories failed to load.
+
+``pythonpath``, ``theme_provider`` and ``theme`` of the same table apply whichever of these supplies the stories.
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ EXAMPLES_FOLDER = Path(pyside6_storybook.examples.__file__).resolve().parent
 """The folder of the installed example stories. Loaded by path, not by module name, so a local folder or module of the same name
 cannot shadow it (an existing path wins over a module name in story discovery)."""
 
-_KNOWN_KEYS = ("stories", "pythonpath")
+_KNOWN_KEYS = ("stories", "pythonpath", "theme_provider", "theme")
 
 
 class StorySourcesError(Exception):
@@ -37,11 +39,15 @@ class StorySources:
         targets: Folders, files and dotted module names for ``load_stories``, resolved against the working directory.
         origin: Where the targets came from, for messages ("the command line", "[tool.pyside6-storybook] in ...").
         pythonpath: Folders to put on ``sys.path`` before loading, from the configuration. Absolute paths.
+        theme_provider: The ``module:attribute`` of the configured theme provider, or ``None``.
+        theme: The configured starting theme, or ``None``.
     """
 
     targets: tuple[str, ...]
     origin: str
     pythonpath: tuple[Path, ...] = field(default=(), kw_only=True)
+    theme_provider: str | None = field(default=None, kw_only=True)
+    theme: str | None = field(default=None, kw_only=True)
 
 
 def resolve_story_sources(command_line_targets: Sequence[str], *, examples: bool, cwd: Path) -> StorySources:
@@ -53,27 +59,38 @@ def resolve_story_sources(command_line_targets: Sequence[str], *, examples: bool
         cwd: The working directory, where ``pyproject.toml`` is looked for.
 
     Returns:
-        The targets, their origin and the configured ``pythonpath``.
+        The targets, their origin, the configured ``pythonpath``, ``theme_provider`` and ``theme``.
 
     Raises:
-        StorySourcesError: If ``pyproject.toml`` is not valid TOML or its ``[tool.pyside6-storybook]`` table is wrong. It is only
-            read when the command line names no targets.
+        StorySourcesError: If ``pyproject.toml`` is not valid TOML or its ``[tool.pyside6-storybook]`` table is wrong. The file is
+            read also when the command line names targets, because ``pythonpath``, ``theme_provider`` and ``theme`` apply to
+            whatever stories are opened; only ``stories`` is ignored then.
     """
-    if command_line_targets or examples:
-        targets = tuple(command_line_targets) + ((str(EXAMPLES_FOLDER),) if examples else ())
-        return StorySources(targets, "the command line")
     config_path = cwd / CONFIG_FILE_NAME
     table = _read_config_table(config_path)
     pythonpath = _pythonpath(table, config_path) if table is not None else ()
+    theme_provider = _non_empty_string(table, "theme_provider", config_path) if table is not None else None
+    theme = _non_empty_string(table, "theme", config_path) if table is not None else None
+    if command_line_targets or examples:
+        targets = tuple(command_line_targets) + ((str(EXAMPLES_FOLDER),) if examples else ())
+        return StorySources(targets, "the command line", pythonpath=pythonpath, theme_provider=theme_provider, theme=theme)
     stories = _stories(table, config_path) if table is not None else None
     if stories is not None:
-        return StorySources(stories, f"[tool.{CONFIG_TABLE}] in {config_path}", pythonpath=pythonpath)
+        origin = f"[tool.{CONFIG_TABLE}] in {config_path}"
+        return StorySources(stories, origin, pythonpath=pythonpath, theme_provider=theme_provider, theme=theme)
     advertised = list(entry_points(group=ENTRY_POINT_GROUP))
     if advertised:
         names = ", ".join(entry_point.name for entry_point in advertised)
         targets = tuple(entry_point.module for entry_point in advertised)
-        return StorySources(targets, f"the {ENTRY_POINT_GROUP} entry points: {names}", pythonpath=pythonpath)
-    return StorySources((str(EXAMPLES_FOLDER),), "the built-in examples (nothing is configured)", pythonpath=pythonpath)
+        origin = f"the {ENTRY_POINT_GROUP} entry points: {names}"
+        return StorySources(targets, origin, pythonpath=pythonpath, theme_provider=theme_provider, theme=theme)
+    return StorySources(
+        (str(EXAMPLES_FOLDER),),
+        "the built-in examples (nothing is configured)",
+        pythonpath=pythonpath,
+        theme_provider=theme_provider,
+        theme=theme,
+    )
 
 
 def put_on_sys_path(folders: Sequence[Path], *, cwd: Path) -> None:
@@ -126,6 +143,15 @@ def _string_list(table: Mapping[str, object], key: str, path: Path) -> tuple[str
     if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
         raise StorySourcesError(f"[tool.{CONFIG_TABLE}] in {path}: '{key}' must be a list of strings")
     return tuple(value)
+
+
+def _non_empty_string(table: Mapping[str, object], key: str, path: Path) -> str | None:
+    value = table.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise StorySourcesError(f"[tool.{CONFIG_TABLE}] in {path}: '{key}' must be a non-empty string")
+    return value
 
 
 def _stories(table: Mapping[str, object], path: Path) -> tuple[str, ...] | None:
