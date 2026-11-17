@@ -38,13 +38,27 @@ class StoryItem(StorybookItem):
 
     def reportinfo(self) -> tuple[str | Path, int | None, str]:
         """Return the story function's file and line, and ``story <id> [<theme>]``."""
-        function = inspect.unwrap(self.story.function)
-        try:
-            file = inspect.getsourcefile(function)
-            line: int | None = inspect.getsourcelines(function)[1] - 1
-        except (TypeError, OSError):
-            file, line = None, None
-        return file or self.path, line, f"story {self.story.id} [{self.theme}]"
+        return story_report_info(self.story, self.path, f"story {self.story.id} [{self.theme}]")
 
 
-__all__ = ["StoryItem"]
+def story_report_info(story: Story, fallback: Path, description: str) -> tuple[str | Path, int | None, str]:
+    """Return where ``story``'s function is defined (``fallback`` when its source is unavailable) and ``description``.
+
+    Args:
+        story: The story.
+        fallback: The file to report when the function's source cannot be found.
+        description: The text that names the item.
+
+    Returns:
+        The file, the zero-based line and the description, as ``pytest.Item.reportinfo`` does.
+    """
+    function = inspect.unwrap(story.function)
+    try:
+        file = inspect.getsourcefile(function)
+        line: int | None = inspect.getsourcelines(function)[1] - 1
+    except (TypeError, OSError):
+        file, line = None, None
+    return file or fallback, line, description
+
+
+__all__ = ["StoryItem", "story_report_info"]

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pytest
 
@@ -25,6 +25,7 @@ class StorybookOptions:
         themes: The themes to render each story in, or ``None`` for every theme the provider lists.
         qt_warnings_fail: Whether a Qt warning logged during a render fails the item.
         qt_warnings_ignore: Patterns (searched in the message) of the warnings that never fail.
+        a11y: Whether each story also gets the accessible-name and keyboard-focus items (``--storybook-a11y``).
     """
 
     enabled: bool
@@ -33,6 +34,7 @@ class StorybookOptions:
     themes: tuple[str, ...] | None
     qt_warnings_fail: bool
     qt_warnings_ignore: tuple[re.Pattern[str], ...]
+    a11y: bool = field(default=False, kw_only=True)
 
     @classmethod
     def from_config(cls, config: pytest.Config) -> StorybookOptions:
@@ -63,6 +65,7 @@ class StorybookOptions:
             themes=themes,
             qt_warnings_fail=warnings == "fail",
             qt_warnings_ignore=_patterns(config.getini("storybook_qt_warnings_ignore")),
+            a11y=bool(config.getoption("storybook_a11y") or config.getini("storybook_a11y")),
         )
 
 

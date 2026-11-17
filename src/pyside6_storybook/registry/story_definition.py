@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from PySide6.QtWidgets import QWidget
 
 from pyside6_storybook.controls import Control
+from pyside6_storybook.registry.checks_ignore import NO_CHECKS_IGNORED, coerce_checks_ignore
 from pyside6_storybook.registry.layout import Layout, coerce_layout
 from pyside6_storybook.registry.story_context import Decorator, StoryContext, StoryFunction
 
@@ -41,6 +42,8 @@ class Story:
         decorators: The decorators that wrap the story's widget, the first one outermost. A variant without its own has its base's.
         layout: The layout the story declared, or ``None`` to use the registry's ``default_layout``. A variant without its own layout
             has its base's.
+        checks_ignore: The checks the story opts out of, as a read-only mapping from the rule (``"name"`` or ``"focus"``) to the reason.
+            A variant without its own has its base's.
         args: For a variant, the values it overrides, by control name, as a read-only mapping; empty for any other story.
         variant_of: The base story, for a variant; ``None`` otherwise.
         doc: The function's docstring, or an empty string.
@@ -55,6 +58,7 @@ class Story:
         "_function",
         "_registry",
         "_variant_of",
+        "checks_ignore",
         "controls",
         "decorators",
         "doc",
@@ -74,6 +78,7 @@ class Story:
         controls: Iterable[Control] = (),
         layout: Layout | str | None = None,
         decorators: Iterable[Decorator] = (),
+        checks_ignore: Mapping[str, str] = NO_CHECKS_IGNORED,
     ) -> None:
         """Create a story.
 
@@ -84,10 +89,13 @@ class Story:
             layout: How the gallery places the widget in the preview: a ``Layout``, its string value, or ``None`` for the registry's
                 ``default_layout``.
             decorators: Functions that wrap the widget, the first one outermost; see ``Decorator``.
+            checks_ignore: Rules of the pytest plugin's checks the story opts out of, each with the reason: ``{"focus": "decorative"}``.
 
         Raises:
-            ValueError: If ``id`` is empty or has an empty segment, two controls share a name, or ``layout`` is not valid.
-            TypeError: If an item of ``controls`` is not a control, or ``decorators`` is not a collection of callables.
+            ValueError: If ``id`` is empty or has an empty segment, two controls share a name, ``layout`` is not valid, or
+                ``checks_ignore`` names an unknown rule or has an empty reason.
+            TypeError: If an item of ``controls`` is not a control, ``decorators`` is not a collection of callables, or
+                ``checks_ignore`` is not a mapping.
         """
         segments = id.split("/")
         if any(not segment.strip() for segment in segments):
@@ -102,6 +110,7 @@ class Story:
             names.add(control.name)
         self.layout: Layout | None = coerce_layout(layout)
         self.decorators: tuple[Decorator, ...] = _check_decorators(id, decorators)
+        self.checks_ignore: Mapping[str, str] = coerce_checks_ignore(id, checks_ignore)
         self.id = id
         self.name = segments[-1]
         self.groups = tuple(segments[:-1])
@@ -155,6 +164,7 @@ class Story:
         args: Mapping[str, object] | None = None,
         layout: Layout | str | None = None,
         decorators: Iterable[Decorator] | None = None,
+        checks_ignore: Mapping[str, str] | None = None,
     ) -> Story:
         """Register a variant of this story: the same function and controls, with other starting values.
 
@@ -166,6 +176,7 @@ class Story:
             args: Values that replace control defaults, by control name. Each must be accepted by its control's ``coerce``.
             layout: The variant's layout; ``None`` keeps this story's.
             decorators: The variant's decorators, which replace this story's; ``None`` keeps them.
+            checks_ignore: The variant's check opt-outs, which replace this story's; ``None`` keeps them.
 
         Returns:
             The registered variant.
@@ -174,8 +185,8 @@ class Story:
             TypeError: If this story is itself a variant.
             RuntimeError: If this story was never registered.
             ValueError: If this story's id has no group, ``name`` is invalid, ``args`` has an unknown key or an invalid value,
-                or ``layout`` is not valid.
-            TypeError: Also if ``decorators`` is not a collection of callables.
+                ``layout`` is not valid, or ``checks_ignore`` names an unknown rule or has an empty reason.
+            TypeError: Also if ``decorators`` is not a collection of callables or ``checks_ignore`` is not a mapping.
         """
         if self.variant_of is not None:
             raise TypeError(f"{self.id!r} is a variant of {self.variant_of.id!r}; call .variant() on the base story instead")
@@ -206,6 +217,7 @@ class Story:
             controls=self.controls,
             layout=self.layout if layout is None else layout,
             decorators=self.decorators if decorators is None else decorators,
+            checks_ignore=self.checks_ignore if checks_ignore is None else checks_ignore,
         )
         variant._args = MappingProxyType(checked)
         variant._variant_of = self

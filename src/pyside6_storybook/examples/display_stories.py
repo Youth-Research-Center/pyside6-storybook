@@ -179,6 +179,7 @@ def alignment(ctx: StoryContext) -> QWidget:
 def table(ctx: StoryContext) -> QWidget:
     """A ``QTableWidget`` that fills the preview. It grows and shrinks with the window, and scrolls inside itself."""
     widget = QTableWidget(ctx.args["rows"], ctx.args["columns"])
+    widget.setAccessibleName("Example table")
     widget.setAlternatingRowColors(ctx.args["alternating_rows"])
     for row in range(ctx.args["rows"]):
         for column in range(ctx.args["columns"]):

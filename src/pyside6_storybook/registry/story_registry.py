@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 
 from pyside6_storybook.controls import Control
+from pyside6_storybook.registry.checks_ignore import NO_CHECKS_IGNORED, coerce_checks_ignore
 from pyside6_storybook.registry.layout import Layout, coerce_layout
 from pyside6_storybook.registry.size_preset import SizePreset
 from pyside6_storybook.registry.story_context import Decorator, StoryFunction
@@ -87,6 +88,7 @@ class StoryRegistry:
         controls: Iterable[Control] = (),
         layout: Layout | str | None = None,
         decorators: Iterable[Decorator] = (),
+        checks_ignore: Mapping[str, str] = NO_CHECKS_IGNORED,
     ) -> Callable[[StoryFunction], Story]:
         """Return a decorator that turns a function into a story registered here.
 
@@ -95,18 +97,22 @@ class StoryRegistry:
             controls: The story's controls.
             layout: The story's layout: a ``Layout``, its string value, or ``None`` for ``default_layout``.
             decorators: Functions that wrap the story's widget, the first one outermost; see ``Decorator``.
+            checks_ignore: Rules of the pytest plugin's checks the story opts out of, each with the reason: ``{"focus": "decorative"}``.
 
         Returns:
             A decorator returning the registered ``Story``.
 
         Raises:
-            ValueError: If ``layout`` is not valid; raised here, when the decorator is created.
+            ValueError: If ``layout`` is not valid, or ``checks_ignore`` names an unknown rule or has an empty reason; raised here,
+                when the decorator is created.
+            TypeError: If ``checks_ignore`` is not a mapping; raised here too.
             TypeError: If ``decorators`` is not a collection of callables; raised when the story is registered.
         """
         story_layout = coerce_layout(layout)
+        ignored = coerce_checks_ignore(id, checks_ignore)
 
         def decorator(function: StoryFunction) -> Story:
-            return self.register(Story(id, function, controls=controls, layout=story_layout, decorators=decorators))
+            return self.register(Story(id, function, controls=controls, layout=story_layout, decorators=decorators, checks_ignore=ignored))
 
         return decorator
 
