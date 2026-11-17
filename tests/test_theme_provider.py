@@ -23,10 +23,11 @@ pytestmark = pytest.mark.usefixtures("restore_window_activation")
 
 @pytest.fixture(autouse=True)
 def _delete_closed_windows() -> Iterator[None]:
-    """Delete the windows qtbot closed, as the event loop would, before the next test changes the application style sheet.
+    """Delete the windows qtbot closed, as the event loop or ``run()`` would, before the next test changes the application style sheet.
 
-    Without it, closed windows from many tests stay pending deletion across several style sheet changes, and Qt can crash in
-    ``setStyleSheet`` once they are deleted (#80; ``pyside6_storybook.polishing`` covers the case a running gallery hits).
+    Qt can crash in ``setStyleSheet`` when closed windows stay pending deletion across style sheet changes and are deleted later (#80).
+    No event loop runs between tests, so without this fixture they would; ``run()`` deletes its window before the provider restores the
+    application's look.
     """
     yield
     QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)

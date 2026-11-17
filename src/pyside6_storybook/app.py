@@ -104,6 +104,9 @@ def run(
         exit_code = app.exec()
         window.close()
         window.deleteLater()
+        # Delete the window, and every widget it left for deletion, before the provider restores the application's look: Qt can crash
+        # in a later setStyleSheet when they are deleted after a style sheet change (#80).
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         # Quitting closes the window, and closing the last window posts another Quit event. The loop has ended, so a later event loop in
         # this process would receive it and stop at once, and every nested loop after it would return immediately.
         QCoreApplication.removePostedEvents(app, QEvent.Type.Quit)

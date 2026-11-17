@@ -137,6 +137,8 @@ All notable changes to this project are documented in this file.
   a story's. The selected story's text stays readable when a style sheet colours the selected row.
 
 ### Fixed
+- Calling `run()` again in the same process with a theme provider that sets a style sheet crashed Qt: `run()` now deletes its window
+  before the provider restores the application's look.
 - The package no longer installs PySide6 6.12.0 on Python 3.11. That release drops a reference to `None`, `True` or `False` on many calls
   under Python 3.11, and a long session aborted the interpreter on exit ("none_dealloc"). Python 3.12 and newer still get 6.12.0.
 - The gallery could crash when the application style sheet was cleared and set again, for example by a theme that sets a style sheet:
