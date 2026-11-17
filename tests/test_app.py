@@ -1,4 +1,6 @@
 import functools
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -43,6 +45,54 @@ def test_run_shows_the_window_themes_the_app_and_restores_it(qapp: QApplication,
     assert str(seen["style"]).lower() == "fusion"
     assert seen["window_color"] == "#f0f0f0"
     assert qapp.palette() == palette_before
+
+
+_RUN_TWICE = """
+import sys
+sys.path.insert(0, {tests!r})
+from fake_providers import StyleSheetProvider
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication, QPushButton
+from pyside6_storybook import StoryRegistry, run
+
+app = QApplication([])
+registry = StoryRegistry()
+registry.story("Inputs/Button")(lambda ctx: QPushButton("Button"))
+
+
+def failing(ctx):
+    raise RuntimeError("boom")
+
+
+registry.story("Broken/Story")(failing)
+
+
+def use_the_gallery():
+    window = next(w for w in QApplication.topLevelWidgets() if type(w).__name__ == "GalleryWindow" and w.isVisible())
+    window.select_story("Broken/Story")
+    window.select_story("Inputs/Button")
+    window.set_theme("Ink")
+    app.quit()
+
+
+for _ in range(3):
+    QTimer.singleShot(0, use_the_gallery)
+    assert run(registry, argv=[], theme_provider=StyleSheetProvider()) == 0
+print("survived")
+"""
+
+
+def test_run_can_be_called_again_with_a_provider_that_sets_a_style_sheet() -> None:
+    # run() used to leave the closed window pending deletion while the provider restored the style sheet; deleting it later crashed
+    # Qt in the next setStyleSheet (#80). The scenario runs in a subprocess because the crash is a segfault.
+    tests = str(Path(__file__).resolve().parent)
+    env = {**os.environ, "QT_QPA_PLATFORM": "offscreen"}
+    result = subprocess.run(
+        [sys.executable, "-c", _RUN_TWICE.format(tests=tests)], capture_output=True, text=True, timeout=60, env=env, check=False
+    )
+
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert "survived" in result.stdout
 
 
 def test_run_leaves_later_event_loops_working(qapp: QApplication, restore_application_look: None, registry: StoryRegistry) -> None:
