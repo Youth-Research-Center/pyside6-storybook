@@ -42,6 +42,7 @@ from pyside6_storybook.gui.icons import ActionIcons
 from pyside6_storybook.gui.reload_status import ReloadStatus
 from pyside6_storybook.gui.reload_watcher import ReloadWatcher
 from pyside6_storybook.gui.sidebar import LOAD_ERRORS_HEADING, StorySidebar
+from pyside6_storybook.polishing import polish_all_widgets
 from pyside6_storybook.registry import Layout, Story, StoryContext, StoryRegistry
 from pyside6_storybook.registry.rendering import StoryRenderError, render_story
 from pyside6_storybook.themes import BuiltinThemes
@@ -463,14 +464,14 @@ class GalleryWindow(QMainWindow):
             dialog.deleteLater()
 
     def _polish_widgets(self) -> None:
-        """Polish the window's widgets now, also those that are hidden and were never shown.
+        """Polish every widget now, also those that are hidden and were never shown.
 
         An application style sheet that is cleared while a widget has never been polished can crash Qt later (see
-        ``pyside6_storybook.polishing``), and a theme provider or the application may change the style sheet at any time.
+        ``pyside6_storybook.polishing``), and a theme provider or the application may change the style sheet at any time. Every widget
+        of the application is polished, not only the window's: a failed render leaves the story's widget and a decorator's wrapper
+        outside the window until their deferred deletion.
         """
-        self.ensurePolished()
-        for widget in self.findChildren(QWidget):
-            widget.ensurePolished()
+        polish_all_widgets()
 
     def _apply_tab_order(self) -> None:
         """Chain Tab through the window in reading order: search, tree, preview tabs, canvas controls, the preview, then the side pane.
