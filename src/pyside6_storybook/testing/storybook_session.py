@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 import pytest
 from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QPalette
+from PySide6.QtGui import QImage, QPalette
 from PySide6.QtWidgets import QApplication, QLayout, QVBoxLayout, QWidget
 
 import pyside6_storybook
@@ -29,6 +29,7 @@ from pyside6_storybook.discovery.sources import StorySources, StorySourcesError,
 from pyside6_storybook.polishing import polish_all_widgets
 from pyside6_storybook.registry import Story, StoryContext, StoryRegistry
 from pyside6_storybook.registry.rendering import RenderedStory, StoryRenderError, render_story
+from pyside6_storybook.testing import snapshots
 from pyside6_storybook.testing.exception_capture import ExceptionCapture
 from pyside6_storybook.testing.qt_messages import QtMessageCollector
 from pyside6_storybook.testing.storybook_options import StorybookOptions
@@ -219,11 +220,13 @@ class StorybookSession:
 
         Returns:
             One item per story and theme (plus, with ``--storybook-a11y``, one per story and accessibility rule and one per story and theme for
-            contrast), one per load error, or a single configuration item.
+            contrast, and with ``--storybook-snapshots`` one per story and theme for the snapshot), one per load error, or a single
+            configuration item.
         """
         from pyside6_storybook.testing.a11y_item import A11yItem
         from pyside6_storybook.testing.contrast_item import ContrastItem
         from pyside6_storybook.testing.load_error_item import ConfigurationItem, StoryLoadErrorItem
+        from pyside6_storybook.testing.snapshot_item import SnapshotItem
         from pyside6_storybook.testing.story_item import StoryItem
 
         self.prepare()
@@ -238,6 +241,8 @@ class StorybookSession:
                 items.extend(A11yItem.from_parent(collector, story=story, rule=rule) for rule in A11Y_CHECKS)
                 if self.options.contrast:
                     items.extend(ContrastItem.from_parent(collector, story=story, theme=theme) for theme in self.themes)
+            if self.options.snapshots:
+                items.extend(SnapshotItem.from_parent(collector, story=story, theme=theme) for theme in self.themes)
         items.extend(StoryLoadErrorItem.from_parent(collector, error=error) for error in self.load_errors)
         if not items:
             targets = ", ".join(self.sources.targets)
@@ -414,6 +419,92 @@ class StorybookSession:
             return [f"{len(issues)} text contrast issue(s) in {story.id} in {theme}:", *(f"  {issue}" for issue in issues)]
 
         self._check_rendered(story, theme, inspect)
+
+    def check_snapshot(self, story: Story, theme: str) -> None:
+        """Render a story in a theme and compare a screenshot of it with its baseline, as a snapshot item does.
+
+        With ``--storybook-update-snapshots`` the baseline is written (or replaced when it differs) once the render has passed the checks
+        of ``check_story``. Otherwise a missing baseline, a different size or too many differing pixels fail; the actual and the diff image
+        are then written to the failures folder, and a pass removes the images an earlier failure left there.
+
+        Args:
+            story: The story to check.
+            theme: The theme to render it in.
+
+        Raises:
+            StoryRenderError: If the story or a decorator fails.
+            StorybookFailure: If the screenshot does not match, there is no baseline, the theme provider fails, Qt logged a warning or an
+                exception reached ``sys.excepthook``.
+        """
+        options = self.options
+        name = snapshots.snapshot_name(story.id, theme)
+        platform = snapshots.platform_name()
+        baseline_path = options.snapshot_dir / platform / f"{name}.png"
+        actual_path = options.snapshot_failures / platform / f"{name}.actual.png"
+        diff_path = options.snapshot_failures / platform / f"{name}.diff.png"
+        captured: list[QImage] = []
+
+        def inspect(rendered: RenderedHost) -> list[str]:
+            actual = snapshots.capture(rendered.host)
+            captured.append(actual)
+            if options.update_snapshots:
+                return []
+            return self._compare_snapshot(story, theme, actual, baseline_path, actual_path, diff_path)
+
+        self._check_rendered(story, theme, inspect)
+        if options.update_snapshots and captured:
+            self._update_baseline(captured[0], baseline_path)
+
+    def _compare_snapshot(
+        self, story: Story, theme: str, actual: QImage, baseline_path: Path, actual_path: Path, diff_path: Path
+    ) -> list[str]:
+        """Compare ``actual`` with the baseline file; return the lines of the failure, or none, and keep the failures folder current."""
+        options = self.options
+        if not baseline_path.is_file():
+            self._write_image(actual, actual_path)
+            return [
+                f"no baseline at {baseline_path}; run pytest --storybook --storybook-update-snapshots to create it",
+                f"  actual image: {actual_path}",
+            ]
+        baseline = snapshots.load(baseline_path)
+        if baseline is None:
+            self._write_image(actual, actual_path)
+            return [f"the baseline at {baseline_path} is not a readable image; run pytest --storybook --storybook-update-snapshots to replace it"]
+        diff = snapshots.compare(baseline, actual, tolerance=options.snapshot_tolerance, max_diff=options.snapshot_max_diff)
+        if diff.matches:
+            actual_path.unlink(missing_ok=True)
+            diff_path.unlink(missing_ok=True)
+            return []
+        self._write_image(actual, actual_path)
+        self._write_image(snapshots.diff_image(baseline, actual, tolerance=options.snapshot_tolerance), diff_path)
+        limit = f"{options.snapshot_max_diff:.4%}"
+        if diff.size_matches:
+            headline = (
+                f"snapshot of {story.id} in {theme} differs from its baseline: {diff.share:.4%} of the pixels differ "
+                f"({diff.differing_pixels} of {diff.total_pixels}); at most {limit} may, with a tolerance of {options.snapshot_tolerance} per channel"
+            )
+        else:
+            (bw, bh), (aw, ah) = diff.baseline_size, diff.actual_size
+            headline = f"snapshot of {story.id} in {theme} has another size than its baseline: {aw}x{ah} instead of {bw}x{bh}"
+        return [
+            headline,
+            f"  baseline: {baseline_path}",
+            f"  actual:   {actual_path}",
+            f"  diff:     {diff_path}",
+            "  run pytest --storybook --storybook-update-snapshots to accept the new look",
+        ]
+
+    def _update_baseline(self, actual: QImage, baseline_path: Path) -> None:
+        """Write the baseline, unless the file already holds the same pixels."""
+        existing = snapshots.load(baseline_path) if baseline_path.is_file() else None
+        if existing is not None and snapshots.compare(existing, actual).matches:
+            return
+        self._write_image(actual, baseline_path)
+
+    @staticmethod
+    def _write_image(image: QImage, path: Path) -> None:
+        if not snapshots.save(image, path):
+            raise StorybookFailure(f"could not write the image {path}")
 
     def _check_rendered(self, story: Story, theme: str, inspect: Callable[[RenderedHost], list[str]]) -> None:
         """Render ``story`` in ``theme``, call ``inspect`` on it before it is disposed, and fail on its lines, Qt warnings and exceptions."""

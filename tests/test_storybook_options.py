@@ -112,3 +112,42 @@ def test_an_unknown_qt_warnings_value_in_the_ini_file_is_a_usage_error(pytester:
 def test_an_ignore_pattern_that_is_not_a_regular_expression_is_a_usage_error(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
     with pytest.raises(pytest.UsageError, match=r"storybook_qt_warnings_ignore: '\(' is not a valid regular expression"):
         _options(pytester, ini='storybook_qt_warnings_ignore = ["("]')
+
+
+def test_the_snapshot_defaults(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    options = _options(pytester)
+
+    assert (options.snapshots, options.update_snapshots, options.snapshot_tolerance, options.snapshot_max_diff) == (False, False, 0, 0.0)
+    assert options.snapshot_dir == pytester.path / "tests" / "storybook_snapshots"
+    assert options.snapshot_failures == pytester.path / "storybook-snapshot-failures"
+
+
+def test_the_snapshot_options_and_ini_keys(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    assert _options(pytester, "--storybook-snapshots").snapshots is True
+    assert _options(pytester, ini="storybook_snapshots = true").snapshots is True
+    updating = _options(pytester, "--storybook-update-snapshots")
+    assert (updating.snapshots, updating.update_snapshots) == (True, True)
+    options = _options(
+        pytester,
+        ini="""
+storybook_snapshot_dir = "baselines"
+storybook_snapshot_failures = "out/failures"
+storybook_snapshot_tolerance = "12"
+storybook_snapshot_max_diff = "0.25"
+""",
+    )
+    assert options.snapshot_dir == pytester.path / "baselines"
+    assert options.snapshot_failures == pytester.path / "out" / "failures"
+    assert (options.snapshot_tolerance, options.snapshot_max_diff) == (12, 0.25)
+
+
+@pytest.mark.parametrize("value", ["-1", "256", "1.5", "abc"])
+def test_a_snapshot_tolerance_outside_0_to_255_is_a_usage_error(pytester: pytest.Pytester, stories: StoryRegistry, value: str) -> None:
+    with pytest.raises(pytest.UsageError, match="storybook_snapshot_tolerance: .* is not a whole number from 0 to 255"):
+        _options(pytester, ini=f'storybook_snapshot_tolerance = "{value}"')
+
+
+@pytest.mark.parametrize("value", ["-0.1", "1.1", "abc", "nan"])
+def test_a_snapshot_max_diff_outside_0_to_1_is_a_usage_error(pytester: pytest.Pytester, stories: StoryRegistry, value: str) -> None:
+    with pytest.raises(pytest.UsageError, match="storybook_snapshot_max_diff: .* is not a share of pixels, a number from 0 to 1"):
+        _options(pytester, ini=f'storybook_snapshot_max_diff = "{value}"')

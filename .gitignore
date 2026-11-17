@@ -219,3 +219,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 .icon-cache/
+
+# pyside6-storybook snapshot failures (pytest --storybook-snapshots)
+storybook-snapshot-failures/

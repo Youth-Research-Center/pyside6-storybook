@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Screenshot snapshots: `pytest --storybook-snapshots` (ini `storybook_snapshots`) adds `storybook::<id>[<theme>-snapshot]` for every story and
+  theme, which compares a screenshot of the rendered story with the baseline
+  `tests/storybook_snapshots/<platform>/<id with / as __>[<theme>].png`. `--storybook-update-snapshots` writes or replaces the baselines; a
+  missing baseline fails and is never created silently. A mismatch (another size, or more differing pixels than `storybook_snapshot_max_diff`,
+  where a pixel differs when a channel differs by more than `storybook_snapshot_tolerance`) writes the actual and diff images to
+  `storybook-snapshot-failures/<platform>/` and names them. `storybook_snapshot_dir` and `storybook_snapshot_failures` move the folders.
+  `checks_ignore` accepts `"snapshot"`. See "Screenshot snapshots" in the README.
 - Text contrast check: `pyside6_storybook.checks.check_text_contrast(widget, *, normal=4.5, large=3.0, include_disabled=False)`
   renders a shown widget and returns a `CheckIssue` for each text (labels, buttons, line edits, spin boxes, combo boxes and items of
   item views) whose contrast against its background, measured on the pixels, is below 4.5:1 (3:1 for large text). `pytest

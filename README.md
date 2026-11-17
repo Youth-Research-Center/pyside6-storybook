@@ -508,6 +508,12 @@ the command line wins.
 - ini `storybook_contrast_normal` (default `4.5`) and `storybook_contrast_large` (default `3`): the contrast ratios, from 1 to 21,
   that normal and large text need.
 - `--storybook-contrast-disabled`, ini `storybook_contrast_disabled` (a bool): also check the text of disabled widgets.
+- `--storybook-snapshots`, ini `storybook_snapshots` (a bool): also compare a screenshot of every story and theme with its baseline (see
+  "Screenshot snapshots"). `--storybook-update-snapshots` writes the baselines instead and implies it.
+- ini `storybook_snapshot_dir` (default `tests/storybook_snapshots`) and `storybook_snapshot_failures` (default
+  `storybook-snapshot-failures`): the folders of the baselines and of the images of a failure, relative to pytest's rootdir.
+- ini `storybook_snapshot_tolerance` (default `0`, a whole number from 0 to 255) and `storybook_snapshot_max_diff` (default `0`, from 0 to 1):
+  how far a colour channel may differ, and what share of the pixels may differ, before a snapshot fails.
 - `--storybook-qt-warnings {fail,ignore}`, ini `storybook_qt_warnings`: whether a Qt warning logged during a render fails the test.
   Default `fail`.
 - ini `storybook_qt_warnings_ignore` (one regular expression per line, no command-line option): the warnings that never fail a test; a
@@ -613,6 +619,54 @@ def test_the_banner_is_readable(qtbot):
 ```
 
 The widget's window is rendered, so show it first, and clear the focus if a focus ring would cover text.
+
+### Screenshot snapshots
+
+`--storybook-snapshots` adds `storybook::<story id>[<theme>-snapshot]` for every story and theme, after the story's other tests. The test
+renders the story as the other tests do (an exception or a Qt warning fails it), takes a screenshot of the host widget and compares it with
+a baseline PNG. The screenshot is rendered into an image at device pixel ratio 1, after the focus is cleared so that no caret blinks, so the
+same story gives the same image twice. The plugin does not change the application's font: the theme provider sets it, so a snapshot shows the
+story as your application looks.
+
+Baselines are files you commit: `<storybook_snapshot_dir>/<platform>/<story id with / replaced by __>[<theme>].png`, where the platform is
+`sys.platform` (`linux`, `win32` or `darwin`), for example `tests/storybook_snapshots/linux/Inputs__Button__Default[Dark].png`.
+
+```bash
+pytest --storybook --storybook-update-snapshots   # write or replace every baseline; the tests pass
+pytest --storybook --storybook-snapshots          # compare
+```
+
+A snapshot test fails when there is no baseline (it never creates one silently; the message tells you the update command), when the image has
+another size, or when the share of differing pixels is above `storybook_snapshot_max_diff`. A pixel differs when a channel differs by more
+than `storybook_snapshot_tolerance`. A failure writes `<name>.actual.png` and `<name>.diff.png` (the differing pixels in red over a faded
+copy of the actual image) to `<storybook_snapshot_failures>/<platform>/` and names both files, the baseline, the share of differing pixels
+and the tolerance. A passing run deletes the images of an earlier failure. Open the three images side by side to see what changed, and run the
+update command to accept it. A story that animates or shows the time opts out with `checks_ignore={"snapshot": "shows the current time"}`.
+
+Fonts and anti-aliasing differ between systems, so a baseline made on one machine fails on another. Use one platform as the reference:
+
+- Make the baselines on the machine that CI uses, or in the same image, and commit them. A developer on another platform runs
+  `pytest --storybook` without `--storybook-snapshots`, or sets a `storybook_snapshot_dir` for the platform.
+- Install the same fonts everywhere (on a Linux runner, one package such as `fonts-dejavu-core`), or a theme provider that sets the font.
+- Add the failures folder to `.gitignore` and upload it from CI, so that a failed run shows you the images:
+
+```gitignore
+storybook-snapshot-failures/
+```
+
+```yaml
+      - name: Test the stories
+        run: pytest --storybook --storybook-snapshots
+        env:
+          QT_QPA_PLATFORM: offscreen
+      - name: Upload the snapshot failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: storybook-snapshot-failures
+          path: storybook-snapshot-failures/
+          if-no-files-found: ignore
+```
 
 ### Selecting tests
 
