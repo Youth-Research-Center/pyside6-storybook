@@ -162,7 +162,9 @@ commit, with no assertion changed; grep for non-literal uses (`objectName() ==`)
 
 **Code**
 - In `BuiltinThemeProvider`:
-  - "System", which restores the activation state through `_restore_color_scheme`;
+  - "System", which restores the style, palette and style sheet found at `activate` and lets the colour scheme follow the system
+    unless the application had forced one: `activate` probes for a forced scheme (`forced_scheme`), and System and `deactivate`
+    unset the scheme and set `forced_scheme` again if there is one; `_restore_color_scheme` is replaced (spec §3);
   - `colorSchemeChanged` connected only while System is active, and notifying through `QTimer.singleShot(0, ...)`;
   - `color_scheme()`.
 - `StoryContext.color_scheme`, and the window's heuristic for providers without `color_scheme()`.
@@ -174,6 +176,8 @@ commit, with no assertion changed; grep for non-literal uses (`objectName() ==`)
 - An emitted `colorSchemeChanged` re-renders after the event loop runs (`qtbot.waitUntil`).
 - `ctx.color_scheme` for each theme, and the heuristic for a provider without `color_scheme()`.
 - The signal is disconnected when switching away.
+- With a fake `QStyleHints` (the provider's `_style_hints` seam): an OS change from Light to Dark while Light is active is followed
+  on entering System and after `deactivate`, and a scheme the application forced before `activate` is forced again.
 
 **Changed tests**
 - `BUILTIN_THEME_NAMES` becomes `("Light", "Dark", "System")`; every test that asserts the exact names follows: the window switch,
@@ -191,7 +195,8 @@ commit, with no assertion changed; grep for non-literal uses (`objectName() ==`)
 - `themes/provider_loader.py`: `load_theme_provider(spec) -> LoadedProvider(provider, modules)` and `ThemeProviderError`.
 - `discovery/sources.py`: the `theme_provider` and `theme` keys and `StorySources` fields; these and `pythonpath` are read also when
   there are targets, so a broken `pyproject.toml` is an error then too.
-- `discovery/reload.py`: `ReloadSession(..., keep=())`, subtracted also from the parent packages `_managed_modules` adds.
+- `discovery/reload.py`: `ReloadSession(..., keep=())`, subtracted also from the parent packages `_managed_modules` adds, and
+  `keep_modules(names)`, which `run()` calls with the modules `provider.activate()` imported.
 - `cli.py`:
   - `--theme-provider`;
   - `--theme` without `choices`, validated after loading;
@@ -202,14 +207,15 @@ commit, with no assertion changed; grep for non-literal uses (`objectName() ==`)
   - errors printed with exit 1.
 
 **Tests** (`tests/test_provider_loader.py`, `tests/test_cli.py`, `tests/test_sources.py`, `tests/test_reload.py`)
-- The loader: an instance, a callable, a class, a dotted attribute.
+- The loader: an instance, a callable, a class, a dotted attribute; an instance with a non-callable `theme_names` attribute is
+  rejected with `ThemeProviderError`.
 - Each error message names the spec.
 - Resolution order: the command line, then `pyproject.toml`, then built-in.
 - Keys are read with targets.
 - An unknown theme lists the provider's names.
 - The `--list` line.
 - `keep=`: the provider module is neither dropped nor watched, and the stories and the provider share the module's singleton
-  after a reload.
+  after a reload; the same holds for a theme manager the provider imports lazily in `activate`.
 
 **Changed tests**
 - `test_an_unknown_theme_is_a_usage_error` was an argparse error (exit 2). It becomes an error after the provider loads and before

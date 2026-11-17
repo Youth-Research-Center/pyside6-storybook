@@ -139,9 +139,15 @@ and `BuiltinThemeProvider` under `### Added`, and `BuiltinThemes`' removal needs
   tuple. Light stays the default, and `Ctrl+T` cycles Light, Dark, System. Contrast guarantees (the inactive selection's 4.5:1)
   hold for Light and Dark only: System is Qt's palette (offscreen, #ffffff on #308cc6 is 3.69:1), and the tests exclude it
   explicitly.
-- **Applying System.** It restores the style, palette and style sheet found at `activate`, and puts back the colour scheme found
-  at `activate` with the existing `_restore_color_scheme` (unset the override, then force the original only if it differs), so a
-  scheme the application forced stays forced and one that followed the system follows it again.
+- **Applying System.** It restores the style, palette and style sheet found at `activate`, and lets the colour scheme follow the
+  operating system again unless the application had forced one.
+  - Qt cannot say whether a scheme was forced, so `activate` finds out once: it records `colorScheme()`, calls
+    `unsetColorScheme()` and reads `colorScheme()` again. If the two differ (and the first is not `Unknown`), the application had
+    forced the first: it is recorded as `forced_scheme` and set again at once. Otherwise `forced_scheme` is `None`.
+  - System calls `unsetColorScheme()` and then, if `forced_scheme` is set, `setColorScheme(forced_scheme)`. `deactivate` does the
+    same. Nothing compares against a scheme read earlier, so an operating-system change while Light or Dark is active (Light to
+    Dark, say) is followed when System is entered and after `deactivate`. The existing `_restore_color_scheme`, which forced the
+    activation-time value back whenever it differed, is replaced: it pinned a system-derived Light after the OS had moved to Dark.
   - It connects `QStyleHints.colorSchemeChanged` while System is active, and disconnects it when switching away and on
     `deactivate`.
   - A scheme change calls the callbacks with `QTimer.singleShot(0, ...)`, not directly: Qt emits `colorSchemeChanged` before it
@@ -182,10 +188,12 @@ help text, since the choices are gone.
   module first would leave it unrecorded, a reload would drop it, and the stories and the provider would hold different copies.
   An unknown `--theme` is therefore reported before any story is loaded.
 - The attribute is an instance, or a callable taking no arguments that returns one. A callable is called once the
-  `QApplication` exists. A class passes `isinstance(cls, ThemeProvider)` (its methods are attributes), so the loader calls the
-  attribute when it is a class (`isinstance(obj, type)`) or when it fails the check, and checks the result.
-- `isinstance` only says yes or no, so the "missing methods" message is built by checking `callable(getattr(obj, name, None))` for
-  each protocol method.
+  `QApplication` exists. The loader calls the attribute when it is a class (`isinstance(obj, type)`), or when it is callable and
+  lacks one of the protocol's methods (a factory function).
+- The object it keeps (the attribute or the result of calling it) is accepted only if `callable(getattr(obj, name, None))` holds for
+  every protocol method. This check is unconditional: `isinstance(obj, ThemeProvider)` only tests that the attributes exist, so an
+  object with `theme_names = ("Paper", "Ink")` would pass it and fail later. A failed check raises `ThemeProviderError` naming the
+  missing or non-callable methods.
 - The loader records the `sys.modules` names that importing and calling the provider added, and returns them with the provider.
 
 **Errors.** Each is a `ThemeProviderError` whose message names the spec. The command line prints it and exits 1, and never falls
@@ -197,7 +205,7 @@ back to the built-in themes.
 | Module not found, or raises while importing | names the module, with the exception's message |
 | Missing attribute | names the attribute and the module |
 | Callable raises | names the callable, with the exception's message |
-| Result is not a `ThemeProvider` | names the missing methods |
+| Result is not a `ThemeProvider` | names the missing or non-callable methods |
 | Unknown `--theme` or `theme` | lists the provider's theme names |
 
 **`--list`** prints `pyside6-storybook: theme provider <spec or "built-in"> (themes: A, B)` on standard error, after the line about
@@ -207,8 +215,13 @@ where the stories came from. Reading the names does not activate the provider (ย
 and the stories and the provider would hold different copies of its singletons (the theme manager). `ReloadSession` gains a
 keyword-only `keep: Collection[str] = ()`: the module names the provider loader recorded. They are excluded from the modules a
 reload drops (including the parent packages `_managed_modules` adds for them) and from the watched files, so editing the provider
-triggers nothing. The README says to restart the gallery after
-editing the provider.
+triggers nothing. The README says to restart the gallery after editing the provider.
+- A provider may import its theme manager lazily, in `activate`. `run()` therefore records the `sys.modules` names before and after
+  `provider.activate(app)` and adds the new ones to the session with `ReloadSession.keep_modules(names)` (internal), before the
+  first reload can run. With the provider loaded before the stories, a theme manager the stories import too is first imported by
+  the provider, so it is kept as well.
+- A module the provider first imports later (in `set_theme` or `tokens`) is not kept and is reloaded with the stories. The guide
+  says to import the theme manager at module level or in `activate`.
 
 **`run` from code** takes `theme_provider=` (ยง1). The three ways (code, command line, `pyproject.toml`) are documented together.
 
@@ -241,9 +254,11 @@ try.
   polish (editors, Docs content, the error panel) call it in their constructors. When the property is set after polish, the helper
   calls `style().unpolish(widget)` and `style().polish(widget)`. The property is not inherited, so internal children (tab bars,
   viewports) are marked explicitly.
-- **Specificity, documented.** `QPushButton[sbkChrome="true"]` beats `QPushButton` and `QWidget QPushButton`, but loses to
-  `QPushButton[flat="false"]` and to pseudo-state rules such as `:hover` or `::tab:selected`. The guide therefore recommends
-  type-plus-property selectors or `#sbkName`, and restating the same pseudo-states.
+- **Specificity, documented (checked offscreen).** `QPushButton[sbkChrome="true"]` beats `QPushButton` and `QWidget QPushButton`
+  wherever they appear. It has the same specificity as `QPushButton[flat="false"]` and `QPushButton:hover`, so between those the
+  rule that comes later in the style sheet wins. `#sbkName` (an ID) beats all of them in any order. The guide therefore says to put
+  chrome rules after the application's general rules, to restate the pseudo-states (`:hover`, `::tab:selected`) the general rules
+  use, and to use `#sbkName` for a single widget.
 
 **Inventory of colours.** The chrome sets no colours of its own today; everything is a palette role. Only one place needs code:
 - **Sidebar selection.** An application rule may set the selected row's background with `selection-background-color` (which does
