@@ -4,7 +4,7 @@ from PySide6.QtGui import QImage, QPalette
 from PySide6.QtWidgets import QApplication, QPushButton, QStyleFactory
 
 from pyside6_storybook.contrast import contrast_ratio
-from pyside6_storybook.themes import DARK_THEME, LIGHT_THEME, BuiltinThemes, ThemeDefinition, dark_palette, light_palette
+from pyside6_storybook.themes import DARK_THEME, LIGHT_THEME, BuiltinThemeProvider, ThemeDefinition, dark_palette, light_palette
 
 _ACTIVE = QPalette.ColorGroup.Active
 _DISABLED = QPalette.ColorGroup.Disabled
@@ -29,8 +29,8 @@ def _hex(palette: QPalette, group: QPalette.ColorGroup, role: QPalette.ColorRole
 
 
 def test_theme_names() -> None:
-    assert BuiltinThemes().names == ("Light", "Dark")
-    assert BuiltinThemes().current == "Light"
+    assert BuiltinThemeProvider().theme_names() == ("Light", "Dark")
+    assert BuiltinThemeProvider().current_theme() == "Light"
 
 
 @pytest.mark.parametrize("make_palette", [light_palette, dark_palette])
@@ -74,17 +74,17 @@ def test_light_and_dark_palettes_differ() -> None:
     assert contrast_ratio(_hex(light_palette(), _ACTIVE, _ROLE.Window), _hex(dark_palette(), _ACTIVE, _ROLE.Window)) > 5
 
 
-def test_activate_applies_the_current_theme_and_fusion(qapp: QApplication, themes: BuiltinThemes) -> None:
+def test_activate_applies_the_current_theme_and_fusion(qapp: QApplication, themes: BuiltinThemeProvider) -> None:
     assert qapp.style().objectName().lower() == "fusion"
     assert qapp.palette().color(_ACTIVE, _ROLE.Window) == light_palette().color(_ACTIVE, _ROLE.Window)
 
 
-def test_set_theme_changes_the_application_palette(qapp: QApplication, themes: BuiltinThemes) -> None:
+def test_set_theme_changes_the_application_palette(qapp: QApplication, themes: BuiltinThemeProvider) -> None:
     light_window = qapp.palette().color(_ACTIVE, _ROLE.Window).name()
 
     themes.set_theme("Dark")
 
-    assert themes.current == "Dark"
+    assert themes.current_theme() == "Dark"
     assert qapp.palette().color(_ACTIVE, _ROLE.Window).name() == _hex(dark_palette(), _ACTIVE, _ROLE.Window)
     assert qapp.palette().color(_ACTIVE, _ROLE.Window).name() != light_window
     assert qapp.palette().color(_DISABLED, _ROLE.ButtonText).name() == _hex(dark_palette(), _DISABLED, _ROLE.ButtonText)
@@ -93,14 +93,14 @@ def test_set_theme_changes_the_application_palette(qapp: QApplication, themes: B
     assert qapp.palette().color(_ACTIVE, _ROLE.Window).name() == light_window
 
 
-def test_set_theme_rejects_unknown_names(themes: BuiltinThemes) -> None:
+def test_set_theme_rejects_unknown_names(themes: BuiltinThemeProvider) -> None:
     with pytest.raises(ValueError, match="Unknown theme 'Sepia'"):
         themes.set_theme("Sepia")
-    assert themes.current == "Light"
+    assert themes.current_theme() == "Light"
 
 
 def test_set_theme_before_activate_is_applied_on_activation(qapp: QApplication, restore_application_look: None) -> None:
-    builtin_themes = BuiltinThemes()
+    builtin_themes = BuiltinThemeProvider()
     builtin_themes.set_theme("Dark")
     original = qapp.palette().color(_ACTIVE, _ROLE.Window).name()
     assert original != _hex(dark_palette(), _ACTIVE, _ROLE.Window)
@@ -112,7 +112,7 @@ def test_set_theme_before_activate_is_applied_on_activation(qapp: QApplication, 
         builtin_themes.deactivate()
 
 
-def test_activating_twice_raises(qapp: QApplication, themes: BuiltinThemes) -> None:
+def test_activating_twice_raises(qapp: QApplication, themes: BuiltinThemeProvider) -> None:
     with pytest.raises(RuntimeError, match="already active"):
         themes.activate(qapp)
 
@@ -122,7 +122,7 @@ def test_deactivate_restores_style_palette_and_style_sheet(qapp: QApplication, r
     qapp.setStyleSheet("QLabel { margin: 0px; }")
     style_name = qapp.style().objectName()
     palette = QPalette(qapp.palette())
-    builtin_themes = BuiltinThemes()
+    builtin_themes = BuiltinThemeProvider()
     builtin_themes.activate(qapp)
     builtin_themes.set_theme("Light")
     assert qapp.palette() != palette
@@ -141,7 +141,7 @@ def test_deactivate_restores_a_non_fusion_style(qapp: QApplication, restore_appl
     qapp.setStyle("Windows")
     original = qapp.style().objectName()
     assert original.lower() != "fusion"
-    builtin_themes = BuiltinThemes()
+    builtin_themes = BuiltinThemeProvider()
     builtin_themes.activate(qapp)
     assert qapp.style().objectName().lower() == "fusion"
 
@@ -151,7 +151,7 @@ def test_deactivate_restores_a_non_fusion_style(qapp: QApplication, restore_appl
 
 
 def test_deactivate_is_idempotent(qapp: QApplication, restore_application_look: None) -> None:
-    builtin_themes = BuiltinThemes()
+    builtin_themes = BuiltinThemeProvider()
     builtin_themes.deactivate()
     builtin_themes.activate(qapp)
     builtin_themes.deactivate()
@@ -159,7 +159,7 @@ def test_deactivate_is_idempotent(qapp: QApplication, restore_application_look: 
 
 
 def test_set_theme_after_deactivate_leaves_the_application_alone(qapp: QApplication, restore_application_look: None) -> None:
-    builtin_themes = BuiltinThemes()
+    builtin_themes = BuiltinThemeProvider()
     builtin_themes.activate(qapp)
     builtin_themes.deactivate()
     palette = QPalette(qapp.palette())
@@ -170,7 +170,7 @@ def test_set_theme_after_deactivate_leaves_the_application_alone(qapp: QApplicat
 
 
 @pytest.mark.parametrize("theme", ["Light", "Dark"])
-def test_a_disabled_button_looks_different_from_an_enabled_one(qtbot, themes: BuiltinThemes, theme: str) -> None:
+def test_a_disabled_button_looks_different_from_an_enabled_one(qtbot, themes: BuiltinThemeProvider, theme: str) -> None:
     themes.set_theme(theme)
     enabled, disabled = QPushButton("Button"), QPushButton("Button")
     qtbot.addWidget(enabled)
@@ -193,7 +193,7 @@ def test_deactivate_restores_a_non_fusion_style_under_an_application_style_sheet
     style_sheet = "QLabel { margin: 1px; }"
     qapp.setStyle("Windows")
     qapp.setStyleSheet(style_sheet)
-    builtin_themes = BuiltinThemes()
+    builtin_themes = BuiltinThemeProvider()
 
     builtin_themes.activate(qapp)
     builtin_themes.deactivate()
@@ -220,8 +220,8 @@ class _FakeStyleHints:
         self.override = None
 
 
-def _themes_with_hints(monkeypatch: pytest.MonkeyPatch, hints: _FakeStyleHints) -> BuiltinThemes:
-    builtin_themes = BuiltinThemes()
+def _themes_with_hints(monkeypatch: pytest.MonkeyPatch, hints: _FakeStyleHints) -> BuiltinThemeProvider:
+    builtin_themes = BuiltinThemeProvider()
     monkeypatch.setattr(builtin_themes, "_style_hints", lambda app: hints)
     return builtin_themes
 
@@ -270,4 +270,4 @@ def test_theme_definition_stores_read_only_copies_of_its_colours() -> None:
 @pytest.mark.parametrize(("theme", "make_palette"), [(LIGHT_THEME, light_palette), (DARK_THEME, dark_palette)])
 def test_built_in_theme_definitions_build_the_published_palettes(theme: ThemeDefinition, make_palette) -> None:
     assert theme.palette() == make_palette()
-    assert theme.name in BuiltinThemes().names
+    assert theme.name in BuiltinThemeProvider().theme_names()

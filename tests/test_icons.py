@@ -16,7 +16,7 @@ from pyside6_storybook import StoryRegistry
 from pyside6_storybook.gui import icons
 from pyside6_storybook.gui.icons import ActionIcons, IconRole, build_icon, clear_icon_cache, icon_svg, palette_icon
 from pyside6_storybook.gui.window import GalleryWindow
-from pyside6_storybook.themes import BuiltinThemes
+from pyside6_storybook.themes import BuiltinThemeProvider
 
 _FORBIDDEN_IMPORTS = {"urllib", "http", "socket", "ssl"}
 
@@ -259,7 +259,7 @@ def test_retint_drops_a_deleted_target_and_keeps_the_others(qtbot) -> None:
     assert [binding.target for binding in registry._bound] == [kept]
 
 
-def test_the_window_retints_on_a_theme_switch(qtbot, registry: StoryRegistry, themes: BuiltinThemes, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_window_retints_on_a_theme_switch(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider, monkeypatch: pytest.MonkeyPatch) -> None:
     window = GalleryWindow(registry, themes)
     qtbot.addWidget(window)
     button = QPushButton(window)
@@ -282,7 +282,9 @@ def test_the_window_retints_on_a_theme_switch(qtbot, registry: StoryRegistry, th
     assert_tinted(strongest_pixel(button.icon()), light_text.name())
 
 
-def test_the_window_retints_on_its_own_palette_change(qtbot, registry: StoryRegistry, themes: BuiltinThemes, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_window_retints_on_its_own_palette_change(
+    qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider, monkeypatch: pytest.MonkeyPatch
+) -> None:
     window = GalleryWindow(registry, themes)
     qtbot.addWidget(window)
     calls: list[QPalette | None] = []

@@ -19,7 +19,7 @@ from pyside6_storybook.gui.error_panel import ErrorPanel
 from pyside6_storybook.gui.reload_status import ReloadStatus
 from pyside6_storybook.gui.reload_watcher import ReloadWatcher
 from pyside6_storybook.gui.window import GalleryWindow
-from pyside6_storybook.themes import BuiltinThemes
+from pyside6_storybook.themes import BuiltinThemeProvider
 
 _clock = itertools.count(2_100_000_000, 10)
 _WAIT_MS = 5000
@@ -238,7 +238,7 @@ def build(ctx):
 """
 
 
-def _window(qtbot, session: ReloadSession, registry: StoryRegistry, themes: BuiltinThemes) -> tuple[GalleryWindow, ReloadWatcher]:
+def _window(qtbot, session: ReloadSession, registry: StoryRegistry, themes: BuiltinThemeProvider) -> tuple[GalleryWindow, ReloadWatcher]:
     window = GalleryWindow(registry, themes, reload=session)
     qtbot.addWidget(window)
     watcher = window.findChild(ReloadWatcher)
@@ -273,14 +273,14 @@ def _text_editor(window: GalleryWindow) -> QLineEdit:
     return editor
 
 
-def _started(qtbot, tmp_path: Path, themes: BuiltinThemes, files: dict[str, str]) -> tuple[GalleryWindow, ReloadWatcher]:
+def _started(qtbot, tmp_path: Path, themes: BuiltinThemeProvider, files: dict[str, str]) -> tuple[GalleryWindow, ReloadWatcher]:
     for relative, source in files.items():
         _write(tmp_path, relative, source)
     session = _session(tmp_path)
     return _window(qtbot, session, session.last_accepted.registry, themes)
 
 
-def test_a_window_without_a_reload_session_has_no_watcher_and_no_status_bar(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_a_window_without_a_reload_session_has_no_watcher_and_no_status_bar(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = GalleryWindow(registry, themes)
     qtbot.addWidget(window)
 
@@ -289,7 +289,7 @@ def test_a_window_without_a_reload_session_has_no_watcher_and_no_status_bar(qtbo
 
 
 def test_an_accepted_reload_keeps_the_story_and_its_control_values_and_reports_the_time(
-    qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemes
+    qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemeProvider
 ) -> None:
     window, watcher = _started(qtbot, tmp_path, themes, {"stories/a_story.py": _TEXT_STORY.format(story_id="Inputs/A", marker="one")})
     assert not window.statusBar().isHidden()
@@ -311,7 +311,7 @@ def test_an_accepted_reload_keeps_the_story_and_its_control_values_and_reports_t
     assert label.accessibleDescription() == label.text()
 
 
-def test_an_enum_value_is_matched_by_name_in_the_reloaded_class(qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_an_enum_value_is_matched_by_name_in_the_reloaded_class(qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window, watcher = _started(
         qtbot,
         tmp_path,
@@ -330,7 +330,7 @@ def test_an_enum_value_is_matched_by_name_in_the_reloaded_class(qtbot, tmp_path:
     assert new_combo.currentText() == "SQUARE"
 
 
-def test_an_enum_value_whose_name_is_gone_starts_at_the_default(qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_an_enum_value_whose_name_is_gone_starts_at_the_default(qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window, watcher = _started(
         qtbot,
         tmp_path,
@@ -347,7 +347,7 @@ def test_an_enum_value_whose_name_is_gone_starts_at_the_default(qtbot, tmp_path:
 
 
 def test_a_removed_story_falls_back_to_the_story_at_its_row_then_the_previous_one(
-    qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemes
+    qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemeProvider
 ) -> None:
     window, watcher = _started(
         qtbot,
@@ -366,7 +366,7 @@ def test_a_removed_story_falls_back_to_the_story_at_its_row_then_the_previous_on
 
 
 def test_theme_canvas_settings_and_the_actions_log_are_untouched_by_a_reload(
-    qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemes
+    qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemeProvider
 ) -> None:
     window, watcher = _started(qtbot, tmp_path, themes, {"stories/a_story.py": _TEXT_STORY.format(story_id="Inputs/A", marker="one")})
     window.set_theme("Dark")
@@ -383,13 +383,13 @@ def test_theme_canvas_settings_and_the_actions_log_are_untouched_by_a_reload(
     _write(tmp_path, "stories/a_story.py", _TEXT_STORY.format(story_id="Inputs/A", marker="two"))
     watcher.trigger_now()
 
-    assert themes.current == "Dark"
+    assert themes.current_theme() == "Dark"
     assert canvas.zoom() == 200
     assert background.currentIndex() == 1
     assert [name for _time, name, _arguments in panel.rows()] == ["kept"]
 
 
-def test_size_presets_are_read_again_after_a_reload(qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_size_presets_are_read_again_after_a_reload(qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     source = _TEXT_STORY.format(story_id="Inputs/A", marker="one")
     window, watcher = _started(qtbot, tmp_path, themes, {"stories/a_story.py": source})
     size = window.findChild(QComboBox, "canvasSize")
@@ -404,7 +404,7 @@ def test_size_presets_are_read_again_after_a_reload(qtbot, tmp_path: Path, stori
 
 
 def test_a_rejected_reload_shows_the_errors_and_keeps_the_stories_until_the_next_accepted_one(
-    qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemes
+    qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemeProvider
 ) -> None:
     window, watcher = _started(
         qtbot,
@@ -443,7 +443,7 @@ def test_a_rejected_reload_shows_the_errors_and_keeps_the_stories_until_the_next
     assert _preview_text(window) == "start:two"
 
 
-def test_a_reload_that_finds_no_stories_says_so(qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_a_reload_that_finds_no_stories_says_so(qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window, watcher = _started(qtbot, tmp_path, themes, {"stories/a_story.py": _TEXT_STORY.format(story_id="Inputs/A", marker="one")})
     (tmp_path / "stories" / "a_story.py").unlink()
 
@@ -453,7 +453,7 @@ def test_a_reload_that_finds_no_stories_says_so(qtbot, tmp_path: Path, stories: 
     assert window.current_story_id() == "Inputs/A"
 
 
-def test_the_window_gets_the_example_stories_back_after_a_reload(qtbot, stories: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_the_window_gets_the_example_stories_back_after_a_reload(qtbot, stories: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     targets = (str(EXAMPLES_FOLDER),)
     session = ReloadSession(targets, cwd=Path.cwd(), initial=load_stories(targets))
     window, watcher = _window(qtbot, session, session.last_accepted.registry, themes)
@@ -465,7 +465,7 @@ def test_the_window_gets_the_example_stories_back_after_a_reload(qtbot, stories:
     assert _status(window).text().startswith("Reloaded")
 
 
-def test_the_watcher_and_status_are_owned_by_the_window(qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_the_watcher_and_status_are_owned_by_the_window(qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window, watcher = _started(qtbot, tmp_path, themes, {"stories/a_story.py": _TEXT_STORY.format(story_id="Inputs/A", marker="one")})
 
     assert watcher.parent() is window

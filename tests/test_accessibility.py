@@ -37,7 +37,7 @@ from pyside6_storybook.gui.error_panel import ErrorPanel
 from pyside6_storybook.gui.reload_status import ReloadStatus
 from pyside6_storybook.gui.sidebar import StorySidebar
 from pyside6_storybook.gui.window import GalleryWindow
-from pyside6_storybook.themes import DARK_THEME, LIGHT_THEME, BuiltinThemes
+from pyside6_storybook.themes import DARK_THEME, LIGHT_THEME, BuiltinThemeProvider
 
 pytestmark = pytest.mark.usefixtures("restore_window_activation")
 
@@ -83,7 +83,7 @@ def _registry() -> StoryRegistry:
     return stories
 
 
-def _make(qtbot, themes: BuiltinThemes, registry: StoryRegistry | None = None) -> GalleryWindow:
+def _make(qtbot, themes: BuiltinThemeProvider, registry: StoryRegistry | None = None) -> GalleryWindow:
     window = GalleryWindow(registry if registry is not None else _registry(), themes)
     qtbot.addWidget(window)
     window.resize(1100, 700)
@@ -158,7 +158,7 @@ _TAB_ORDER = [
 # Tab order
 
 
-def test_tab_visits_the_panes_in_reading_order_and_wraps_to_the_search(qtbot, themes: BuiltinThemes) -> None:
+def test_tab_visits_the_panes_in_reading_order_and_wraps_to_the_search(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     _child(window, StorySidebar, "storySidebar").focus_search()
     qtbot.waitUntil(lambda: _focused_name() == "Search stories", timeout=5000)
@@ -170,7 +170,7 @@ def test_tab_visits_the_panes_in_reading_order_and_wraps_to_the_search(qtbot, th
     assert _tab(qtbot) == "Search stories"
 
 
-def test_shift_tab_walks_the_same_order_backwards(qtbot, themes: BuiltinThemes) -> None:
+def test_shift_tab_walks_the_same_order_backwards(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     _child(window, StorySidebar, "storySidebar").focus_search()
     qtbot.waitUntil(lambda: _focused_name() == "Search stories", timeout=5000)
@@ -180,7 +180,7 @@ def test_shift_tab_walks_the_same_order_backwards(qtbot, themes: BuiltinThemes) 
     assert visited == [_TAB_ORDER[0], *reversed(_TAB_ORDER[1:])]
 
 
-def test_the_tab_order_follows_the_story_when_it_changes(qtbot, themes: BuiltinThemes) -> None:
+def test_the_tab_order_follows_the_story_when_it_changes(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     window.select_story("Display/Label")
     qtbot.wait(50)
@@ -190,7 +190,7 @@ def test_the_tab_order_follows_the_story_when_it_changes(qtbot, themes: BuiltinT
     assert [_tab(qtbot) for _ in range(4)] == ["Theme", "Controls and actions tabs", "Size", "Search stories"]
 
 
-def test_the_tab_order_follows_the_docs_tab(qtbot, themes: BuiltinThemes) -> None:
+def test_the_tab_order_follows_the_docs_tab(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     tabs = _child(window, QTabWidget, "previewTabs")
     tabs.setCurrentIndex(1)
@@ -204,7 +204,7 @@ def test_the_tab_order_follows_the_docs_tab(qtbot, themes: BuiltinThemes) -> Non
 # Panes
 
 
-def test_the_panes_and_the_preview_area_have_accessible_names(qtbot, themes: BuiltinThemes) -> None:
+def test_the_panes_and_the_preview_area_have_accessible_names(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     sidebar = _child(window, StorySidebar, "storySidebar")
     preview_pane = _child(window, QTabWidget, "previewTabs").parentWidget()
@@ -222,13 +222,13 @@ def test_the_panes_and_the_preview_area_have_accessible_names(qtbot, themes: Bui
     assert scroll.accessibleName() == "Preview of Display/Plain"
 
 
-def test_the_preview_area_is_named_without_a_story(qtbot, themes: BuiltinThemes) -> None:
+def test_the_preview_area_is_named_without_a_story(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes, StoryRegistry())
 
     assert _child(window, QScrollArea, "previewScroll").accessibleName() == "Preview"
 
 
-def test_f6_cycles_through_the_panes_and_returns_to_the_last_focused_widget(qtbot, themes: BuiltinThemes) -> None:
+def test_f6_cycles_through_the_panes_and_returns_to_the_last_focused_widget(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     _child(window, StorySidebar, "storySidebar").focus_search()
     qtbot.waitUntil(lambda: _focused_name() == "Search stories", timeout=5000)
@@ -249,7 +249,7 @@ def test_f6_cycles_through_the_panes_and_returns_to_the_last_focused_widget(qtbo
     assert _focused_name() == "Theme"
 
 
-def test_shift_f6_cycles_backwards(qtbot, themes: BuiltinThemes) -> None:
+def test_shift_f6_cycles_backwards(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     _focus(qtbot, _child(window, QTreeView, "storyTree"))
 
@@ -261,7 +261,7 @@ def test_shift_f6_cycles_backwards(qtbot, themes: BuiltinThemes) -> None:
     assert _focused_name() == "Stories"
 
 
-def test_f6_falls_back_to_the_first_widget_when_the_remembered_one_is_gone(qtbot, themes: BuiltinThemes) -> None:
+def test_f6_falls_back_to_the_first_widget_when_the_remembered_one_is_gone(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     _focus(qtbot, _story_input(window, QPushButton, "Story button"))
     _focus(qtbot, _child(window, QTreeView, "storyTree"))
@@ -299,13 +299,13 @@ def _assert_every_chrome_widget_is_named(window: GalleryWindow) -> None:
     assert unnamed == []
 
 
-def test_every_focusable_chrome_widget_has_a_name_on_the_canvas_and_controls_tabs(qtbot, themes: BuiltinThemes) -> None:
+def test_every_focusable_chrome_widget_has_a_name_on_the_canvas_and_controls_tabs(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
 
     _assert_every_chrome_widget_is_named(window)
 
 
-def test_every_focusable_chrome_widget_has_a_name_on_the_docs_and_actions_tabs(qtbot, themes: BuiltinThemes) -> None:
+def test_every_focusable_chrome_widget_has_a_name_on_the_docs_and_actions_tabs(qtbot, themes: BuiltinThemeProvider) -> None:
     stories = _registry()
     stories.get("Inputs/Button").variant("Wide", args={"text": "Wide"})
     window = _make(qtbot, themes, stories)
@@ -318,7 +318,7 @@ def test_every_focusable_chrome_widget_has_a_name_on_the_docs_and_actions_tabs(q
     assert any(isinstance(widget, QToolButton | QPushButton) and widget.text() == "Clear" for widget in _chrome_focusables(window))
 
 
-def test_every_focusable_chrome_widget_has_a_name_when_a_story_fails(qtbot, themes: BuiltinThemes) -> None:
+def test_every_focusable_chrome_widget_has_a_name_when_a_story_fails(qtbot, themes: BuiltinThemeProvider) -> None:
     stories = StoryRegistry()
 
     @stories.story("Broken/Story")
@@ -343,7 +343,7 @@ def _story_input(window: GalleryWindow, kind: type[QWidget], name: str) -> QWidg
     raise AssertionError(name)
 
 
-def test_slash_types_into_a_line_edit_and_an_editable_combo_box_without_moving_focus(qtbot, themes: BuiltinThemes) -> None:
+def test_slash_types_into_a_line_edit_and_an_editable_combo_box_without_moving_focus(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     field = _story_input(window, QLineEdit, "Story field")
     editable = _story_input(window, QComboBox, "Story editable combo")
@@ -361,7 +361,7 @@ def test_slash_types_into_a_line_edit_and_an_editable_combo_box_without_moving_f
     assert _focused_name() == "Story editable combo"
 
 
-def test_slash_does_not_fire_from_a_spin_box(qtbot, themes: BuiltinThemes) -> None:
+def test_slash_does_not_fire_from_a_spin_box(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     spin = _story_input(window, QSpinBox, "Story spin")
     _focus(qtbot, spin)
@@ -373,7 +373,7 @@ def test_slash_does_not_fire_from_a_spin_box(qtbot, themes: BuiltinThemes) -> No
     assert spin.value() == 0
 
 
-def test_slash_opens_the_search_from_the_tree(qtbot, themes: BuiltinThemes) -> None:
+def test_slash_opens_the_search_from_the_tree(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     _focus(qtbot, _child(window, QTreeView, "storyTree"))
 
@@ -382,7 +382,7 @@ def test_slash_opens_the_search_from_the_tree(qtbot, themes: BuiltinThemes) -> N
     qtbot.waitUntil(lambda: _focused_name() == "Search stories", timeout=5000)
 
 
-def test_alt_down_still_opens_a_combo_boxs_popup(qtbot, themes: BuiltinThemes) -> None:
+def test_alt_down_still_opens_a_combo_boxs_popup(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     combo = _story_input(window, QComboBox, "Story combo")
     assert isinstance(combo, QComboBox)
@@ -395,7 +395,7 @@ def test_alt_down_still_opens_a_combo_boxs_popup(qtbot, themes: BuiltinThemes) -
     combo.hidePopup()
 
 
-def test_the_theme_switch_popup_opens_with_alt_down_too(qtbot, themes: BuiltinThemes) -> None:
+def test_the_theme_switch_popup_opens_with_alt_down_too(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     switch = _child(window, QComboBox, "themeSwitch")
     _focus(qtbot, switch)
@@ -407,7 +407,7 @@ def test_the_theme_switch_popup_opens_with_alt_down_too(qtbot, themes: BuiltinTh
     switch.hidePopup()
 
 
-def test_ctrl_alt_down_and_up_move_through_the_visible_stories(qtbot, themes: BuiltinThemes) -> None:
+def test_ctrl_alt_down_and_up_move_through_the_visible_stories(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     _focus(qtbot, _child(window, QTreeView, "storyTree"))
     ctrl_alt = Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier
@@ -425,7 +425,7 @@ def test_ctrl_alt_down_and_up_move_through_the_visible_stories(qtbot, themes: Bu
     assert window.current_story_id() == "Inputs/Button"
 
 
-def test_ctrl_alt_down_expands_the_branch_of_the_story_it_opens(qtbot, themes: BuiltinThemes) -> None:
+def test_ctrl_alt_down_expands_the_branch_of_the_story_it_opens(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     tree = _child(window, QTreeView, "storyTree")
     model = tree.model()
@@ -440,7 +440,7 @@ def test_ctrl_alt_down_expands_the_branch_of_the_story_it_opens(qtbot, themes: B
     assert tree.isExpanded(display)
 
 
-def test_ctrl_alt_down_skips_the_stories_the_search_hides(qtbot, themes: BuiltinThemes) -> None:
+def test_ctrl_alt_down_skips_the_stories_the_search_hides(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     search = _child(window, QLineEdit, "storySearch")
     qtbot.keyClicks(search, "plain")
@@ -451,20 +451,20 @@ def test_ctrl_alt_down_skips_the_stories_the_search_hides(qtbot, themes: Builtin
     assert window.current_story_id() == "Display/Plain"
 
 
-def test_ctrl_t_switches_to_the_next_theme_and_wraps(qtbot, themes: BuiltinThemes) -> None:
+def test_ctrl_t_switches_to_the_next_theme_and_wraps(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     switch = _child(window, QComboBox, "themeSwitch")
-    assert themes.current == "Light"
+    assert themes.current_theme() == "Light"
 
     _key(qtbot, Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
-    assert themes.current == "Dark"
+    assert themes.current_theme() == "Dark"
     assert switch.currentText() == "Dark"
     _key(qtbot, Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
-    assert themes.current == "Light"
+    assert themes.current_theme() == "Light"
     assert switch.currentText() == "Light"
 
 
-def test_focus_stays_on_the_editor_after_a_control_edit_rebuilds_the_preview(qtbot, themes: BuiltinThemes) -> None:
+def test_focus_stays_on_the_editor_after_a_control_edit_rebuilds_the_preview(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     editor = next(widget for widget in _chrome_focusables(window) if widget.accessibleName() == "Text")
     _focus(qtbot, editor)
@@ -479,18 +479,18 @@ def test_focus_stays_on_the_editor_after_a_control_edit_rebuilds_the_preview(qtb
     assert story_button.text() == "ab"
 
 
-def test_ctrl_t_with_focus_in_the_preview_leaves_focus_on_the_canvas(qtbot, themes: BuiltinThemes) -> None:
+def test_ctrl_t_with_focus_in_the_preview_leaves_focus_on_the_canvas(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     _focus(qtbot, _story_input(window, QPushButton, "Story button"))
 
     qtbot.keyClick(QApplication.focusWidget(), Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
 
-    assert themes.current == "Dark"
+    assert themes.current_theme() == "Dark"
     qtbot.waitUntil(lambda: QApplication.focusWidget() is _child(window, QScrollArea, "previewScroll"), timeout=5000)
     assert _focused_name() == "Preview of Inputs/Button"
 
 
-def test_selecting_a_story_with_focus_in_the_preview_leaves_focus_on_the_canvas(qtbot, themes: BuiltinThemes) -> None:
+def test_selecting_a_story_with_focus_in_the_preview_leaves_focus_on_the_canvas(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     _focus(qtbot, _story_input(window, QLineEdit, "Story field"))
 
@@ -522,7 +522,7 @@ def _dialog_rows(dialog: QDialog) -> list[tuple[str, str]]:
     return rows
 
 
-def test_the_help_menu_has_a_plain_text_keyboard_shortcuts_entry(qtbot, themes: BuiltinThemes) -> None:
+def test_the_help_menu_has_a_plain_text_keyboard_shortcuts_entry(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
 
     menus = [action for action in window.menuBar().actions() if action.menu() is not None]
@@ -540,7 +540,7 @@ def _native(keys: str) -> str:
     return QKeySequence(keys).toString(QKeySequence.SequenceFormat.NativeText)
 
 
-def test_f1_opens_a_dialog_listing_every_shortcut_and_it_is_deleted_after_it_closes(qtbot, themes: BuiltinThemes) -> None:
+def test_f1_opens_a_dialog_listing_every_shortcut_and_it_is_deleted_after_it_closes(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     assert window.findChild(QDialog, "shortcutsDialog") is None
 
@@ -563,7 +563,7 @@ def test_f1_opens_a_dialog_listing_every_shortcut_and_it_is_deleted_after_it_clo
     assert window.findChild(QDialog, "shortcutsDialog") is None
 
 
-def test_f1_twice_keeps_one_dialog(qtbot, themes: BuiltinThemes) -> None:
+def test_f1_twice_keeps_one_dialog(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
 
     _key(qtbot, Qt.Key.Key_F1)
@@ -578,7 +578,7 @@ def test_f1_twice_keeps_one_dialog(qtbot, themes: BuiltinThemes) -> None:
     QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
-def test_the_shortcuts_dialog_table_and_the_window_rows_come_from_one_table(qtbot, themes: BuiltinThemes) -> None:
+def test_the_shortcuts_dialog_table_and_the_window_rows_come_from_one_table(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
 
     rows = window.shortcut_rows()
@@ -620,7 +620,7 @@ def _grab_ring(qtbot, factory) -> tuple[Counter[str], int]:
 
 @pytest.mark.parametrize("theme", _THEMES, ids=lambda theme: theme.name)
 @pytest.mark.parametrize("factory", [lambda parent: QLineEdit(parent), lambda parent: QPushButton("Button", parent)], ids=["line edit", "button"])
-def test_the_rendered_focus_ring_reaches_3_to_1_against_window_and_base(qtbot, themes: BuiltinThemes, theme, factory) -> None:
+def test_the_rendered_focus_ring_reaches_3_to_1_against_window_and_base(qtbot, themes: BuiltinThemeProvider, theme, factory) -> None:
     themes.set_theme(theme.name)
     palette = QApplication.palette()
     changed, total = _grab_ring(qtbot, factory)
@@ -647,7 +647,7 @@ def _tint(source) -> str:
 
 
 @pytest.mark.parametrize("theme", _THEMES, ids=lambda theme: theme.name)
-def test_every_chrome_icon_reaches_3_to_1_against_its_background(qtbot, themes: BuiltinThemes, theme) -> None:
+def test_every_chrome_icon_reaches_3_to_1_against_its_background(qtbot, themes: BuiltinThemeProvider, theme) -> None:
     themes.set_theme(theme.name)
     stories = _registry()
     window = _make(qtbot, themes, stories)
@@ -699,7 +699,7 @@ def _chrome_widgets(window: GalleryWindow) -> list[QWidget]:
 
 
 def test_chrome_text_is_not_clipped_and_nothing_has_a_fixed_height_at_a_24_point_font(
-    qtbot, qapp: QApplication, themes: BuiltinThemes, restore_application_look: None
+    qtbot, qapp: QApplication, themes: BuiltinThemeProvider, restore_application_look: None
 ) -> None:
     font = QFont(qapp.font())
     font.setPointSize(24)
@@ -729,7 +729,7 @@ def test_chrome_text_is_not_clipped_and_nothing_has_a_fixed_height_at_a_24_point
             assert bar.tabBar().height() >= bar.tabBar().fontMetrics().height()
 
 
-def test_the_status_bar_and_menu_bar_follow_the_font(qtbot, qapp: QApplication, themes: BuiltinThemes, restore_application_look: None) -> None:
+def test_the_status_bar_and_menu_bar_follow_the_font(qtbot, qapp: QApplication, themes: BuiltinThemeProvider, restore_application_look: None) -> None:
     font = QFont(qapp.font())
     font.setPointSize(24)
     qapp.setFont(font)
@@ -741,7 +741,7 @@ def test_the_status_bar_and_menu_bar_follow_the_font(qtbot, qapp: QApplication, 
     assert not (status.minimumHeight() == status.maximumHeight() and status.maximumHeight() != _NO_LIMIT)
 
 
-def test_the_canvas_lists_its_shortcuts_from_the_table_that_creates_them(qtbot, themes: BuiltinThemes) -> None:
+def test_the_canvas_lists_its_shortcuts_from_the_table_that_creates_them(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     canvas = window.findChild(Canvas)
     assert canvas is not None

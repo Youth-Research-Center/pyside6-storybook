@@ -11,7 +11,7 @@ from pyside6_storybook.contrast import contrast_ratio
 from pyside6_storybook.gui.controls_panel import ControlsPanel
 from pyside6_storybook.gui.sidebar import StorySidebar, _StoryFilterModel
 from pyside6_storybook.gui.window import GalleryWindow
-from pyside6_storybook.themes import BUILTIN_THEME_NAMES, BuiltinThemes
+from pyside6_storybook.themes import BUILTIN_THEME_NAMES, BuiltinThemeProvider
 
 pytestmark = pytest.mark.usefixtures("restore_window_activation")
 
@@ -552,7 +552,7 @@ def test_enter_opens_the_story_without_the_trees_activated_signal(qtbot) -> None
 # The window's shortcuts
 
 
-def _window(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> tuple[GalleryWindow, StorySidebar]:
+def _window(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> tuple[GalleryWindow, StorySidebar]:
     window = GalleryWindow(registry, themes)
     qtbot.addWidget(window)
     show_active(qtbot, window)
@@ -566,7 +566,7 @@ def _window(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> tuple[Gall
     [(Qt.Key.Key_F, Qt.KeyboardModifier.ControlModifier), (Qt.Key.Key_Slash, Qt.KeyboardModifier.NoModifier)],
 )
 def test_ctrl_f_and_slash_focus_the_search_from_the_tree(
-    qtbot, registry: StoryRegistry, themes: BuiltinThemes, key: Qt.Key, modifier: Qt.KeyboardModifier
+    qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider, key: Qt.Key, modifier: Qt.KeyboardModifier
 ) -> None:
     window, sidebar = _window(qtbot, registry, themes)
     _search(sidebar).setText("lab")
@@ -581,7 +581,7 @@ def test_ctrl_f_and_slash_focus_the_search_from_the_tree(
     assert _search(sidebar).text() == "lab"
 
 
-def test_slash_typed_into_a_line_edit_stays_there(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_slash_typed_into_a_line_edit_stays_there(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window, sidebar = _window(qtbot, registry, themes)
     edit = QLineEdit(window)
     edit.show()
@@ -595,7 +595,7 @@ def test_slash_typed_into_a_line_edit_stays_there(qtbot, registry: StoryRegistry
     assert not _search(sidebar).hasFocus()
 
 
-def test_slash_from_a_spin_box_neither_fires_nor_moves_focus(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_slash_from_a_spin_box_neither_fires_nor_moves_focus(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window, sidebar = _window(qtbot, registry, themes)
     spin = QSpinBox(window)
     spin.show()
@@ -609,7 +609,7 @@ def test_slash_from_a_spin_box_neither_fires_nor_moves_focus(qtbot, registry: St
     assert spin.value() == 0
 
 
-def test_slash_from_a_non_editable_combo_box_does_nothing(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_slash_from_a_non_editable_combo_box_does_nothing(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window, sidebar = _window(qtbot, registry, themes)
     combo = window.findChild(QComboBox, "themeSwitch")
     assert combo is not None
@@ -625,7 +625,7 @@ def test_slash_from_a_non_editable_combo_box_does_nothing(qtbot, registry: Story
 # The window
 
 
-def test_typing_in_the_search_never_changes_the_previewed_story(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_typing_in_the_search_never_changes_the_previewed_story(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window, sidebar = _window(qtbot, registry, themes)
     window.select_story("Display/Label")
     preview = window.current_preview_widget()
@@ -641,7 +641,7 @@ def test_typing_in_the_search_never_changes_the_previewed_story(qtbot, registry:
     assert window.current_preview_widget() is preview
 
 
-def test_window_select_story_opens_the_story_and_reports_unknown_ids(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_window_select_story_opens_the_story_and_reports_unknown_ids(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window, sidebar = _window(qtbot, registry, themes)
     _type(qtbot, sidebar, "button")
 
@@ -652,7 +652,7 @@ def test_window_select_story_opens_the_story_and_reports_unknown_ids(qtbot, regi
     assert window.current_story_id() == "Display/Plain"
 
 
-def test_window_set_registry_keeps_the_story_and_its_values_and_renders_once(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_window_set_registry_keeps_the_story_and_its_values_and_renders_once(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window, _ = _window(qtbot, registry, themes)
     editor = next(e for e in window.findChildren(QLineEdit) if e.objectName() != "storySearch" and e.isVisibleTo(window))
     editor.selectAll()
@@ -669,7 +669,7 @@ def test_window_set_registry_keeps_the_story_and_its_values_and_renders_once(qtb
     assert preview.property("text") == "Save"
 
 
-def test_window_set_registry_falls_back_to_defaults_when_a_value_is_rejected(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_window_set_registry_falls_back_to_defaults_when_a_value_is_rejected(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window, _ = _window(qtbot, registry, themes)
     window.select_story("Display/Label")
     narrower = StoryRegistry()
@@ -682,7 +682,9 @@ def test_window_set_registry_falls_back_to_defaults_when_a_value_is_rejected(qtb
     assert preview.text() == "size 3"
 
 
-def test_window_set_registry_selects_the_story_at_the_same_row_when_the_story_is_gone(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_window_set_registry_selects_the_story_at_the_same_row_when_the_story_is_gone(
+    qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider
+) -> None:
     window, _ = _window(qtbot, registry, themes)
     window.select_story("Display/Label")
 
@@ -700,7 +702,7 @@ def _story_with_controls(registry: StoryRegistry, story_id: str, *names: str) ->
     registry.story(story_id, controls=[IntControl(name, 1, 0, 100) for name in names])(lambda ctx: QLabel(str(sorted(ctx.args.items()))))
 
 
-def test_window_set_registry_starts_from_the_new_defaults_and_overlays_the_previous_values(qtbot, themes: BuiltinThemes) -> None:
+def test_window_set_registry_starts_from_the_new_defaults_and_overlays_the_previous_values(qtbot, themes: BuiltinThemeProvider) -> None:
     old = StoryRegistry()
     _story_with_controls(old, "T/Label/Default", "a", "gone")
     old.get("T/Label/Default").variant("Loud", args={"a": 3})
@@ -726,7 +728,7 @@ def test_window_set_registry_starts_from_the_new_defaults_and_overlays_the_previ
     assert preview.text() == str([("a", 5), ("b", 9)])
 
 
-def test_window_set_registry_builds_one_controls_panel_even_when_a_value_is_rejected(qtbot, themes: BuiltinThemes) -> None:
+def test_window_set_registry_builds_one_controls_panel_even_when_a_value_is_rejected(qtbot, themes: BuiltinThemeProvider) -> None:
     old = StoryRegistry()
     _story_with_controls(old, "T/One", "a", "b")
     window, _ = _window(qtbot, old, themes)
@@ -759,7 +761,7 @@ def test_the_search_field_has_a_clear_button_and_accessible_names(qtbot) -> None
     assert sidebar.accessibleName() == "Story list"
 
 
-def test_the_search_icon_is_tinted_from_the_palette_and_follows_a_theme_switch(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_the_search_icon_is_tinted_from_the_palette_and_follows_a_theme_switch(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window, sidebar = _window(qtbot, registry, themes)
     (action,) = [a for a in _search(sidebar).actions() if not a.icon().isNull()]
 
@@ -775,7 +777,7 @@ def test_the_search_icon_is_tinted_from_the_palette_and_follows_a_theme_switch(q
 
 
 @pytest.mark.parametrize("theme", BUILTIN_THEME_NAMES)
-def test_the_inactive_selection_keeps_a_readable_contrast(theme: str, qapp: QApplication, themes: BuiltinThemes) -> None:
+def test_the_inactive_selection_keeps_a_readable_contrast(theme: str, qapp: QApplication, themes: BuiltinThemeProvider) -> None:
     themes.set_theme(theme)
     palette = QApplication.palette()
     for group in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):
@@ -785,7 +787,7 @@ def test_the_inactive_selection_keeps_a_readable_contrast(theme: str, qapp: QApp
 
 
 
-def test_window_set_registry_keeps_a_cleared_file_control_empty(qtbot, themes: BuiltinThemes) -> None:
+def test_window_set_registry_keeps_a_cleared_file_control_empty(qtbot, themes: BuiltinThemeProvider) -> None:
     def build() -> StoryRegistry:
         registry = StoryRegistry()
         registry.story("Files/Picker", controls=[FileControl("path", "default.png")])(lambda ctx: QLabel(str(ctx.args["path"])))

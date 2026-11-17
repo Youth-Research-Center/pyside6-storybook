@@ -31,10 +31,10 @@ from pyside6_storybook.gui.controls_panel import NO_CONTROLS_MESSAGE, ControlsPa
 from pyside6_storybook.gui.error_panel import ErrorPanel
 from pyside6_storybook.gui.sidebar import StorySidebar
 from pyside6_storybook.gui.window import NO_STORIES_MESSAGE, GalleryWindow
-from pyside6_storybook.themes import BuiltinThemes
+from pyside6_storybook.themes import BuiltinThemeProvider
 
 
-def _make_window(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> GalleryWindow:
+def _make_window(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> GalleryWindow:
     window = GalleryWindow(registry, themes)
     qtbot.addWidget(window)
     return window
@@ -56,12 +56,12 @@ def _sidebar_ids(window: GalleryWindow) -> list[str]:
     return _sidebar(window).visible_story_ids()
 
 
-def test_sidebar_lists_every_story_in_registration_order(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_sidebar_lists_every_story_in_registration_order(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, registry, themes)
     assert _sidebar_ids(window) == ["Inputs/Button", "Display/Label", "Display/Plain"]
 
 
-def test_first_story_is_selected_and_previewed_on_start(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_first_story_is_selected_and_previewed_on_start(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, registry, themes)
 
     assert _sidebar(window).selected_story_id() == "Inputs/Button"
@@ -77,7 +77,7 @@ def test_first_story_is_selected_and_previewed_on_start(qtbot, registry: StoryRe
     assert preview.parent() is surface
 
 
-def test_selecting_a_story_updates_heading_preview_and_controls(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_selecting_a_story_updates_heading_preview_and_controls(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, registry, themes)
     first_preview = window.current_preview_widget()
 
@@ -92,7 +92,7 @@ def test_selecting_a_story_updates_heading_preview_and_controls(qtbot, registry:
     assert preview is not first_preview
 
 
-def test_a_story_without_controls_shows_the_empty_state(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_a_story_without_controls_shows_the_empty_state(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, registry, themes)
 
     window.select_story("Display/Plain")
@@ -104,7 +104,7 @@ def test_a_story_without_controls_shows_the_empty_state(qtbot, registry: StoryRe
     assert empty_label.text() == NO_CONTROLS_MESSAGE
 
 
-def test_changing_a_control_rebuilds_the_preview(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_changing_a_control_rebuilds_the_preview(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, registry, themes)
     window.show()
     first = window.current_preview_widget()
@@ -122,7 +122,7 @@ def test_changing_a_control_rebuilds_the_preview(qtbot, registry: StoryRegistry,
     assert second.text() == "Save"
 
 
-def test_switching_theme_rebuilds_the_preview_and_changes_the_palette(qtbot, registry: StoryRegistry, themes: BuiltinThemes, qapp) -> None:
+def test_switching_theme_rebuilds_the_preview_and_changes_the_palette(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider, qapp) -> None:
     window = _make_window(qtbot, registry, themes)
     window.select_story("Display/Label")
     first = window.current_preview_widget()
@@ -138,11 +138,11 @@ def test_switching_theme_rebuilds_the_preview_and_changes_the_palette(qtbot, reg
     assert isinstance(second, QLabel)
     assert second is not first
     assert second.text() == "Dark 10"
-    assert themes.current == "Dark"
+    assert themes.current_theme() == "Dark"
     assert qapp.palette().window().color().name() != window_color
 
 
-def test_set_theme_updates_the_switch_and_the_preview(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_set_theme_updates_the_switch_and_the_preview(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, registry, themes)
     first = window.current_preview_widget()
 
@@ -151,20 +151,20 @@ def test_set_theme_updates_the_switch_and_the_preview(qtbot, registry: StoryRegi
     switch = window.findChild(QComboBox, "themeSwitch")
     assert switch is not None
     assert switch.currentText() == "Dark"
-    assert themes.current == "Dark"
+    assert themes.current_theme() == "Dark"
     assert window.current_preview_widget() is not first
 
 
-def test_set_theme_rejects_unknown_names_without_changing_anything(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_set_theme_rejects_unknown_names_without_changing_anything(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, registry, themes)
     first = window.current_preview_widget()
     with pytest.raises(ValueError, match="Sepia"):
         window.set_theme("Sepia")
     assert window.current_preview_widget() is first
-    assert themes.current == "Light"
+    assert themes.current_theme() == "Light"
 
 
-def test_story_receives_the_args_and_theme_in_its_context(qtbot, themes: BuiltinThemes) -> None:
+def test_story_receives_the_args_and_theme_in_its_context(qtbot, themes: BuiltinThemeProvider) -> None:
     contexts: list[StoryContext] = []
     stories = StoryRegistry()
 
@@ -179,7 +179,7 @@ def test_story_receives_the_args_and_theme_in_its_context(qtbot, themes: Builtin
     assert [(dict(ctx.args), ctx.theme) for ctx in contexts] == [({"n": 3}, "Light"), ({"n": 3}, "Dark")]
 
 
-def test_no_method_is_called_on_the_returned_widget(qtbot, themes: BuiltinThemes) -> None:
+def test_no_method_is_called_on_the_returned_widget(qtbot, themes: BuiltinThemeProvider) -> None:
     class Recording(QLabel):
         def set_tokens(self, tokens: dict) -> None:
             raise AssertionError("set_tokens must not be called")
@@ -192,7 +192,7 @@ def test_no_method_is_called_on_the_returned_widget(qtbot, themes: BuiltinThemes
     assert isinstance(window.current_preview_widget(), Recording)
 
 
-def test_the_previous_preview_widget_is_deleted(qtbot, registry: StoryRegistry, themes: BuiltinThemes, qapp: QApplication) -> None:
+def test_the_previous_preview_widget_is_deleted(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider, qapp: QApplication) -> None:
     window = _make_window(qtbot, registry, themes)
     first = window.current_preview_widget()
     assert first is not None
@@ -204,7 +204,7 @@ def test_the_previous_preview_widget_is_deleted(qtbot, registry: StoryRegistry, 
     assert not shiboken6.isValid(first)
 
 
-def test_closing_the_window_releases_the_preview(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_closing_the_window_releases_the_preview(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, registry, themes)
     window.show()
     assert window.current_preview_widget() is not None
@@ -214,7 +214,7 @@ def test_closing_the_window_releases_the_preview(qtbot, registry: StoryRegistry,
     assert window.current_preview_widget() is None
 
 
-def test_an_empty_registry_shows_an_empty_state(qtbot, themes: BuiltinThemes) -> None:
+def test_an_empty_registry_shows_an_empty_state(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, StoryRegistry(), themes)
     window.show()
 
@@ -230,7 +230,7 @@ def test_an_empty_registry_shows_an_empty_state(qtbot, themes: BuiltinThemes) ->
     assert window.current_preview_widget() is None
 
 
-def test_the_empty_state_sits_at_the_top_of_the_preview(qtbot, themes: BuiltinThemes) -> None:
+def test_the_empty_state_sits_at_the_top_of_the_preview(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, StoryRegistry(), themes)
     window.resize(900, 600)
     window.show()
@@ -244,7 +244,7 @@ def test_the_empty_state_sits_at_the_top_of_the_preview(qtbot, themes: BuiltinTh
     assert empty_label.geometry().bottom() < surface.height() // 2
 
 
-def test_the_empty_state_is_hidden_when_there_are_stories(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_the_empty_state_is_hidden_when_there_are_stories(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, registry, themes)
     window.show()
     empty_label = window.findChild(QLabel, "previewEmptyState")
@@ -252,7 +252,7 @@ def test_the_empty_state_is_hidden_when_there_are_stories(qtbot, registry: Story
     assert not empty_label.isVisible()
 
 
-def test_the_chrome_uses_no_fixed_colors(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_the_chrome_uses_no_fixed_colors(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, registry, themes)
     window.show()
     assert window.styleSheet() == ""
@@ -260,14 +260,14 @@ def test_the_chrome_uses_no_fixed_colors(qtbot, registry: StoryRegistry, themes:
         assert widget.styleSheet() == "", widget.objectName()
 
 
-def test_every_widget_has_an_owner(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_every_widget_has_an_owner(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, registry, themes)
     window.select_story("Display/Plain")
     for widget in window.findChildren(QWidget):
         assert widget.parent() is not None, widget
 
 
-def test_the_story_list_and_theme_switch_have_accessible_names(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_the_story_list_and_theme_switch_have_accessible_names(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, registry, themes)
     switch = window.findChild(QComboBox, "themeSwitch")
     assert switch is not None
@@ -285,7 +285,7 @@ def _raising(ctx: StoryContext) -> QWidget:
     raise RuntimeError("boom while rendering")
 
 
-def test_a_story_that_raises_shows_an_error_panel_and_logs_it(qtbot, themes: BuiltinThemes, caplog: pytest.LogCaptureFixture) -> None:
+def test_a_story_that_raises_shows_an_error_panel_and_logs_it(qtbot, themes: BuiltinThemeProvider, caplog: pytest.LogCaptureFixture) -> None:
     stories = StoryRegistry()
     stories.story("Good/One")(lambda ctx: QLabel("one"))
     stories.story("Broken/Raises")(_raising)
@@ -305,7 +305,7 @@ def test_a_story_that_raises_shows_an_error_panel_and_logs_it(qtbot, themes: Bui
     assert any("Broken/Raises" in record.getMessage() and record.exc_info for record in caplog.records)
 
 
-def test_a_story_that_returns_a_non_widget_shows_an_error_panel(qtbot, themes: BuiltinThemes) -> None:
+def test_a_story_that_returns_a_non_widget_shows_an_error_panel(qtbot, themes: BuiltinThemeProvider) -> None:
     stories = StoryRegistry()
     stories.story("Good/One")(lambda ctx: QLabel("one"))
     stories.story("Broken/None")(lambda ctx: None)  # ty: ignore[invalid-argument-type]
@@ -321,7 +321,7 @@ def test_a_story_that_returns_a_non_widget_shows_an_error_panel(qtbot, themes: B
     assert window.current_preview_widget() is None
 
 
-def test_the_next_story_renders_after_an_error(qtbot, themes: BuiltinThemes) -> None:
+def test_the_next_story_renders_after_an_error(qtbot, themes: BuiltinThemeProvider) -> None:
     stories = StoryRegistry()
     stories.story("Broken/Raises")(_raising)
     stories.story("Good/One")(lambda ctx: QLabel("one"))
@@ -336,7 +336,7 @@ def test_the_next_story_renders_after_an_error(qtbot, themes: BuiltinThemes) -> 
     assert preview.text() == "one"
 
 
-def test_the_error_panel_is_replaced_when_the_story_renders_again(qtbot, themes: BuiltinThemes, qapp: QApplication) -> None:
+def test_the_error_panel_is_replaced_when_the_story_renders_again(qtbot, themes: BuiltinThemeProvider, qapp: QApplication) -> None:
     stories = StoryRegistry()
 
     @stories.story("Flaky", controls=[BoolControl("fail", default=True)])
@@ -361,7 +361,7 @@ def test_the_error_panel_is_replaced_when_the_story_renders_again(qtbot, themes:
     assert preview.text() == "rendered"
 
 
-def test_switching_theme_on_a_broken_story_keeps_the_window_usable(qtbot, themes: BuiltinThemes) -> None:
+def test_switching_theme_on_a_broken_story_keeps_the_window_usable(qtbot, themes: BuiltinThemeProvider) -> None:
     stories = StoryRegistry()
     stories.story("Broken/Raises")(_raising)
     window = _make_window(qtbot, stories, themes)
@@ -384,7 +384,7 @@ def _load_errors() -> list[LoadError]:
     ]
 
 
-def test_load_errors_get_a_sidebar_entry_after_the_stories(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_load_errors_get_a_sidebar_entry_after_the_stories(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = GalleryWindow(registry, themes, load_errors=_load_errors())
     qtbot.addWidget(window)
 
@@ -393,7 +393,7 @@ def test_load_errors_get_a_sidebar_entry_after_the_stories(qtbot, registry: Stor
     assert window.current_story_id() == "Inputs/Button"
 
 
-def test_selecting_the_load_errors_entry_shows_every_error(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_selecting_the_load_errors_entry_shows_every_error(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = GalleryWindow(registry, themes, load_errors=_load_errors())
     qtbot.addWidget(window)
 
@@ -416,7 +416,7 @@ def test_selecting_the_load_errors_entry_shows_every_error(qtbot, registry: Stor
     assert isinstance(window.current_preview_widget(), QPushButton)
 
 
-def test_with_only_load_errors_the_errors_are_shown_on_start(qtbot, themes: BuiltinThemes) -> None:
+def test_with_only_load_errors_the_errors_are_shown_on_start(qtbot, themes: BuiltinThemeProvider) -> None:
     window = GalleryWindow(StoryRegistry(), themes, load_errors=_load_errors()[:1])
     qtbot.addWidget(window)
     window.show()
@@ -431,7 +431,7 @@ def test_with_only_load_errors_the_errors_are_shown_on_start(qtbot, themes: Buil
     assert not empty_label.isVisible()
 
 
-def test_one_broken_and_two_working_story_modules(qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_one_broken_and_two_working_story_modules(qtbot, tmp_path: Path, stories: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     """The acceptance case of #8, from real files: the gallery opens, lists the failure, and renders both working stories."""
     write(tmp_path, "stories/a_story.py", story_source("Working/A", "'a'"))
     write(tmp_path, "stories/b_story.py", story_source("Working/B", "'b'"))
@@ -458,7 +458,7 @@ def test_one_broken_and_two_working_story_modules(qtbot, tmp_path: Path, stories
     assert "SyntaxError" in panel.details()
 
 
-def test_the_traceback_starts_at_the_story_not_in_the_library(qtbot, themes: BuiltinThemes) -> None:
+def test_the_traceback_starts_at_the_story_not_in_the_library(qtbot, themes: BuiltinThemeProvider) -> None:
     stories = StoryRegistry()
     stories.story("Broken/Raises")(_raising)
     window = _make_window(qtbot, stories, themes)
@@ -471,7 +471,7 @@ def test_the_traceback_starts_at_the_story_not_in_the_library(qtbot, themes: Bui
     assert "pyside6_storybook" not in details
 
 
-def test_the_controls_section_scrolls_when_there_are_many_controls(qtbot, themes: BuiltinThemes) -> None:
+def test_the_controls_section_scrolls_when_there_are_many_controls(qtbot, themes: BuiltinThemeProvider) -> None:
     stories = StoryRegistry()
 
     @stories.story("Many", controls=[IntControl(f"value_{index}", 0, 0, 9) for index in range(40)])
@@ -497,7 +497,7 @@ def test_the_controls_section_scrolls_when_there_are_many_controls(qtbot, themes
     assert panel.height() > scroll.viewport().height()
 
 
-def test_the_controls_section_does_not_scroll_for_a_few_controls(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_the_controls_section_does_not_scroll_for_a_few_controls(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, registry, themes)
     window.resize(900, 600)
     window.show()
@@ -508,7 +508,7 @@ def test_the_controls_section_does_not_scroll_for_a_few_controls(qtbot, registry
     assert scroll.verticalScrollBar().maximum() == 0
 
 
-def test_the_controls_panel_starts_from_the_stories_default_args(qtbot, themes: BuiltinThemes) -> None:
+def test_the_controls_panel_starts_from_the_stories_default_args(qtbot, themes: BuiltinThemeProvider) -> None:
     stories = StoryRegistry()
 
     @stories.story("Ratio", controls=[FloatControl("ratio", 1, 0, 2)])
@@ -522,7 +522,7 @@ def test_the_controls_panel_starts_from_the_stories_default_args(qtbot, themes: 
     assert preview.text() == "1.0"
 
 
-def test_a_variants_panel_starts_at_its_args_and_stays_editable(qtbot, themes: BuiltinThemes) -> None:
+def test_a_variants_panel_starts_at_its_args_and_stays_editable(qtbot, themes: BuiltinThemeProvider) -> None:
     stories = StoryRegistry()
 
     @stories.story("Inputs/Label/Default", controls=[BoolControl("loud", default=False)])
@@ -560,7 +560,7 @@ class _FixedHint(QWidget):
 
 
 def _layout_window(
-    qtbot, themes: BuiltinThemes, story_function, *, layout: Layout | str | None, width: int = 700, height: int = 500
+    qtbot, themes: BuiltinThemeProvider, story_function, *, layout: Layout | str | None, width: int = 700, height: int = 500
 ) -> GalleryWindow:
     registry = StoryRegistry()
     registry.story("Layout/Story", layout=layout)(story_function)
@@ -625,7 +625,7 @@ def _small(ctx: StoryContext) -> QWidget:
     return _FixedHint(300, 200)
 
 
-def test_the_preview_surface_is_the_widget_of_a_scroll_area_and_owns_the_preview(qtbot, themes: BuiltinThemes) -> None:
+def test_the_preview_surface_is_the_widget_of_a_scroll_area_and_owns_the_preview(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _layout_window(qtbot, themes, _button, layout=None)
 
     stack = _scroll(window).widget()
@@ -637,7 +637,7 @@ def test_the_preview_surface_is_the_widget_of_a_scroll_area_and_owns_the_preview
     assert _surface(window).backgroundRole() == _scroll(window).viewport().backgroundRole()
 
 
-def test_a_story_without_a_layout_uses_the_registry_default(qtbot, themes: BuiltinThemes) -> None:
+def test_a_story_without_a_layout_uses_the_registry_default(qtbot, themes: BuiltinThemeProvider) -> None:
     registry = StoryRegistry()
     registry.default_layout = Layout.FILL
     registry.story("A/B")(_expanding)
@@ -650,7 +650,7 @@ def test_a_story_without_a_layout_uses_the_registry_default(qtbot, themes: Built
     assert _preview(window).geometry() == _inner_rect(window)
 
 
-def test_padded_is_top_aligned_with_the_full_width_for_a_horizontally_expanding_widget(qtbot, themes: BuiltinThemes) -> None:
+def test_padded_is_top_aligned_with_the_full_width_for_a_horizontally_expanding_widget(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _layout_window(qtbot, themes, _small_expanding_horizontally, layout=Layout.PADDED)
 
     for width, height in ((700, 500), (900, 600)):
@@ -664,7 +664,7 @@ def test_padded_is_top_aligned_with_the_full_width_for_a_horizontally_expanding_
         assert geometry.height() == _preview(window).sizeHint().height()
 
 
-def test_padded_stretches_a_button_to_the_full_width_at_its_natural_height(qtbot, themes: BuiltinThemes) -> None:
+def test_padded_stretches_a_button_to_the_full_width_at_its_natural_height(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _layout_window(qtbot, themes, _button, layout=Layout.PADDED)
 
     geometry = _preview(window).geometry()
@@ -674,7 +674,7 @@ def test_padded_stretches_a_button_to_the_full_width_at_its_natural_height(qtbot
     assert geometry.y() == _inner_rect(window).y()
 
 
-def test_centered_keeps_the_natural_size_and_stays_centered_after_a_resize(qtbot, themes: BuiltinThemes) -> None:
+def test_centered_keeps_the_natural_size_and_stays_centered_after_a_resize(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _layout_window(qtbot, themes, _button, layout=Layout.CENTERED)
 
     for width, height in ((700, 500), (900, 650), (600, 400)):
@@ -687,7 +687,7 @@ def test_centered_keeps_the_natural_size_and_stays_centered_after_a_resize(qtbot
         assert abs(geometry.center().y() - surface.rect().center().y()) <= 1
 
 
-def test_fill_gives_an_expanding_widget_the_whole_area_inside_the_margins_before_and_after_a_resize(qtbot, themes: BuiltinThemes) -> None:
+def test_fill_gives_an_expanding_widget_the_whole_area_inside_the_margins_before_and_after_a_resize(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _layout_window(qtbot, themes, _expanding, layout=Layout.FILL)
 
     for width, height in ((700, 500), (900, 650), (600, 400)):
@@ -696,7 +696,7 @@ def test_fill_gives_an_expanding_widget_the_whole_area_inside_the_margins_before
         assert _preview(window).geometry() == _inner_rect(window)
 
 
-def test_fill_keeps_a_buttons_natural_height_and_centres_it_vertically(qtbot, themes: BuiltinThemes) -> None:
+def test_fill_keeps_a_buttons_natural_height_and_centres_it_vertically(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _layout_window(qtbot, themes, _button, layout=Layout.FILL)
 
     for width, height in ((700, 500), (900, 650)):
@@ -710,7 +710,7 @@ def test_fill_keeps_a_buttons_natural_height_and_centres_it_vertically(qtbot, th
 
 
 @pytest.mark.parametrize("layout", [Layout.PADDED, Layout.CENTERED])
-def test_an_oversized_widget_keeps_its_natural_size_and_scrolls_in_padded_and_centered(qtbot, themes: BuiltinThemes, layout: Layout) -> None:
+def test_an_oversized_widget_keeps_its_natural_size_and_scrolls_in_padded_and_centered(qtbot, themes: BuiltinThemeProvider, layout: Layout) -> None:
     window = _layout_window(qtbot, themes, _big, layout=layout, width=900, height=500)
     window.resize(900, 500)
     QApplication.processEvents()
@@ -729,7 +729,7 @@ def test_an_oversized_widget_keeps_its_natural_size_and_scrolls_in_padded_and_ce
 
 
 @pytest.mark.parametrize("layout", [Layout.PADDED, Layout.CENTERED])
-def test_a_widget_that_fits_does_not_scroll(qtbot, themes: BuiltinThemes, layout: Layout) -> None:
+def test_a_widget_that_fits_does_not_scroll(qtbot, themes: BuiltinThemeProvider, layout: Layout) -> None:
     window = _layout_window(qtbot, themes, _small, layout=layout)
     scroll = _scroll(window)
 
@@ -738,7 +738,7 @@ def test_a_widget_that_fits_does_not_scroll(qtbot, themes: BuiltinThemes, layout
     assert _surface(window).minimumSize() == QSize(320, 220)
 
 
-def test_fill_has_no_scroll_bars_and_shrinks_the_widget_with_the_pane(qtbot, themes: BuiltinThemes) -> None:
+def test_fill_has_no_scroll_bars_and_shrinks_the_widget_with_the_pane(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _layout_window(qtbot, themes, _big, layout=Layout.FILL, width=900, height=500)
     scroll = _scroll(window)
 
@@ -751,7 +751,7 @@ def test_fill_has_no_scroll_bars_and_shrinks_the_widget_with_the_pane(qtbot, the
     assert _preview(window).width() < 800
 
 
-def test_switching_from_a_scrolling_story_to_fill_resets_the_surface_minimum(qtbot, themes: BuiltinThemes) -> None:
+def test_switching_from_a_scrolling_story_to_fill_resets_the_surface_minimum(qtbot, themes: BuiltinThemeProvider) -> None:
     registry = StoryRegistry()
     registry.story("A/Big", layout=Layout.PADDED)(_big)
     registry.story("B/Fill", layout=Layout.FILL)(_expanding)
@@ -770,7 +770,7 @@ def test_switching_from_a_scrolling_story_to_fill_resets_the_surface_minimum(qtb
     assert _preview(window).geometry() == _inner_rect(window)
 
 
-def test_the_error_panel_uses_fill_whatever_the_story_declares(qtbot, themes: BuiltinThemes) -> None:
+def test_the_error_panel_uses_fill_whatever_the_story_declares(qtbot, themes: BuiltinThemeProvider) -> None:
     def failing(ctx: StoryContext) -> QWidget:
         raise RuntimeError("boom")
 
@@ -784,7 +784,7 @@ def test_the_error_panel_uses_fill_whatever_the_story_declares(qtbot, themes: Bu
         assert _scroll(window).verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
 
 
-def test_the_load_errors_view_uses_fill(qtbot, registry: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_the_load_errors_view_uses_fill(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = GalleryWindow(registry, themes, load_errors=[LoadError(source="x", message="m", details="d")])
     qtbot.addWidget(window)
     window.resize(700, 500)
@@ -801,7 +801,7 @@ def test_the_load_errors_view_uses_fill(qtbot, registry: StoryRegistry, themes: 
     assert _scroll(window).verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
 
 
-def test_a_word_wrapped_label_wraps_in_a_narrow_window_without_a_horizontal_scroll_range(qtbot, themes: BuiltinThemes) -> None:
+def test_a_word_wrapped_label_wraps_in_a_narrow_window_without_a_horizontal_scroll_range(qtbot, themes: BuiltinThemeProvider) -> None:
     registry = StoryRegistry()
     registry.story("Display/Padded", layout=Layout.PADDED)(_wrapping_label)
     registry.story("Display/Centered", layout=Layout.CENTERED)(_wrapping_label)
@@ -825,7 +825,7 @@ def test_a_word_wrapped_label_wraps_in_a_narrow_window_without_a_horizontal_scro
         assert _surface(window).minimumHeight() == 0
 
 
-def test_the_label_example_wraps_in_a_narrow_window(qtbot, stories: StoryRegistry, themes: BuiltinThemes) -> None:
+def test_the_label_example_wraps_in_a_narrow_window(qtbot, stories: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     examples = load_stories([EXAMPLES_MODULE]).registry
     window = _make_window(qtbot, examples, themes)
     window.resize(560, 400)
@@ -860,7 +860,7 @@ def _wrap_in_frame(widget: QWidget, ctx: StoryContext) -> QWidget:
     return wrapper
 
 
-def test_current_preview_widget_is_the_undecorated_widget_inside_the_decorated_root(qtbot, themes: BuiltinThemes) -> None:
+def test_current_preview_widget_is_the_undecorated_widget_inside_the_decorated_root(qtbot, themes: BuiltinThemeProvider) -> None:
     registry = StoryRegistry()
     registry.decorators.append(_wrap_in_frame)
     registry.story("Group/Story", decorators=[padding(10)])(lambda ctx: QLabel("inner"))
@@ -877,7 +877,7 @@ def test_current_preview_widget_is_the_undecorated_widget_inside_the_decorated_r
     assert preview.parentWidget() is not outer
 
 
-def test_rebuilding_deletes_the_decorated_root_and_the_widget(qtbot, themes: BuiltinThemes, qapp: QApplication) -> None:
+def test_rebuilding_deletes_the_decorated_root_and_the_widget(qtbot, themes: BuiltinThemeProvider, qapp: QApplication) -> None:
     registry = StoryRegistry()
     registry.story("Group/Story", decorators=[padding(10), frame()])(lambda ctx: QLabel("inner"))
     window = _make_window(qtbot, registry, themes)
@@ -897,7 +897,7 @@ def test_rebuilding_deletes_the_decorated_root_and_the_widget(qtbot, themes: Bui
     assert window.current_preview_widget() is not widget
 
 
-def test_the_decorated_root_is_placed_with_the_stories_layout(qtbot, themes: BuiltinThemes) -> None:
+def test_the_decorated_root_is_placed_with_the_stories_layout(qtbot, themes: BuiltinThemeProvider) -> None:
     registry = StoryRegistry()
     registry.story("Group/Story", layout=Layout.CENTERED, decorators=[padding(24), fixed_size(320, 200)])(lambda ctx: QLabel("inner"))
     window = _make_window(qtbot, registry, themes)
@@ -915,7 +915,7 @@ def test_the_decorated_root_is_placed_with_the_stories_layout(qtbot, themes: Bui
     assert widget.geometry().topLeft() == QPoint(24, 24)
 
 
-def test_a_decorator_that_raises_shows_an_error_panel_and_logs_it(qtbot, themes: BuiltinThemes, caplog: pytest.LogCaptureFixture) -> None:
+def test_a_decorator_that_raises_shows_an_error_panel_and_logs_it(qtbot, themes: BuiltinThemeProvider, caplog: pytest.LogCaptureFixture) -> None:
     def broken(widget: QWidget, ctx: StoryContext) -> QWidget:
         raise RuntimeError("decorator boom")
 
@@ -939,7 +939,7 @@ def test_a_decorator_that_raises_shows_an_error_panel_and_logs_it(qtbot, themes:
     assert any("Broken/Decorated" in record.getMessage() and record.exc_info for record in caplog.records)
 
 
-def test_a_registry_decorator_that_fails_shows_an_error_for_every_story(qtbot, themes: BuiltinThemes) -> None:
+def test_a_registry_decorator_that_fails_shows_an_error_for_every_story(qtbot, themes: BuiltinThemeProvider) -> None:
     def broken(widget: QWidget, ctx: StoryContext) -> QWidget:
         return QLabel("dropped")
 
@@ -965,7 +965,7 @@ def _inputs(_ctx: StoryContext) -> QWidget:
 
 
 @pytest.mark.parametrize("theme", ["Light", "Dark"])
-def test_inputs_stand_out_from_the_preview_surface(qtbot, themes: BuiltinThemes, theme: str) -> None:
+def test_inputs_stand_out_from_the_preview_surface(qtbot, themes: BuiltinThemeProvider, theme: str) -> None:
     registry = StoryRegistry()
     registry.story("Forms/Inputs")(_inputs)
     window = _make_window(qtbot, registry, themes)
