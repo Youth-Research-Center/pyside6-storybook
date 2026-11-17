@@ -103,6 +103,10 @@ All notable changes to this project are documented in this file.
 - `FloatControl` rejects a default or bound that needs more than 10 decimals, which the editor used to show rounded.
 
 ### Fixed
+- The package no longer installs PySide6 6.12.0 on Python 3.11. That release drops a reference to `None`, `True` or `False` on many calls
+  under Python 3.11, and a long session aborted the interpreter on exit ("none_dealloc"). Python 3.12 and newer still get 6.12.0.
+- `pyside6_storybook.app.run` left a Quit event posted when it returned, so every later event loop in the same process (a second `run()`,
+  or a test's wait) stopped at once.
 - The Dark theme's input fields, unchecked check boxes and alternate table rows were almost invisible in the preview. The preview
   surface now uses the window background, where a stock widget sits in an application, and the Dark palette separates `Window`,
   `Base` and `AlternateBase` further; the Light theme's alternate rows are a little stronger too.

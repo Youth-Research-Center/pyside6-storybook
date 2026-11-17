@@ -156,7 +156,10 @@ def test_the_checkerboard_alternates_eight_pixel_squares_of_base_and_mid_and_fol
         surface = _surface(window)
         palette = surface.palette()
         image = surface.grab().toImage()
-        origin = surface.contentsRect().topLeft()
+        # Sample whole squares below the surface's children (the empty-state label), whose antialiased text can reach into the first squares.
+        covered = max((child.geometry().bottom() + 1 for child in surface.findChildren(QWidget) if child.isVisible()), default=0)
+        origin = surface.contentsRect().topLeft() + QPoint(0, -(-covered // 16) * 16)
+        assert origin.y() + 16 <= surface.contentsRect().bottom()
         pixel = functools.partial(_pixel_name, image, origin)
 
         mid = palette.color(QPalette.ColorRole.Mid).name()
@@ -405,14 +408,16 @@ def test_every_canvas_control_is_visible_and_at_least_its_minimum_size_hint_at_t
         controls.append(_size_label(window))
     controls += [label for label in toolbar.findChildren(QLabel) if label.buddy() is not None and not label.isHidden()]
 
-    def fits() -> bool:
+    def fits() -> None:
         # The initial splitter sizes leave the middle pane wide enough for the longest toolbar row; wait for the posted layout pass.
-        return all(
-            widget.isVisible()
-            and widget.width() >= widget.minimumSizeHint().width()
-            and widget.height() >= widget.minimumSizeHint().height()
+        undersized = [
+            f"{widget.objectName() or type(widget).__name__}: {widget.size().toTuple()} < {widget.minimumSizeHint().toTuple()}"
             for widget in [*controls, toolbar]
-        )
+            if not widget.isVisible()
+            or widget.width() < widget.minimumSizeHint().width()
+            or widget.height() < widget.minimumSizeHint().height()
+        ]
+        assert not undersized, f"window {window.size().toTuple()}: " + ", ".join(undersized)
 
     qtbot.waitUntil(fits, timeout=3000)
     assert window.size() == QSize(1100, 700)

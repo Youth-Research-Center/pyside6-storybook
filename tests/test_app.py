@@ -1,5 +1,7 @@
+import functools
+
 import pytest
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QEventLoop, QTimer
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication, QComboBox, QLabel
 
@@ -36,6 +38,16 @@ def test_run_shows_the_window_themes_the_app_and_restores_it(qapp: QApplication,
     assert str(seen["style"]).lower() == "fusion"
     assert seen["window_color"] == "#f0f0f0"
     assert qapp.palette() == palette_before
+
+
+def test_run_leaves_later_event_loops_working(qapp: QApplication, restore_application_look: None, registry: StoryRegistry) -> None:
+    QTimer.singleShot(0, qapp.quit)
+    assert run(registry, argv=["pyside6-storybook"]) == 0
+    qapp.processEvents()  # delivers anything run() left posted, as pytest-qt does between tests
+
+    loop = QEventLoop()
+    QTimer.singleShot(0, functools.partial(loop.exit, 7))
+    assert loop.exec() == 7
 
 
 def test_run_with_an_empty_registry_opens_the_empty_gallery(qapp: QApplication, restore_application_look: None) -> None:

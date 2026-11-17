@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Sequence
 
+from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication
 
 from pyside6_storybook.discovery import LoadError
@@ -55,6 +56,9 @@ def run(
         exit_code = app.exec()
         window.close()
         window.deleteLater()
+        # Quitting closes the window, and closing the last window posts another Quit event. The loop has ended, so a later event loop in
+        # this process would receive it and stop at once, and every nested loop after it would return immediately.
+        QCoreApplication.removePostedEvents(app, QEvent.Type.Quit)
     finally:
         themes.deactivate()
     return exit_code
