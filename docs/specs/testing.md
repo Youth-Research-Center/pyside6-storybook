@@ -119,21 +119,29 @@ command-line option and an ini option; the command line wins.
      - the story's default arguments (`story.default_args()`, the same values the gallery starts with, variant overrides included);
      - the theme;
      - an `ActionSink` that discards entries;
-     - the provider's `tokens()` and `color_scheme()` (read with `getattr` and the window's palette heuristic, as the window does).
-     The context-building code moves from the window into a shared internal helper (`themes/story_context_factory.py`:
-     `build_story_context(story, provider, *, args, actions)`), which both use.
+     - the provider's `tokens()` and `color_scheme()`, read with `read_tokens(provider)` and `read_color_scheme(provider)` from a
+       new internal module, `themes/provider_values.py`. These helpers raise on a provider error or a wrong type (a `tokens()` that
+       is not a mapping). The window uses the same two helpers inside its `_call_provider` guard and keeps its caching and error
+       behaviour unchanged (`tests/test_tokens.py` and `tests/test_theme_provider.py` keep passing). In the plugin, a provider error
+       fails the story item.
   3. `render_story(story, ctx, registry=registry)` builds the widget and its decorators.
-  4. Show the root (offscreen), clear focus (`QApplication.focusWidget().clearFocus()` when the focus is inside the root), and run
-     `QApplication.processEvents()` twice. The shown root becomes the active window offscreen and a line edit or spin box takes focus;
-     its blinking caret would make snapshots differ and its focus look would enter the checks.
-  5. Run the item's check, if it is a check item (§2–§4), on the shown root.
-  6. Hide the root and delete it, flushing `DeferredDelete`.
+  4. Put the root in a host widget with `autoFillBackground` and the `Window` background role, as the gallery's preview surface does,
+     and show the host (offscreen). Rendered as a top-level window, a translucent style-sheet background is painted twice over a
+     transparent image, which skews pixel checks and snapshots. Then clear focus (`QApplication.focusWidget().clearFocus()` when the
+     focus is inside the root), and run `QApplication.processEvents()` twice. The shown host becomes the active window offscreen and
+     a line edit or spin box takes focus; its blinking caret would make snapshots differ and its focus look would enter the checks.
+  5. Run the item's check, if it is a check item (§2–§4): the accessibility rules on the root, and contrast and snapshots on the
+     rendered host.
+  6. Hide the host and delete it with the root, flushing `DeferredDelete`.
 - **Failures.** A `StoryRenderError` fails the item with its title and details. A failure caused by the story's own code does not
   print a pytest traceback, because `repr_failure` returns the error's text. While the item runs, a Qt message handler collects
   `QtWarningMsg`, `QtCriticalMsg` and `QtFatalMsg`. With `storybook_qt_warnings = fail` the item fails and lists the messages that no
 pattern of `storybook_qt_warnings_ignore` matches. The handler
   chains to the previous one, so pytest-qt's capture still works.
 - `reportinfo()` returns the story function's file and line, and `"story <id> [<theme>]"`.
+- **Session end.** In `pytest_sessionfinish` the session deactivates the provider, restores both bindings of the default registry
+  (`pyside6_storybook.registry.default_registry` and `pyside6_storybook.default_registry`) to what they were before loading, and
+  reinstalls the previous Qt message handler. pytester restores `sys.path` and `sys.modules`; the provider restores the look.
 
 ### 1.5 The `render_story` fixture
 
@@ -157,7 +165,8 @@ pattern of `storybook_qt_warnings_ignore` matches. The handler
   - `load_error_item.py`: `StoryLoadErrorItem` and the configuration item;
   - `qt_messages.py`: the message handler and the ignore patterns;
   - `fixtures.py`: the `render_story` fixture's implementation.
-- `src/pyside6_storybook/themes/story_context_factory.py`: `build_story_context`, shared with the window (§1.4).
+- `src/pyside6_storybook/testing/snapshots.py`: capture, comparison and diff images (§4, added by PR 4).
+- `src/pyside6_storybook/themes/provider_values.py`: `read_tokens` and `read_color_scheme`, shared with the window (§1.4).
 
 ### 1.7 Tests
 
@@ -215,11 +224,12 @@ pattern of `storybook_qt_warnings_ignore` matches. The handler
 
 ### 2.2 Opting out per story
 
-- `story()`, `StoryRegistry.story()`, `Story.__init__` and `Story.variant` gain a keyword-only parameter after the existing ones:
-  `checks_ignore: Mapping[str, str] = {}`, mapping a rule (`"name"`, `"focus"`, `"contrast"`, `"snapshot"`) to the reason.
-  - Unknown rules and empty reasons raise `ValueError`.
-  - The mapping is stored read-only on `Story.checks_ignore`.
-  - A variant without its own mapping uses its base's, as with layout and decorators.
+- `story()`, `StoryRegistry.story()` and `Story.__init__` gain a keyword-only parameter after the existing ones,
+  `checks_ignore: Mapping[str, str] = {}`, mapping a rule to the reason. `Story.variant` gains
+  `checks_ignore: Mapping[str, str] | None = None`, like `layout` and `decorators`, so `None` means "use the base's".
+  - Unknown rules and empty reasons raise `ValueError`. Each PR adds the rule names it implements: PR 2 `"name"` and `"focus"`,
+    PR 3 `"contrast"`, PR 4 `"snapshot"`, so no rule is accepted before something checks it.
+  - The mapping is stored read-only on `Story.checks_ignore` (a new `__slots__` entry).
 - **Deviation from the issue.** #34 names the parameter `a11y_ignore`. One mapping serves all four checks (#33, #34 and #35 each ask
   for a per-story opt-out with a reason), so it is named for checks in general. The issue's example becomes
   `@story(..., checks_ignore={"focus": "decorative"})`.
@@ -235,8 +245,9 @@ pattern of `storybook_qt_warnings_ignore` matches. The handler
 ### 2.4 Examples and tests
 
 - Run both rules on the built-in examples and fix what they find in the examples, not by adding exclusions. Today `name` fails on
-  Line Edit (three stories), Spin Box, Double Spin Box, Slider and Table: give each an accessible name or a buddy label, as a real
-  form would.
+  Line Edit (three stories), Spin Box, Double Spin Box, Slider, Table and Combo Box (whose only name is its current text, which the
+  combo box rule rejects). Each gets `setAccessibleName` on the widget itself, not a wrapper with a buddy label: tests check that
+  the Slider story's preview widget is the `QSlider`, and the Table keeps `Layout.FILL`.
 - **Tests:**
   - an icon-only `QToolButton` fails `name`, and `setAccessibleName` fixes it;
   - a `NoFocus` `QPushButton` fails `focus`;
@@ -274,8 +285,11 @@ pattern of `storybook_qt_warnings_ignore` matches. The handler
 - **Measured on the review's prototype:**
   - `#777777` on `#888888` is 1.26 (fail); black on white is 21 (pass); 7.0 passes and 2.0 fails.
   - 3.19 passes at 18 pt and at 14 pt bold, and fails at 10 pt; 4.61 at 8 pt passes.
-  - Every example passes in Light and Dark except Display/Color Swatch: 4.07 in Light and 3.39 in Dark. That is real low contrast,
-    and PR 3 fixes the example by drawing its text with `pick_contrasting_text` on the swatch colour.
+  - Hosted as §1.4 describes, the default Color Swatch measures 5.41 in Light and 4.24 in Dark, a real failure in Dark. Choosing
+    the text colour from the swatch's RGB alone also fails for translucent colours (3.97 in Dark, 1.59 for a fully transparent one).
+    PR 3 fixes the example by blending the swatch colour over the palette's `Window` colour and picking black or white text against
+    the result (computed in the example, which imports only PySide6 and the library's public API). PR 3 re-measures every number in
+    this section with the hosted rendering and corrects them.
 - **Not covered, documented plainly:**
   - progress-bar text, `QGroupBox` titles, placeholder text, and custom-painted text such as the Token Badge;
   - text on gradients or images, and thin anti-aliased text, which give estimates.
@@ -302,8 +316,8 @@ pattern of `storybook_qt_warnings_ignore` matches. The handler
 
 ### 4.1 Capture and baselines
 
-- **Capture.** `adjustSize()` on the root, show it, clear focus (§1.4), process events, then `QWidget.render` into a `QImage`
-  (`Format_ARGB32`) of the root's size at device pixel ratio 1. Without clearing focus, Line Edit/Default gave two different frames
+- **Capture.** `adjustSize()` on the root, show its host (§1.4), clear focus, process events, then `QWidget.render` into a `QImage`
+  (`Format_ARGB32`) of the host's size at device pixel ratio 1. Without clearing focus, Line Edit/Default gave two different frames
   within 1.5 s (the caret blinks); with it, every example renders byte-identical twice in one process and across two processes, in
   Light and Dark. Rendering into an image fixes the device pixel ratio, whatever the screen's.
   - The plugin does not change the application font. The provider's theme sets it, so a snapshot shows the story as the application
@@ -321,7 +335,7 @@ pattern of `storybook_qt_warnings_ignore` matches. The handler
   `--storybook-update-snapshots` implies it, writes or replaces each baseline, and passes. A missing baseline without the update
   flag fails with "no baseline at <path>; run pytest --storybook --storybook-update-snapshots to create it", and is never created
   silently.
-- **Comparison** (`pytest_plugin/snapshots.py`, on `QImage`, no extra dependency):
+- **Comparison** (`testing/snapshots.py`, on `QImage`, no extra dependency):
   - Different sizes fail.
   - Otherwise a pixel differs when any channel differs by more than `storybook_snapshot_tolerance` (default 0).
   - The item fails when the share of differing pixels exceeds `storybook_snapshot_max_diff` (default 0.0).

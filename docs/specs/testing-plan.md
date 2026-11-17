@@ -1,6 +1,6 @@
 # Testing (milestone 5): implementation plan
 
-Status: draft. Implements `docs/specs/testing.md` (the spec) in four stacked pull requests. Section numbers (§1) refer to the spec.
+Status: reviewed (findings applied). Implements `docs/specs/testing.md` (the spec) in four stacked pull requests. Section numbers (§1) refer to the spec.
 
 ## Order, branches and merging
 
@@ -37,8 +37,15 @@ before merging it". The spec PR merges independently.
     must not share the `QApplication`.
   - **The project under test.** pytester's project gets its own `pyproject.toml` with `[tool.pyside6-storybook]` and story files
     written with `pytester.makepyfile`, never the repository's examples unless a test is about the examples.
-  - **The default registry.** In-process runs share `sys.modules` and the default registry, so each test uses the `stories` fixture,
-    or the plugin's fresh-registry loading (§1.3).
+  - **The default registry.** In-process runs share `sys.modules` and the default registry, so every pytester test uses the
+    `stories` fixture, and the plugin restores both registry bindings at session end (§1.4). A test-module fixture fails the test
+    when an in-process run leaves any of these changed: the default-registry bindings, `sys.path`, the application palette, style,
+    style sheet and font, the Qt message handler, or the top-level widgets.
+  - **No `timeout` in pytester projects.** An inner pytest-timeout cancels the outer test's alarm.
+  - **pytest-qt wraps every item** when present, story items included, with its own exception and Qt-log capture. Test the
+    warning and exception behaviour with and without `-p no:pytestqt`.
+  - **Interleaving.** pytest-randomly is not installed; a test that needs story items between other tests reorders them with a
+    `pytest_collection_modifyitems` hook in the pytester project's `conftest.py`.
 - A test that renders the examples in every theme is `full`, per AGENTS.md. One theme pair (Light, Dark) of the examples may be core
   when it is the issue's acceptance run.
 
@@ -51,11 +58,14 @@ before merging it". The spec PR merges independently.
 - `pyproject.toml`:
   - the `pytest11` entry point and the `pytest` extra;
   - hatch `packages` gains `src/pyside6_storybook_pytest.py`;
-  - dev dependency `pytest-xdist`;
+  - dev dependency `pytest-xdist>=3.6` (a lower bound, so the lowest-direct run does not resolve an ancient version);
   - `uv.lock` updated.
 - `src/pyside6_storybook/testing/` (internal), as listed in §1.6.
-- `src/pyside6_storybook/themes/story_context_factory.py`: `build_story_context`, now used by `gui/window.py` too, with no behaviour
-  change in the window: its existing tests keep passing.
+- `src/pyside6_storybook/themes/provider_values.py`: `read_tokens` and `read_color_scheme`, which raise on a provider error or a
+  wrong type. `gui/window.py` uses them inside its `_call_provider` guard and keeps its caching and error behaviour:
+  `tests/test_tokens.py` and `tests/test_theme_provider.py` keep passing unchanged.
+- The render step puts the story's root in an opaque host widget (§1.4), and the session restores the default-registry bindings and
+  the previous Qt message handler at session end.
 - `discovery/sources.py`: `StorySources.fallback` (keyword-only, default `False`), set for the examples fallback. `cli.py` is
   unchanged.
 
@@ -65,6 +75,9 @@ before merging it". The spec PR merges independently.
   acceptance is "one passing test per story and theme".
 - `StorySources.fallback` for each source kind.
 - The start-up cost test.
+- `tests/test_packaging.py` (full): `pyside6_storybook_pytest.py` is at the wheel's root and `entry_points.txt` has the `[pytest11]`
+  entry.
+- A provider whose `tokens()` raises fails the story item.
 
 **Docs**
 - README "Testing stories": enabling, options and ini keys, item ids and selection (`-k`, `--deselect`; nodeids are not paths), the
@@ -78,13 +91,16 @@ before merging it". The spec PR merges independently.
 **Code**
 - `src/pyside6_storybook/checks/` (public subpackage): `check_issue.py`, `accessibility.py`, and an `__init__.py` re-exporting
   `CheckIssue`, `check_accessible_names` and `check_keyboard_focus`.
-- `checks_ignore` on `story()`, `StoryRegistry.story()`, `Story.__init__` and `Story.variant`, plus `Story.checks_ignore`:
-  - validated (unknown rule or empty reason raises `ValueError`);
+- `checks_ignore` on `story()`, `StoryRegistry.story()` and `Story.__init__` (default `{}`), on `Story.variant` (default `None`,
+  meaning the base's), plus `Story.checks_ignore` (a new `__slots__` entry):
+  - validated (unknown rule or empty reason raises `ValueError`); this PR accepts `"name"` and `"focus"` only;
   - stored read-only;
   - inherited by variants.
 - Plugin: `--storybook-a11y` and ini `storybook_a11y`, adding the `[a11y-name]` and `[a11y-focus]` items, skipped with the reason
   when ignored.
-- Examples: accessible names or buddies for Line Edit (three stories), Spin Box, Double Spin Box, Slider and Table, as §2.4 lists.
+- Examples: `setAccessibleName` on the widget itself for Line Edit (three stories), Spin Box, Double Spin Box, Slider, Table and
+  Combo Box, as §2.4 lists. The Slider story's preview widget stays the `QSlider`
+  (`tests/test_actions_panel.py::test_moving_the_example_slider_logs_the_new_value`) and the Table stays `Layout.FILL`.
 
 **Tests**
 - Everything §2.4 lists.
@@ -93,7 +109,7 @@ before merging it". The spec PR merges independently.
 - The combo box rule: an unlabelled combo box fails even though its current text is non-empty.
 - `tests/test_examples.py`: every example passes both rules.
 
-**Changed tests:** any test that pins the `story()`, `Story` or `Story.variant` signature or attribute list gains `checks_ignore`.
+**Changed tests:** none expected; the plan review found no test that pins the `story()`, `Story` or `Story.variant` signatures.
 
 **Docs**
 - README: the checks, `checks_ignore`, and the a11y items.
@@ -108,13 +124,16 @@ before merging it". The spec PR merges independently.
   - `--storybook-no-contrast` and `storybook_contrast`;
   - `storybook_contrast_normal` and `storybook_contrast_large`;
   - `--storybook-contrast-disabled` and `storybook_contrast_disabled`.
-- Example Display/Color Swatch: the swatch's text uses `pick_contrasting_text` against the swatch colour, reaching 4.5:1 in both
-  themes.
+- `checks_ignore` accepts `"contrast"`.
+- Example Display/Color Swatch: the text colour is black or white, chosen against the swatch colour blended over the palette's
+  `Window` colour, computed in the example (it imports only PySide6 and the public API; `pick_contrasting_text` is internal). It
+  reaches 4.5:1 for opaque and translucent swatch colours in both themes.
+- Re-measure the numbers of spec §3.1 with the hosted rendering and correct them in the PR description.
 
 **Tests**
 - Everything §3.2 lists, each synthetic case with its measured ratio in the assertion message.
 - The one-colour box fails.
-- The Color Swatch story reaches 4.5:1 for several swatch colours.
+- The Color Swatch story reaches 4.5:1 for several swatch colours, opaque and translucent (alpha 0, 64, 255), in Light and Dark.
 
 **Docs**
 - README: the contrast check, its method and limits.
@@ -123,6 +142,7 @@ before merging it". The spec PR merges independently.
 ## PR 4: snapshots (#33), spec §4
 
 **Code**
+- `checks_ignore` accepts `"snapshot"`.
 - `testing/snapshots.py`: `capture`, `compare`, `SnapshotDiff` and the diff-image writer.
 - Plugin items `[<theme>-snapshot]`, with the options:
   - `--storybook-snapshots` and `--storybook-update-snapshots`;
