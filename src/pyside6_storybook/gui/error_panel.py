@@ -43,6 +43,7 @@ class ErrorPanel(QWidget):
 
         self._details = QPlainTextEdit(details, self)
         mark_chrome(self._details, "sbkErrorDetails")
+        mark_chrome(self._details.viewport())
         self._details.setAccessibleName("Error details")
         self._details.setReadOnly(True)
         self._details.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)

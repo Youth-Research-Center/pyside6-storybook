@@ -75,6 +75,8 @@ class ActionsPanel(QWidget):
 
         self._tree = QTreeWidget(self)
         mark_chrome(self._tree, "sbkActionsTree")
+        for part in (self._tree.viewport(), self._tree.header()):
+            mark_chrome(part)
         self._tree.setAccessibleName("Logged actions")
         self._tree.setHeaderLabels(list(HEADERS))
         self._tree.setRootIsDecorated(False)

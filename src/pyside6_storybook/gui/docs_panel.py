@@ -195,6 +195,7 @@ class DocsPanel(QWidget):
 
     def _section(self, title: str, body: QWidget, parent: QWidget) -> QWidget:
         section = QWidget(parent)
+        mark_chrome(section)
         layout = QVBoxLayout(section)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(_SECTION_SPACING)
@@ -222,6 +223,7 @@ class DocsPanel(QWidget):
         if not story.controls:
             return self._text(NO_CONTROLS_MESSAGE, "sbkDocsNoControls", parent)
         body = QWidget(parent)
+        mark_chrome(body)
         layout = QVBoxLayout(body)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(_SECTION_SPACING)
@@ -234,6 +236,8 @@ class DocsPanel(QWidget):
     def _controls_table(rows: list[tuple[str, str, str, str]], parent: QWidget) -> QTableWidget:
         table = QTableWidget(len(rows), len(CONTROLS_HEADERS), parent)
         mark_chrome(table, "sbkDocsControlsTable")
+        for part in (table.viewport(), table.horizontalHeader(), table.verticalHeader()):
+            mark_chrome(part)
         table.setAccessibleName("Controls")
         table.setHorizontalHeaderLabels(list(CONTROLS_HEADERS))
         table.verticalHeader().setVisible(False)
@@ -258,6 +262,7 @@ class DocsPanel(QWidget):
 
     def _siblings_body(self, story: Story, siblings: list[Story], parent: QWidget) -> QWidget:
         body = QWidget(parent)
+        mark_chrome(body)
         layout = QVBoxLayout(body)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
@@ -282,6 +287,7 @@ class DocsPanel(QWidget):
             return self._text(NO_SOURCE_MESSAGE, "sbkDocsNoSource", parent)
         self._source = source
         body = QWidget(parent)
+        mark_chrome(body)
         layout = QVBoxLayout(body)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(_SECTION_SPACING)
@@ -300,6 +306,7 @@ class DocsPanel(QWidget):
 
         view = _SourceView(source, body)
         mark_chrome(view, "sbkDocsSource")
+        mark_chrome(view.viewport())
         view.setAccessibleName("Source")
         view.setReadOnly(True)
         view.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)

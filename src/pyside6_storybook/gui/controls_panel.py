@@ -41,6 +41,7 @@ class ControlsPanel(QWidget):
             TypeError: If a value in ``values`` has a type its control rejects.
         """
         super().__init__(parent)
+        mark_chrome(self)
         self._controls = tuple(controls)
         self._editors: dict[str, ControlEditor] = {}
         starting = dict(values) if values is not None else {}
@@ -58,6 +59,7 @@ class ControlsPanel(QWidget):
             _share_input_focus_policy(editor)
             editor.valueChanged.connect(self._on_editor_changed)
             label = QLabel(control.display_label, self)
+            mark_chrome(label)
             label.setBuddy(editor)
             if control.description:
                 label.setToolTip(control.description)

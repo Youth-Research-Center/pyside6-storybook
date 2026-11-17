@@ -463,6 +463,58 @@ an exception is logged and shown in the preview as "Theme provider failed: ...",
 `ValueError` otherwise. After the provider is deactivated, `run` logs a warning for each of the application's style, palette, style sheet
 and font that the provider did not restore.
 
+## Styling the gallery
+
+The gallery accepts the application's styling, so it looks like the application. It guarantees only that its own text, selection and
+focus indicators stay readable. Qt cannot exempt a subtree from an application style sheet, and the gallery does not try: a rule like
+`QPushButton { ... }` reaches the gallery's buttons and your story's buttons alike. The gallery adds no style sheet of its own; its
+colours come from palette roles, which is why a provider that sets a style sheet also sets a matching palette (see Themes).
+
+Two things make the gallery's widgets addressable without touching your stories:
+- **Object names.** Every widget of the gallery has an object name with the prefix `sbk`, so `#sbkStoryTree` selects the story tree.
+  `#sbkName` is the strongest selector an application can use.
+- **The `sbkChrome` property.** Widgets that you may want to style and that contain no story widget have the property `sbkChrome`
+  set to `true`: the sidebar, the canvas controls, the tab bars, the side pane and everything in it, the Docs panel, the status bar,
+  the error panel and the empty-state labels. The widgets that hold the preview (the window, the splitter, the preview pane, the
+  preview tab widget, the canvas, the scroll area and its viewport, the stack and the surface) have a name only, so
+  `*[sbkChrome="true"] QPushButton` reaches the gallery's buttons and never a story's.
+
+```css
+/* The gallery's controls only. */
+*[sbkChrome="true"] { font-size: 11pt; }
+*[sbkChrome="true"] QPushButton { padding: 2px 8px; }
+QPushButton[sbkChrome="true"] { border-radius: 4px; }
+#sbkStoryTree::item:selected { background: #1e88e5; }
+```
+
+**Specificity.** `QPushButton[sbkChrome="true"]` beats `QPushButton` and `QWidget QPushButton` wherever they appear. It has the same
+specificity as `QPushButton[flat="false"]` and `QPushButton:hover`, so between those the rule that comes later in the style sheet
+wins. `#sbkName` (an ID) beats all of them in any order. Put the chrome rules after your general rules, restate the pseudo-states
+(`:hover`, `::tab:selected`) that your general rules use, and use `#sbkName` for a single widget.
+
+**The selected story.** A rule can colour the selected row with `selection-background-color` or with
+`QTreeView::item:selected { background: ... }`. The sidebar reads the colour the style really draws behind the row and paints the
+row's text in a colour that is readable on it. When your rule also sets `color` for selected items, the style sheet wins and the
+gallery's colour is ignored.
+
+The object names:
+
+- `sbkStorySidebar`: the sidebar, with `sbkStorySearch`, `sbkStoryTree` and `sbkStorySearchEmptyState`.
+- `sbkCanvas`: the canvas (a name only), with `sbkCanvasToolbar`, `sbkCanvasBackground`, `sbkCanvasSize`, `sbkCanvasSizeLabel`,
+  `sbkCanvasWidth`, `sbkCanvasHeight`, `sbkCanvasZoomOut`, `sbkCanvasZoomLevel`, `sbkCanvasZoomIn`, `sbkCanvasZoomReset` and
+  `sbkCanvasZoomNote`.
+- `sbkPreviewScroll`, `sbkPreviewStack`, `sbkPreviewSurface`, `sbkPreviewTabs` and `sbkPreviewZoomImage`: the widgets that hold the
+  preview (names only).
+- `sbkPreviewHeading`, `sbkPreviewEmptyState` and `sbkPreviewError`: the heading above the preview, its empty-state label and the error
+  panel, with `sbkErrorIcon`, `sbkErrorTitle` and `sbkErrorDetails`.
+- `sbkThemeSwitch`, `sbkSideTabs` (a name only), `sbkControlsScroll` and `sbkControlsEmptyState`: the side pane.
+- `sbkActionsPanel`, `sbkActionsTree`, `sbkActionsStatus` and `sbkActionsClear`: the Actions tab.
+- `sbkDocsScroll`, `sbkDocsPanel`, `sbkDocsContent`, `sbkDocsHeading`, `sbkDocsModuleDoc`, `sbkDocsStoryDoc`, `sbkDocsNoControls`,
+  `sbkDocsVariantCaption`, `sbkDocsControlsTable`, `sbkDocsSiblingCurrent`, `sbkDocsSiblingLink`, `sbkDocsNoSource`,
+  `sbkDocsCopyButton` and `sbkDocsSource`: the Docs tab.
+- `sbkReloadStatus` and `sbkReloadStatusIcon`: the status bar.
+- `sbkShortcutsDialog` and `sbkShortcutsTable`: the Keyboard shortcuts dialog.
+
 ## Licence
 
 MIT. See [LICENSE](LICENSE). PySide6, which pyside6-storybook depends on, is available under the LGPLv3, the GPLv3 or a

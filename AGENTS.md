@@ -109,8 +109,10 @@ in the same pull request as the bump.
     function behind its controls table), `actions_panel.py` (`ActionsPanel`, the Actions tab: the log a story fills through
     `StoryContext.log` and `log_signal`, and the per-render sink that drops entries from an older render) and
     `error_panel.py` (`ErrorPanel`, which the window shows in the preview for a story that fails and for the load errors),
-    `reload_watcher.py` (`ReloadWatcher`, a `QFileSystemWatcher` with a 300 ms debounce that runs a `ReloadSession`) and
-    `reload_status.py` (`ReloadStatus`, the status bar's message and icon). New gallery widgets go
+    `reload_watcher.py` (`ReloadWatcher`, a `QFileSystemWatcher` with a 300 ms debounce that runs a `ReloadSession`),
+    `reload_status.py` (`ReloadStatus`, the status bar's message and icon) and
+    `chrome.py` (`mark_chrome`, which names a widget
+    of the gallery and sets its `sbkChrome` property). New gallery widgets go
     here, not at the package root.
     - `gui/icons.py` (internal, not in `__all__`): reads the bundle and renders icons (`icon_svg`, `build_icon`, `palette_icon`,
       `clear_icon_cache`), `IconRole` (the palette role that tints an icon) and `ActionIcons`, the registry the window retints when the
@@ -203,6 +205,15 @@ Icons are bundled Phosphor SVGs, never downloaded at runtime, and the gallery im
   application style sheet was cleared and was deleted after one was set again. Call `polish_all_widgets()` before the library changes
   the application style sheet, and `GalleryWindow._polish_widgets()` after building widgets (it runs with `_apply_tab_order` and
   polishes every widget, also those a failed render left for deletion).
+- **Chrome is named through `mark_chrome`.** Every widget of the gallery that has an object name gets it from
+  `mark_chrome(widget, "sbkName")` (`gui/chrome.py`): the `sbk` prefix, camel case, a string literal at the call site (a helper that
+  builds widgets takes the literal from its caller), and the name added to the README's list in "Styling the gallery", which a test
+  compares with the source in both directions. The helper also sets the property `sbkChrome`, which goes on every widget an application
+  might style, internal children included (tab bars, viewports, editor inputs, which get no name), and never on an ancestor of the
+  preview surface: those are marked with `chrome=False`. A widget made after polish is marked in its constructor.
+- **No widget-local style sheets.** Colours come from palette roles and an application style sheet must be able to override every
+  rule, so no widget calls `setStyleSheet`; a widget that needs a colour the palette cannot give gets code, as the sidebar's selection
+  delegate does.
 - Every icon-only, custom-painted or card-style control needs `setAccessibleName`/`setAccessibleDescription` and must be keyboard-focusable.
   Form labels set their editor as buddy, and the editor gets the label text as its accessible name.
 - Application-wide changes (style, palette, style sheet) are applied through a `ThemeProvider` (`BuiltinThemeProvider` by default), which records what

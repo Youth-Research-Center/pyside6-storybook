@@ -31,6 +31,7 @@ class ReloadStatus(QWidget):
             parent: The owning widget.
         """
         super().__init__(parent)
+        mark_chrome(self)
         self._icon_name: str | None = None
         self._icon = QLabel(self)
         mark_chrome(self._icon, "sbkReloadStatusIcon")

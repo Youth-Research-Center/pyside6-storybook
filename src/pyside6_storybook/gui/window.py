@@ -146,6 +146,7 @@ class GalleryWindow(QMainWindow):
         self._docs_panel = DocsPanel(self, icons=self._icons)
         self._docs_scroll = QScrollArea(self)
         mark_chrome(self._docs_scroll, "sbkDocsScroll")
+        mark_chrome(self._docs_scroll.viewport())
         self._docs_scroll.setAccessibleName("Docs")
         self._docs_scroll.setFrameShape(QFrame.Shape.StyledPanel)
         self._docs_scroll.setWidgetResizable(True)
@@ -155,6 +156,7 @@ class GalleryWindow(QMainWindow):
         # Document mode keeps the tab frame from taking width away from the preview.
         self._preview_tabs = QTabWidget(self)
         mark_chrome(self._preview_tabs, "sbkPreviewTabs", chrome=False)
+        mark_chrome(self._preview_tabs.tabBar())
         self._preview_tabs.tabBar().setAccessibleName("Preview tabs")
         self._preview_tabs.setDocumentMode(True)
         self._preview_tabs.addTab(self._canvas, "Canvas")
@@ -181,12 +183,14 @@ class GalleryWindow(QMainWindow):
         self._call_provider(self._theme_provider.on_changed, functools.partial(_call_weak_method, handler), default=None, report=False)
 
         self._controls_host = QWidget(self)
+        mark_chrome(self._controls_host)
         self._controls_host_layout = QVBoxLayout(self._controls_host)
         self._controls_host_layout.setContentsMargins(0, 0, 0, 0)
         self._controls_host_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self._controls_scroll = QScrollArea(self)
         mark_chrome(self._controls_scroll, "sbkControlsScroll")
         # The editors in it take focus and the scroll area follows them, so it is not a stop of its own.
+        mark_chrome(self._controls_scroll.viewport())
         self._controls_scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._controls_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._controls_scroll.setWidgetResizable(True)
@@ -195,13 +199,15 @@ class GalleryWindow(QMainWindow):
 
         self._actions_panel = ActionsPanel(self, icons=self._icons)
         self._side_tabs = QTabWidget(self)
-        mark_chrome(self._side_tabs, "sbkSideTabs")
+        mark_chrome(self._side_tabs, "sbkSideTabs", chrome=False)
+        mark_chrome(self._side_tabs.tabBar())
         self._side_tabs.tabBar().setAccessibleName("Controls and actions tabs")
         self._side_tabs.setDocumentMode(True)
         self._side_tabs.addTab(self._controls_scroll, "Controls")
         self._side_tabs.addTab(self._actions_panel, "Actions")
 
         side_pane = QWidget(self)
+        mark_chrome(side_pane)
         side_pane.setAccessibleName("Controls and actions")
         side_layout = QVBoxLayout(side_pane)
         side_layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
@@ -228,6 +234,7 @@ class GalleryWindow(QMainWindow):
         if isinstance(app, QApplication):
             app.focusChanged.connect(self._on_focus_changed)
         self._reload_status = ReloadStatus(self)
+        mark_chrome(self.statusBar())
         self.statusBar().addWidget(self._reload_status, 1)
         self.statusBar().setVisible(reload is not None)
         if reload is not None:
@@ -371,10 +378,12 @@ class GalleryWindow(QMainWindow):
 
     def _build_section(self, title: str, content: QWidget, parent: QWidget) -> QWidget:
         section = QWidget(parent)
+        mark_chrome(section)
         layout = QVBoxLayout(section)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(_SECTION_SPACING)
         title_label = QLabel(title, section)
+        mark_chrome(title_label)
         title_label.setFont(self._bold_font(title_label))
         layout.addWidget(title_label)
         layout.addWidget(content)
@@ -497,6 +506,7 @@ class GalleryWindow(QMainWindow):
         rows = self.shortcut_rows()
         table = QTableWidget(len(rows), len(SHORTCUTS_HEADERS), dialog)
         mark_chrome(table, "sbkShortcutsTable")
+        mark_chrome(table.viewport())
         table.setAccessibleName("Keyboard shortcuts")
         table.setHorizontalHeaderLabels(list(SHORTCUTS_HEADERS))
         table.verticalHeader().setVisible(False)
@@ -511,6 +521,7 @@ class GalleryWindow(QMainWindow):
             for column, text in enumerate(cells):
                 table.setItem(row, column, QTableWidgetItem(text))
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, dialog)
+        mark_chrome(buttons)
         buttons.rejected.connect(dialog.reject)
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)

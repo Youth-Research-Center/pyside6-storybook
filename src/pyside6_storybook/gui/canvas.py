@@ -589,6 +589,7 @@ class Canvas(QWidget):
 
     def _labelled(self, text: str, editor: QWidget) -> QLabel:
         label = QLabel(text, self._toolbar)
+        mark_chrome(label)
         label.setBuddy(editor)
         return label
 
