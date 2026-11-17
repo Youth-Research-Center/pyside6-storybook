@@ -2,6 +2,8 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+pytest_plugins = ["pytester"]
+
 import sys
 from collections.abc import Iterator
 

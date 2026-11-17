@@ -7,7 +7,7 @@ from story_files import write
 
 from pyside6_storybook.discovery import sources
 from pyside6_storybook.discovery.constants import ENTRY_POINT_GROUP
-from pyside6_storybook.discovery.sources import EXAMPLES_FOLDER, StorySourcesError, put_on_sys_path, resolve_story_sources
+from pyside6_storybook.discovery.sources import EXAMPLES_FOLDER, StorySources, StorySourcesError, put_on_sys_path, resolve_story_sources
 
 
 @pytest.fixture
@@ -86,6 +86,27 @@ def test_nothing_configured_falls_back_to_the_examples(tmp_path: Path, no_entry_
 
     assert resolved.targets == (str(EXAMPLES_FOLDER),)
     assert resolved.origin == "the built-in examples (nothing is configured)"
+
+
+def test_only_the_examples_fallback_is_marked_as_a_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fresh = tmp_path / "fresh"
+    fresh.mkdir()
+    write(tmp_path, "configured/pyproject.toml", '[tool.pyside6-storybook]\nstories = ["stories"]\n')
+    _fake_entry_points(monkeypatch)
+    nothing = resolve_story_sources([], examples=False, cwd=fresh)
+    _fake_entry_points(monkeypatch, ("demo", "demo.stories"))
+
+    assert nothing.fallback is True
+    assert resolve_story_sources([], examples=False, cwd=fresh).fallback is False  # entry points
+    assert resolve_story_sources([], examples=False, cwd=tmp_path / "configured").fallback is False  # the pyproject table
+    assert resolve_story_sources(["given"], examples=False, cwd=fresh).fallback is False  # the command line
+    assert resolve_story_sources([], examples=True, cwd=fresh).fallback is False  # --examples names them explicitly
+
+
+def test_fallback_is_keyword_only_and_false_by_default() -> None:
+    assert StorySources(("stories",), "test").fallback is False
+    with pytest.raises(TypeError):
+        StorySources(("stories",), "test", (), None, None, True)  # noqa: FBT003 - the call must fail  # ty: ignore[too-many-positional-arguments]
 
 
 @pytest.mark.parametrize(

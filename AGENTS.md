@@ -128,13 +128,26 @@ in the same pull request as the bump.
   - `themes/` - the built-in themes: `theme_definition.py` (`ThemeDefinition`: name, colour scheme and palette colours), one module
     per theme (`light_theme.py`, `dark_theme.py`), `provider.py` (`ThemeProvider`, the protocol an application implements) and
     `builtin_theme_provider.py` (`BuiltinThemeProvider`, which applies the built-in themes and returns their design tokens), and
-    `provider_loader.py` (internal: `load_theme_provider`, which imports a `module:attribute` spec, and `ThemeProviderError`)
+    `provider_loader.py` (internal: `load_theme_provider`, which imports a `module:attribute` spec, and `ThemeProviderError`) and
+    `provider_values.py` (internal: `read_tokens` and `read_color_scheme`, which the window and the pytest plugin share; they raise on a
+    provider error or a wrong type)
+  - `testing/` (internal) - the implementation of the pytest plugin, imported only when the plugin is on or `render_story` is used:
+    `storybook_session.py` (`StorybookSession`: the `QApplication`, the provider lifecycle, the story registry, rendering a story in an
+    opaque host, and `StorybookFailure`), `storybook_options.py` (`StorybookOptions`, the options and ini keys), `storybook_collector.py`
+    (`StorybookCollector`), `storybook_item.py` (`StorybookItem`, the base of every item), `story_item.py` (`StoryItem`),
+    `load_error_item.py` (`StoryLoadErrorItem` and `ConfigurationItem`), `qt_messages.py` (`QtMessageCollector`) and `fixtures.py` (the
+    implementation of `render_story`)
   - `contrast.py` - WCAG contrast helpers
   - `polishing.py` (internal) - `polish_all_widgets`, the workaround for a Qt crash when the application style sheet changes while a
     widget was never polished
   - `resources/icons/` - package data, not code (`resources/__init__.py` makes it a package): `icon_manifest.toml` (the icons, the pinned
     Phosphor release), the generated `icon_bundle.json` and `licenses/phosphor-LICENSE.txt`. Never edit the generated files by hand
   - `app.py` - `run()` (exported), which creates the `QApplication`, activates the theme provider and opens the window
+- `src/pyside6_storybook_pytest.py` - the pytest plugin's entry module, registered under `pytest11` and shipped in the wheel beside the
+  package. It imports only `pytest` and the standard library at module level (importing anything under `pyside6_storybook` runs the
+  package `__init__`, which imports Qt), defines the options, ini keys, the `storybook` marker, the hooks and the `render_story`
+  fixture, and imports `pyside6_storybook.testing` inside the hooks. `SESSION_KEY`, the `config.stash` key of the `StorybookSession`,
+  lives here for the same reason. A test checks that importing it imports no `PySide6` or `pyside6_storybook.*` module
   - `py.typed` - marks the package as typed
 - `scripts/docs/` - development only: `render_theming_images.py` renders the two screenshots of `docs/theming.md`
 - `scripts/icons/` - development only, not in the wheel: `build_icon_bundle.py` and the `icon_bundle/` package it runs, which download the
@@ -260,6 +273,13 @@ Icons are bundled Phosphor SVGs, never downloaded at runtime, and the gallery im
   which isolates `sys.path`, `sys.modules` and both bindings of the default registry (`pyside6_storybook.registry.default_registry`,
   which `@story` reads, and `pyside6_storybook.default_registry`, which projects import), and writes its story files under `tmp_path`
   with the helpers in `tests/story_files.py`.
+- A test of the pytest plugin (`tests/test_pytest_plugin.py`) runs a small project with `pytester` (`pytest_plugins = ["pytester"]` in
+  `tests/conftest.py`), in-process unless it needs isolation (start-up cost, xdist, a Qt exception hook), and uses the `stories` fixture:
+  an in-process run shares `sys.modules`, `sys.path` and the default registry with the test. The module's autouse fixture fails a test
+  that leaves the registry bindings, `sys.path`, the application's look or a top-level widget changed, and `_run` fails one that leaves
+  the Qt message handler changed. A pytester project never sets `timeout` (an inner pytest-timeout cancels the outer test's alarm).
+  pytest-qt wraps every item, story items included, so test Qt warnings and exceptions with and without `-p no:pytest-qt`; pytest-qt
+  itself leaves its message handler installed when a fixture fails in setup.
 - A test that changes the application palette, style or style sheet restores them in a fixture with `try/finally`
   (`restore_application_look` and `themes` in `tests/conftest.py`).
 - Drive widgets the way a user does: `qtbot.keyClicks`, `qtbot.mouseClick`, or the editor's own setters. Assert which values were emitted, not

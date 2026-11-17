@@ -59,6 +59,10 @@ Two optional methods are looked up with `getattr` and are not part of the protoc
   A change the provider makes by itself (an application manager that follows the system, a timer) must call the callbacks too. The
   provider may call them synchronously inside `set_theme` or later.
 - **Callbacks end with `deactivate`.** It clears them, so none is called again and a provider used by a second `run()` starts with none.
+- **A provider can be activated again after `deactivate`.** The pytest plugin (see "Testing stories" in the README) activates the
+  provider before the first story test, deactivates it when the next test is not a story test, and activates it again for the next
+  story test, so `activate` must work on a provider that was deactivated, and a second `activate` must record the application's look
+  again.
 - **Polish before a style sheet change.** Qt can crash when the application style sheet changes while a widget exists that was never
   polished. Call `ensurePolished()` on `QApplication.allWidgets()` before you set or clear the style sheet, as the example does.
 

@@ -458,6 +458,129 @@ connection, a registry in a library) survives a reload, and a story file's own s
 project imports that failed to import is not watched until a story reloads. `--no-reload` turns it off, and code that calls
 `pyside6_storybook.run(registry)` directly gets no reload.
 
+## Testing stories
+
+The `pytest` extra adds a pytest plugin that renders every story in every theme as a test, and a `render_story` fixture for tests you
+write yourself.
+
+```bash
+pip install "pyside6-storybook[pytest]"      # or: uv add --dev "pyside6-storybook[pytest]"
+pytest --storybook
+```
+
+The extra installs `pytest` and `pytest-qt`. The plugin is registered with pytest through an entry point, and it does nothing, and
+imports neither Qt nor the library, unless you turn it on with `--storybook` or `storybook = true` in the pytest ini options.
+
+### What runs
+
+Each story and theme is one test, and its id is `storybook::<story id>[<theme>]`, for example `storybook::Inputs/Button/Default[Dark]`.
+A test builds the story's widget from the story's default arguments (a variant's included), inside the theme, shows it offscreen and
+deletes it. It fails when:
+
+- the story or one of its decorators raises, or the story does not return a `QWidget`: the report shows the story's own traceback;
+- the theme provider fails (a `tokens()` that raises, for one);
+- Qt logs a warning, a critical or a fatal message while it renders, unless an ignore pattern matches it (see below).
+
+A story file that fails to import is a failing test too, `storybook::load-error[<file>]`, and the other stories still run. A theme provider that
+cannot be loaded, an unknown theme in `storybook_themes`, or a project with no story at all gives one failing test,
+`storybook::configuration`, with the reason, and no story tests. Every test carries the `storybook` marker, so
+`pytest -m "not storybook"` runs your other tests alone, even with `storybook = true` in the ini options, which adds the story tests to
+every run.
+
+The widget is shown inside an opaque host widget painted with the palette's `Window` colour, as the gallery's preview is, and focus is
+cleared after it is shown, so a line edit does not keep a blinking caret. The offscreen platform is the default: the plugin sets
+`QT_QPA_PLATFORM=offscreen` unless it is already set.
+
+### Options
+
+Every setting has a command-line option and an ini option (`pytest.ini`, `pyproject.toml` under `[tool.pytest.ini_options]`, ...), and
+the command line wins.
+
+- `--storybook`, ini `storybook` (a bool): turn the plugin on.
+- `--storybook-stories TARGET` (repeatable), ini `storybook_stories` (one target per line): the folders, files and dotted module names
+  to load, as on the gallery's command line. Default: `stories` in `[tool.pyside6-storybook]`.
+- `--storybook-theme-provider SPEC`, ini `storybook_theme_provider`: the `module:attribute` of your theme provider. Default:
+  `theme_provider` in `[tool.pyside6-storybook]`, else the built-in themes.
+- `--storybook-themes NAMES`, ini `storybook_themes`: comma-separated themes to render each story in. Default: every theme the
+  provider lists (the built-in ones are Light, Dark and System).
+- `--storybook-qt-warnings {fail,ignore}`, ini `storybook_qt_warnings`: whether a Qt warning logged during a render fails the test.
+  Default `fail`.
+- ini `storybook_qt_warnings_ignore` (one regular expression per line, no command-line option): the warnings that never fail a test; a
+  pattern is searched in the message. Default: `propagateSizeHints`.
+
+The offscreen platform logs "This plugin does not support propagateSizeHints()" when some widgets are shown, so that message is
+ignored by default. Setting `storybook_qt_warnings_ignore` replaces the default, so list it again if you still want it ignored.
+
+The stories come from `storybook_stories`, or else from `[tool.pyside6-storybook]` in the `pyproject.toml` next to pytest's rootdir,
+with its `pythonpath` put on `sys.path` as the gallery does. If nothing names them, the plugin reports a usage error instead of testing
+the library's built-in examples; name them explicitly with `--storybook-stories pyside6_storybook.examples` if you want that. A
+malformed option or `pyproject.toml` table is a usage error (exit code 4) before anything is collected.
+
+```toml
+[tool.pytest.ini_options]
+storybook = true
+storybook_themes = "Light,Dark"
+storybook_qt_warnings_ignore = [
+    "propagateSizeHints",
+    "QFont::setPointSize: Point size <= 0",
+]
+```
+
+### Selecting tests
+
+`-k`, `--deselect`, `-m` and `--lf` work on the story tests as on any others:
+
+```bash
+pytest --storybook -k Dark                          # one theme
+pytest --storybook -k "Inputs and not Disabled"     # by story name
+pytest --storybook --deselect "storybook::Inputs/Button/Default[Dark]"
+pytest --storybook --lf                             # the tests that failed last time
+pytest --storybook --collect-only -q                # list the ids
+```
+
+A story id is not a path, so a `storybook::...` id cannot be given as an argument (pytest answers "file or directory not found"); select
+with `-k` or `--deselect`.
+
+### Things to know
+
+- **The `QApplication`.** The plugin creates it (or reuses an existing one) before it imports any story, so a story module that builds
+  a widget at import time works, as it does under the command line. pytest-qt's `qapp` fixture reuses it, and the plugin's
+  `QApplication` ignores `qapp_cls`, `qapp_args` and `qt_qapp_name`.
+- **pytest-qt is optional for the story tests.** With it, an exception raised in a Qt virtual method (a `paintEvent`, for one) fails the
+  test, because pytest-qt captures it; without it, newer PySide6 versions only print the exception, and the test passes. The `render_story`
+  fixture needs pytest-qt.
+- **The theme provider is activated lazily** before the first story test and deactivated when the next test is not a story test and at
+  the end of the run, so the application's look is back before any other test runs. A provider can be activated again after
+  `deactivate`; see [docs/theming.md](docs/theming.md).
+- **pytest-xdist.** The story tests are collected in the same order in every worker. With `-n`, the default `load` distribution spreads
+  them over the workers; `--dist loadfile` and `--dist loadscope` put all of them on one worker.
+- **Stories imported earlier.** The plugin loads the stories into a new registry when it collects. A story module that something else
+  already imported (a test module or a `conftest.py`) is not executed again and its stories are not found.
+
+### The `render_story` fixture
+
+For a test that does more than render, `render_story` builds a story's widget and returns it, shown:
+
+```python
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QPushButton
+
+
+def test_a_disabled_button_stays_disabled(render_story, qtbot):
+    button = render_story("Inputs/Button/Default", args={"enabled": False}, theme="Dark")
+
+    assert isinstance(button, QPushButton)
+    assert not button.isEnabled()
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)  # nothing happens
+```
+
+`render_story(story_id, *, args=None, theme=None)` returns the story's own widget, without the decorators' wrappers. `args` replaces
+some default arguments, converted by the story's controls; an unknown name raises `KeyError`, and so does an unknown story id, listing the
+closest ids. `theme` activates the theme provider for the test and switches to that theme; the provider is deactivated afterwards. Without
+`theme` the widget is rendered in the application's current look, and the context has no design tokens. Everything the fixture rendered is
+hidden and deleted at teardown. The fixture works without `--storybook`, loads the same stories lazily, and needs pytest-qt: without it
+the test fails with "render_story needs pytest-qt: install pyside6-storybook[pytest]".
+
 ## Themes
 
 The gallery switches between three built-in themes. Light and Dark are the Fusion style with an explicit palette, so a widget looks
