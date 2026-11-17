@@ -54,12 +54,28 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=False,
         help="also check every story for controls without an accessible name or Tab focus (items <id>[a11y-name] and <id>[a11y-focus])",
     )
+    group.addoption(
+        "--storybook-no-contrast",
+        action="store_true",
+        default=False,
+        help="with --storybook-a11y, do not add the text-contrast items (<id>[<theme>-contrast]), which are heuristic",
+    )
+    group.addoption(
+        "--storybook-contrast-disabled",
+        action="store_true",
+        default=False,
+        help="also check the text of disabled widgets for contrast",
+    )
     parser.addini("storybook", "turn the pyside6-storybook plugin on", type="bool", default=False)
     parser.addini("storybook_stories", "story targets, one per line", type="linelist", default=[])
     parser.addini("storybook_theme_provider", "the theme provider, as module:attribute", default="")
     parser.addini("storybook_themes", "comma-separated themes to render each story in", default="")
     parser.addini("storybook_qt_warnings", "fail or ignore: whether a Qt warning during a render fails the item", default="")
     parser.addini("storybook_a11y", "also check accessible names and keyboard focus of every story", type="bool", default=False)
+    parser.addini("storybook_contrast", "with storybook_a11y, add the text-contrast items; false turns them off", type="bool", default=True)
+    parser.addini("storybook_contrast_normal", "the contrast ratio normal text needs", default="4.5")
+    parser.addini("storybook_contrast_large", "the contrast ratio large text needs (18 pt, or 14 pt bold)", default="3")
+    parser.addini("storybook_contrast_disabled", "also check the text of disabled widgets for contrast", type="bool", default=False)
     parser.addini(
         "storybook_qt_warnings_ignore",
         "regular expressions of Qt warnings that never fail an item, one per line",

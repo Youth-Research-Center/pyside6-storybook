@@ -98,6 +98,7 @@ class StoryRegistry:
             layout: The story's layout: a ``Layout``, its string value, or ``None`` for ``default_layout``.
             decorators: Functions that wrap the story's widget, the first one outermost; see ``Decorator``.
             checks_ignore: Rules of the pytest plugin's checks the story opts out of, each with the reason: ``{"focus": "decorative"}``.
+                The rules are ``"name"``, ``"focus"`` and ``"contrast"``.
 
         Returns:
             A decorator returning the registered ``Story``.

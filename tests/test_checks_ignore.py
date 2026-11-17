@@ -29,9 +29,9 @@ def test_the_mapping_is_stored_read_only_and_copied() -> None:
         registered.checks_ignore["name"] = "x"  # ty: ignore[invalid-assignment]
 
 
-@pytest.mark.parametrize("rule", ["contrast", "snapshot", "Name", ""])
+@pytest.mark.parametrize("rule", ["snapshot", "Name", ""])
 def test_an_unknown_rule_is_rejected_when_the_decorator_is_created(rule: str) -> None:
-    with pytest.raises(ValueError, match=r"unknown rule .* expected one of 'name', 'focus'"):
+    with pytest.raises(ValueError, match=r"unknown rule .* expected one of 'name', 'focus', 'contrast'"):
         StoryRegistry().story("A/b", checks_ignore={rule: "why"})
     with pytest.raises(ValueError, match="unknown rule"):
         Story("A/b", _build, checks_ignore={rule: "why"})

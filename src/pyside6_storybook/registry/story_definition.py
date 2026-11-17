@@ -42,8 +42,8 @@ class Story:
         decorators: The decorators that wrap the story's widget, the first one outermost. A variant without its own has its base's.
         layout: The layout the story declared, or ``None`` to use the registry's ``default_layout``. A variant without its own layout
             has its base's.
-        checks_ignore: The checks the story opts out of, as a read-only mapping from the rule (``"name"`` or ``"focus"``) to the reason.
-            A variant without its own has its base's.
+        checks_ignore: The checks the story opts out of, as a read-only mapping from a rule (``"name"``, ``"focus"`` or ``"contrast"``) to the
+            reason. A variant without its own has its base's.
         args: For a variant, the values it overrides, by control name, as a read-only mapping; empty for any other story.
         variant_of: The base story, for a variant; ``None`` otherwise.
         doc: The function's docstring, or an empty string.
@@ -90,6 +90,7 @@ class Story:
                 ``default_layout``.
             decorators: Functions that wrap the widget, the first one outermost; see ``Decorator``.
             checks_ignore: Rules of the pytest plugin's checks the story opts out of, each with the reason: ``{"focus": "decorative"}``.
+                The rules are ``"name"``, ``"focus"`` and ``"contrast"``.
 
         Raises:
             ValueError: If ``id`` is empty or has an empty segment, two controls share a name, ``layout`` is not valid, or

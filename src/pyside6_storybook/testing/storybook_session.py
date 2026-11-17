@@ -22,7 +22,7 @@ from PySide6.QtWidgets import QApplication, QLayout, QVBoxLayout, QWidget
 
 import pyside6_storybook
 from pyside6_storybook import registry as registry_module
-from pyside6_storybook.checks import CheckIssue, check_accessible_names, check_keyboard_focus
+from pyside6_storybook.checks import CheckIssue, check_accessible_names, check_keyboard_focus, check_text_contrast
 from pyside6_storybook.checks.rules import RULE_FOCUS, RULE_NAME
 from pyside6_storybook.discovery import LoadError, load_stories
 from pyside6_storybook.discovery.sources import StorySources, StorySourcesError, put_on_sys_path, resolve_story_sources
@@ -218,10 +218,11 @@ class StorybookSession:
             collector: The parent of the items.
 
         Returns:
-            One item per story and theme (plus one per story and accessibility rule with ``--storybook-a11y``), one per load error,
-            or a single configuration item.
+            One item per story and theme (plus, with ``--storybook-a11y``, one per story and accessibility rule and one per story and theme for
+            contrast), one per load error, or a single configuration item.
         """
         from pyside6_storybook.testing.a11y_item import A11yItem
+        from pyside6_storybook.testing.contrast_item import ContrastItem
         from pyside6_storybook.testing.load_error_item import ConfigurationItem, StoryLoadErrorItem
         from pyside6_storybook.testing.story_item import StoryItem
 
@@ -235,6 +236,8 @@ class StorybookSession:
             items.extend(StoryItem.from_parent(collector, story=story, theme=theme) for theme in self.themes)
             if self.options.a11y:
                 items.extend(A11yItem.from_parent(collector, story=story, rule=rule) for rule in A11Y_CHECKS)
+                if self.options.contrast:
+                    items.extend(ContrastItem.from_parent(collector, story=story, theme=theme) for theme in self.themes)
         items.extend(StoryLoadErrorItem.from_parent(collector, error=error) for error in self.load_errors)
         if not items:
             targets = ", ".join(self.sources.targets)
@@ -386,6 +389,32 @@ class StorybookSession:
 
         self._check_rendered(story, theme, inspect)
 
+    def check_contrast(self, story: Story, theme: str) -> None:
+        """Render a story in a theme and check the contrast of its text, as a contrast item does.
+
+        The render is checked as ``check_story`` checks it.
+
+        Args:
+            story: The story to check.
+            theme: The theme to render it in.
+
+        Raises:
+            StoryRenderError: If the story or a decorator fails.
+            StorybookFailure: If a text is too faint, the theme provider fails, Qt logged a warning or an exception reached
+                ``sys.excepthook``.
+        """
+        options = self.options
+
+        def inspect(rendered: RenderedHost) -> list[str]:
+            issues = check_text_contrast(
+                rendered.root, normal=options.contrast_normal, large=options.contrast_large, include_disabled=options.contrast_disabled
+            )
+            if not issues:
+                return []
+            return [f"{len(issues)} text contrast issue(s) in {story.id} in {theme}:", *(f"  {issue}" for issue in issues)]
+
+        self._check_rendered(story, theme, inspect)
+
     def _check_rendered(self, story: Story, theme: str, inspect: Callable[[RenderedHost], list[str]]) -> None:
         """Render ``story`` in ``theme``, call ``inspect`` on it before it is disposed, and fail on its lines, Qt warnings and exceptions."""
         collector = QtMessageCollector()
@@ -397,6 +426,11 @@ class StorybookSession:
                 rendered = self.render(story)
                 try:
                     found = inspect(rendered)
+                except Exception:
+                    # A paintEvent that raises while the check renders the widget surfaces here too; the exception hook has the story's
+                    # own traceback, which is reported below.
+                    if not exceptions.errors:
+                        raise
                 finally:
                     rendered.dispose()
         finally:

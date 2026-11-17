@@ -137,13 +137,14 @@ in the same pull request as the bump.
     `storybook_session.py` (`StorybookSession`: the `QApplication`, the provider lifecycle, the story registry, rendering a story in an
     opaque host, and `StorybookFailure`), `storybook_options.py` (`StorybookOptions`, the options and ini keys), `storybook_collector.py`
     (`StorybookCollector`), `storybook_item.py` (`StorybookItem`, the base of every item), `story_item.py` (`StoryItem`),
-    `a11y_item.py` (`A11yItem`, the `--storybook-a11y` items),
+    `a11y_item.py` (`A11yItem`, the `--storybook-a11y` items), `contrast_item.py` (`ContrastItem`, the `[<theme>-contrast]` items),
     `load_error_item.py` (`StoryLoadErrorItem` and `ConfigurationItem`), `qt_messages.py` (`QtMessageCollector`), `exception_capture.py`
     (`ExceptionCapture`, which collects what PySide6 hands to `sys.excepthook` while a story renders) and `fixtures.py` (the
     implementation of `render_story`)
   - `checks/` - public checks that run on any widget: `check_issue.py` (`CheckIssue`), `accessibility.py` (`check_accessible_names`,
-    `check_keyboard_focus`) and `rules.py` (the rule names `checks_ignore` accepts); `__init__.py` re-exports the first two and
-    `CheckIssue`, the package root does not
+    `check_keyboard_focus`), `contrast.py` (`check_text_contrast`, which measures rendered pixels and reuses the WCAG helpers of the
+    top-level `contrast.py`), `_tree.py` (internal: the widget-tree helpers the checks share) and `rules.py` (the rule names
+    `checks_ignore` accepts); `__init__.py` re-exports the checks and `CheckIssue`, the package root does not
   - `contrast.py` - WCAG contrast helpers
   - `polishing.py` (internal) - `polish_all_widgets`, the workaround for a Qt crash when the application style sheet changes while a
     widget was never polished

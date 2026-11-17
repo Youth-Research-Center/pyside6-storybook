@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPalette, QPen
-from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QProgressBar, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QFrame, QGridLayout, QLabel, QProgressBar, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 
 from pyside6_storybook import BoolControl, ChoiceControl, ColorControl, EnumControl, IntControl, Layout, StoryContext, TextControl, story
 
@@ -142,13 +142,48 @@ def palette(ctx: StoryContext) -> QWidget:
     ],
 )
 def color_swatch(ctx: StoryContext) -> QWidget:
-    """A ``QLabel`` filled with a colour. The control gives the story a ``QColor``, which a translucent colour keeps its opacity in."""
+    """A ``QLabel`` filled with a colour, in black or white text, whichever is easier to read on it.
+
+    The control gives the story a ``QColor``, which a translucent colour keeps its opacity in; the text colour is chosen against the
+    colour blended over the window colour, which is what is seen behind the text.
+    """
     color: QColor = ctx.args["color"]
     widget = QLabel(ctx.args["text"])
     widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
     widget.setMargin(24)
-    widget.setStyleSheet(f"background-color: rgba({color.red()}, {color.green()}, {color.blue()}, {color.alpha()});")
+    text = _readable_text_color(_blend_over(color, QApplication.palette().color(QPalette.ColorRole.Window)))
+    widget.setStyleSheet(
+        f"background-color: rgba({color.red()}, {color.green()}, {color.blue()}, {color.alpha()}); color: {text.name()};"
+    )
     return widget
+
+
+def _blend_over(color: QColor, backdrop: QColor) -> QColor:
+    """Return ``color`` laid over the opaque ``backdrop``, as it looks on the screen."""
+    opacity = color.alphaF()
+    return QColor(
+        round(color.red() * opacity + backdrop.red() * (1 - opacity)),
+        round(color.green() * opacity + backdrop.green() * (1 - opacity)),
+        round(color.blue() * opacity + backdrop.blue() * (1 - opacity)),
+    )
+
+
+def _luminance(color: QColor) -> float:
+    """Return the WCAG relative luminance of an opaque colour."""
+
+    def linear(channel: int) -> float:
+        value = channel / 255
+        return value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4
+
+    return 0.2126 * linear(color.red()) + 0.7152 * linear(color.green()) + 0.0722 * linear(color.blue())
+
+
+def _readable_text_color(background: QColor) -> QColor:
+    """Return black or white, whichever has the higher WCAG contrast ratio against the opaque ``background``."""
+    luminance = _luminance(background)
+    black_ratio = (luminance + 0.05) / 0.05
+    white_ratio = 1.05 / (luminance + 0.05)
+    return QColor(0, 0, 0) if black_ratio >= white_ratio else QColor(255, 255, 255)
 
 
 @story(

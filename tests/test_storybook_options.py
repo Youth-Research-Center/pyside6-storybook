@@ -21,11 +21,28 @@ def test_the_defaults_turn_the_plugin_off_and_fail_on_qt_warnings(pytester: pyte
     assert options.qt_warnings_fail is True
     assert [pattern.pattern for pattern in options.qt_warnings_ignore] == ["propagateSizeHints"]
     assert options.a11y is False
+    assert (options.contrast, options.contrast_normal, options.contrast_large, options.contrast_disabled) == (True, 4.5, 3.0, False)
 
 
 def test_the_a11y_option_and_ini_key_turn_the_accessibility_items_on(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
     assert _options(pytester, "--storybook-a11y").a11y is True
     assert _options(pytester, ini="storybook_a11y = true").a11y is True
+
+
+def test_the_contrast_options_and_ini_keys(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    assert _options(pytester, "--storybook-no-contrast").contrast is False
+    assert _options(pytester, ini="storybook_contrast = false").contrast is False
+    assert _options(pytester, "--storybook-contrast-disabled").contrast_disabled is True
+    assert _options(pytester, ini="storybook_contrast_disabled = true").contrast_disabled is True
+    options = _options(pytester, ini='storybook_contrast_normal = "7"\nstorybook_contrast_large = "4.5"')
+    assert (options.contrast_normal, options.contrast_large) == (7.0, 4.5)
+
+
+@pytest.mark.parametrize("value", ["abc", "0.5", "22", "nan", ""])
+@pytest.mark.parametrize("key", ["storybook_contrast_normal", "storybook_contrast_large"])
+def test_a_contrast_threshold_that_is_not_a_ratio_is_a_usage_error(pytester: pytest.Pytester, stories: StoryRegistry, key: str, value: str) -> None:
+    with pytest.raises(pytest.UsageError, match=f"{key}: .* is not a contrast ratio"):
+        _options(pytester, ini=f'{key} = "{value}"')
 
 
 def test_every_ini_key_is_read(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
