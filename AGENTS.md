@@ -84,7 +84,7 @@ in the same pull request as the bump.
     the functions every control uses (label derivation, `label`/`description` validation, the float step and decimals rules). Controls
     share no base class: each has `label`, `description`, `display_label` and `coerce`
   - `registry/` - the story model, one module per type:
-    - `story_context.py`: `StoryContext`, `StoryFunction`, `Decorator`;
+    - `story_context.py`: `StoryContext` (with `args`, `theme`, `actions` and `tokens`), `StoryFunction`, `Decorator`;
     - `story_definition.py`: `Story`, `StoryOrigin`; `Story.variant` registers a variant through the registry link that
       `StoryRegistry.register` sets;
     - `layout.py`: `Layout`, how the preview places a story's widget;
@@ -126,7 +126,7 @@ in the same pull request as the bump.
     idiomatic.
   - `themes/` - the built-in themes: `theme_definition.py` (`ThemeDefinition`: name, colour scheme and palette colours), one module
     per theme (`light_theme.py`, `dark_theme.py`), `provider.py` (`ThemeProvider`, the protocol an application implements) and
-    `builtin_theme_provider.py` (`BuiltinThemeProvider`, which applies the built-in themes)
+    `builtin_theme_provider.py` (`BuiltinThemeProvider`, which applies the built-in themes and returns their design tokens)
   - `contrast.py` - WCAG contrast helpers
   - `polishing.py` (internal) - `polish_all_widgets`, the workaround for a Qt crash when the application style sheet changes while a
     widget was never polished

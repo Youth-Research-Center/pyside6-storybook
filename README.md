@@ -70,6 +70,7 @@ pyside6-storybook stories
   story's name.
 - The gallery calls the function with a `StoryContext`: `ctx.args` holds the current value of each control, by name, and
   `ctx.theme` the name of the active theme. The story is built again from scratch whenever a control or the theme changes.
+  `ctx.tokens` holds the theme provider's design tokens (see Themes).
 - The function returns the widget to show. If it raises, or returns something that is not a widget, the gallery shows the error
   and its traceback in place of the widget, and the other stories keep working.
 - Discovery picks up every file named `*_story.py` or `*_stories.py` below a folder. Story files can import your application, and
@@ -458,6 +459,49 @@ A provider that sets an application-wide style sheet also sets a matching `QPale
 palette roles, and a style sheet alone leaves the application palette unchanged. The gallery re-renders the preview when the
 provider calls its callbacks, so a theme change the provider makes by itself shows up too. Every call into a provider is guarded:
 an exception is logged and shown in the preview as "Theme provider failed: ...", and the gallery keeps running.
+
+### Design tokens
+
+A provider can also describe its theme to the stories. If it has a `tokens()` method returning a mapping of names to values, the
+gallery reads it after `activate` and after every change notification, and every story receives the result as `ctx.tokens`, a
+read-only mapping that is empty when the provider has no `tokens()` (the method is optional and not part of the protocol). A failing
+`tokens()` is shown like any provider error, and the stories then see an empty mapping. A story reads tokens like this:
+
+```python
+accent = ctx.tokens.get("accent", "#1f5fc4")
+```
+
+`BuiltinThemeProvider.tokens()` returns `#rrggbb` strings read from the application palette's Active group, so they are correct for
+whichever theme is applied:
+
+| Token | Palette role |
+| --- | --- |
+| `window` | `Window` |
+| `window_text` | `WindowText` |
+| `base` | `Base` |
+| `alternate_base` | `AlternateBase` |
+| `text` | `Text` |
+| `button` | `Button` |
+| `button_text` | `ButtonText` |
+| `highlight` | `Highlight` |
+| `highlighted_text` | `HighlightedText` |
+| `accent` | `Accent` |
+| `border` | `Mid` |
+| `placeholder_text` | `PlaceholderText` |
+
+The gallery never calls anything on your widget. A widget that takes tokens gets them from the story, so give it a method such as
+`set_tokens` and call it yourself. The story is built again on every theme change, so the widget repaints with the new tokens:
+
+```python
+@story("Display/Token Badge")
+def token_badge(ctx: StoryContext) -> QWidget:
+    badge = TokenBadge("New")
+    badge.set_tokens(ctx.tokens)
+    return badge
+```
+
+Build `StoryContext` yourself in a test and `tokens` is empty, so let a widget fall back to the matching palette role when a token is
+missing. The built-in example `Display/Token Badge` does.
 
 `run(registry, argv, *, theme=None, theme_provider=None)` opens the gallery. `theme` must be one of the provider's names; `run` raises
 `ValueError` otherwise. After the provider is deactivated, `run` logs a warning for each of the application's style, palette, style sheet

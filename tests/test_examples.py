@@ -39,6 +39,7 @@ EXPECTED_IDS = [
     "Display/Color Swatch",
     "Display/Alignment",
     "Display/Table",
+    "Display/Token Badge",
     "Forms/Sign-in Form",
     "Inputs/Line Edit/Default",
     "Inputs/Line Edit/Password",

@@ -7,7 +7,7 @@ import itertools
 import logging
 import traceback
 import weakref
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from typing import TypeVar
@@ -181,6 +181,8 @@ class GalleryWindow(QMainWindow):
         # The provider can outlive the window, so it gets a callback that does not keep the window alive.
         handler: weakref.WeakMethod[Callable[[], None]] = weakref.WeakMethod(self._on_provider_changed)
         self._call_provider(self._theme_provider.on_changed, functools.partial(_call_weak_method, handler), default=None, report=False)
+        self._tokens: Mapping[str, object] = {}
+        self._refresh_tokens(report=False)
 
         self._controls_host = QWidget(self)
         mark_chrome(self._controls_host)
@@ -334,6 +336,27 @@ class GalleryWindow(QMainWindow):
                 self._startup_provider_error = error
             return default
 
+    def _refresh_tokens(self, *, report: bool = True) -> bool:
+        """Read the provider's design tokens; a provider without ``tokens`` yields ``{}``, and so does one that raises or returns no mapping.
+
+        Returns:
+            ``False`` if the provider's ``tokens`` raised (the error is reported as any provider error), ``True`` otherwise.
+        """
+        read_tokens = getattr(self._theme_provider, "tokens", None)
+        if read_tokens is None:
+            self._tokens = {}
+            return True
+
+        def tokens() -> Mapping[str, object]:
+            result = read_tokens()
+            if not isinstance(result, Mapping):
+                raise TypeError(f"tokens() returned {type(result).__name__}, expected a mapping")
+            return result
+
+        result: Mapping[str, object] | None = self._call_provider(tokens, default=None, report=report)
+        self._tokens = {} if result is None else result
+        return result is not None
+
     def _show_provider_error(self, error: Exception) -> None:
         details = "".join(traceback.format_exception(error))
         self._show_error(f"{_THEME_ERROR_TITLE}: {type(error).__name__}: {error}", details)
@@ -355,7 +378,8 @@ class GalleryWindow(QMainWindow):
             return
         try:
             self._sync_theme_switch()
-            self._rebuild_preview()
+            if self._refresh_tokens():
+                self._rebuild_preview()
         except Exception:
             self._logger.exception("Handling a theme change failed")
 
@@ -656,7 +680,7 @@ class GalleryWindow(QMainWindow):
         try:
             rendered = render_story(
                 story,
-                StoryContext(args=panel.values(), theme=theme, actions=self._actions_panel.new_sink()),
+                StoryContext(args=panel.values(), theme=theme, actions=self._actions_panel.new_sink(), tokens=self._tokens),
                 registry=self._registry,
             )
         except StoryRenderError as error:

@@ -5,6 +5,10 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Design tokens: `StoryContext.tokens` is a read-only mapping of the active theme's tokens, empty by default. A theme provider supplies
+  it through an optional `tokens()` method, which the gallery reads after activation and after every change notification (a provider
+  without it, or one that raises, gives an empty mapping). `BuiltinThemeProvider.tokens()` returns twelve `#rrggbb` colours read from the
+  application palette (`window`, `accent`, `border` and others), and the new `Display/Token Badge` example paints a widget from them.
 - Theme providers: the new `ThemeProvider` protocol lets an application supply its own themes to the gallery (`theme_names`, `current_theme`,
   `activate`, `set_theme`, `on_changed`, `deactivate`), and `BuiltinThemeProvider` is the default Light and Dark provider. `run`, which
   opens the gallery, is now exported from the package and takes the keyword-only `theme_provider`; it validates `theme` against the
