@@ -31,12 +31,13 @@ class A11yItem(StorybookItem):
         super().__init__(parent=parent, suffix=f"{story.id}[a11y-{rule}]")
         self.story = story
         self.rule = rule
+        reason = story.checks_ignore.get(rule)
+        if reason is not None:
+            # A skip marker, not pytest.skip() in runtest: the story is not rendered, and -rs reports the story's file and line.
+            self.add_marker(pytest.mark.skip(reason=f"{rule} ignored: {reason}"))
 
     def runtest(self) -> None:
-        """Skip with the story's reason when it ignores the rule; otherwise render it and fail on every issue the rule finds."""
-        reason = self.story.checks_ignore.get(self.rule)
-        if reason is not None:
-            pytest.skip(f"{self.rule} ignored: {reason}")
+        """Render the story and fail on every issue the rule finds; a story that ignores the rule is skipped by its marker instead."""
         self.config.stash[SESSION_KEY].check_accessibility(self.story, self.rule)
 
     def reportinfo(self) -> tuple[str | Path, int | None, str]:

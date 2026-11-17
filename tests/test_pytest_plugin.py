@@ -1101,7 +1101,13 @@ def test_an_ignored_rule_is_skipped_with_its_reason(pytester: pytest.Pytester, s
 
     result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Light", "-rs")
 
-    result.stdout.fnmatch_lines(["*SKIPPED*name ignored: decorative icon*", "*SKIPPED*focus ignored: not interactive*"])
+    # The skip names the story's own file, not the plugin's.
+    result.stdout.fnmatch_lines(
+        [
+            "SKIPPED [[]1[]] stories/demo_stories.py: name ignored: decorative icon",
+            "SKIPPED [[]1[]] stories/demo_stories.py: focus ignored: not interactive",
+        ]
+    )
 
 
 def test_a_variant_is_skipped_through_the_inherited_ignore(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
