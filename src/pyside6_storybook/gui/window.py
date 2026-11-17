@@ -219,6 +219,7 @@ class GalleryWindow(QMainWindow):
             self._reload_watcher = ReloadWatcher(reload, self)
             self._reload_watcher.reloaded.connect(self._on_reloaded)
         self._apply_tab_order()
+        self._polish_widgets()
         self._sidebar.select_first()
 
     def current_preview_widget(self) -> QWidget | None:
@@ -461,6 +462,16 @@ class GalleryWindow(QMainWindow):
         if dialog is not None and shiboken6.isValid(dialog):
             dialog.deleteLater()
 
+    def _polish_widgets(self) -> None:
+        """Polish the window's widgets now, also those that are hidden and were never shown.
+
+        An application style sheet that is cleared while a widget has never been polished can crash Qt later (see
+        ``pyside6_storybook.polishing``), and a theme provider or the application may change the style sheet at any time.
+        """
+        self.ensurePolished()
+        for widget in self.findChildren(QWidget):
+            widget.ensurePolished()
+
     def _apply_tab_order(self) -> None:
         """Chain Tab through the window in reading order: search, tree, preview tabs, canvas controls, the preview, then the side pane.
 
@@ -575,12 +586,14 @@ class GalleryWindow(QMainWindow):
         self._preview_root = rendered.root
         self._canvas.place(rendered.root, story.layout if story.layout is not None else self._registry.default_layout)
         self._apply_tab_order()
+        self._polish_widgets()
 
     def _show_error(self, title: str, details: str) -> None:
         self._clear_preview()
         self._error_panel = ErrorPanel(title, details, self._canvas.surface)
         self._canvas.place(self._error_panel, Layout.FILL)
         self._apply_tab_order()
+        self._polish_widgets()
 
     def _clear_preview(self) -> None:
         """Remove the preview, first stopping its widget's actions from being logged, including signals it emits while it is hidden."""
