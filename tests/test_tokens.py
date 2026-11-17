@@ -167,6 +167,34 @@ def test_a_tokens_failure_after_a_theme_change_shows_the_error_panel(qtbot, reco
         provider.deactivate()
 
 
+def test_tokens_that_are_not_a_mapping_show_the_error_panel_instead_of_rendering(
+    qtbot, recording, qapp: QApplication, restore_application_look: None
+) -> None:
+    registry, seen = recording
+    provider = StyleSheetProvider()
+    provider.activate(qapp)
+    try:
+        window = _window(qtbot, registry, provider)
+        seen.clear()
+
+        def not_a_mapping() -> object:
+            return ["#ffffff"]
+
+        provider.tokens = not_a_mapping  # ty: ignore[invalid-assignment]
+        with qtbot.capture_exceptions() as exceptions:
+            provider.simulate_external_change()
+            panel = window.findChild(ErrorPanel)
+            assert panel is not None
+            assert "Theme provider failed: TypeError: tokens() returned list, expected a mapping" in [
+                label.text() for label in panel.findChildren(QLabel)
+            ]
+
+        assert exceptions == []
+        assert seen == []  # the bad tokens never reach a story
+    finally:
+        provider.deactivate()
+
+
 def test_a_story_that_reads_only_the_args_renders_unchanged(qtbot, registry: StoryRegistry, themes: BuiltinThemeProvider) -> None:
     window = _window(qtbot, registry, themes)
 

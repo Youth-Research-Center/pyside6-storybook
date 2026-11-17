@@ -20,17 +20,19 @@ _SWATCHES = (
 )
 
 
+_TOKEN_FALLBACKS = {
+    "accent": QPalette.ColorRole.Accent,
+    "highlighted_text": QPalette.ColorRole.HighlightedText,
+    "border": QPalette.ColorRole.Mid,
+}
+"""The palette role a ``TokenBadge`` uses for each token the story did not pass."""
+
+
 class TokenBadge(QWidget):
     """A rounded badge painted from design tokens: ``accent`` fill, ``highlighted_text`` text and a ``border`` outline.
 
     A token that is missing falls back to the matching palette role, so the badge also works with a plain ``StoryContext``.
     """
-
-    _FALLBACKS = {
-        "accent": QPalette.ColorRole.Accent,
-        "highlighted_text": QPalette.ColorRole.HighlightedText,
-        "border": QPalette.ColorRole.Mid,
-    }
 
     def __init__(self, text: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -53,7 +55,7 @@ class TokenBadge(QWidget):
         token = self._tokens.get(name)
         if isinstance(token, str) and QColor.isValidColorName(token):
             return QColor(token)
-        return self.palette().color(QPalette.ColorGroup.Active, self._FALLBACKS[name])
+        return self.palette().color(QPalette.ColorGroup.Active, _TOKEN_FALLBACKS[name])
 
     def paintEvent(self, event: QPaintEvent) -> None:
         """Paint the badge."""

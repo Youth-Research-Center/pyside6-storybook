@@ -337,7 +337,7 @@ class GalleryWindow(QMainWindow):
             return default
 
     def _refresh_tokens(self, *, report: bool = True) -> bool:
-        """Read the provider's design tokens; a provider without ``tokens`` yields ``{}``, and so does one that raises.
+        """Read the provider's design tokens; a provider without ``tokens`` yields ``{}``, and so does one that raises or returns no mapping.
 
         Returns:
             ``False`` if the provider's ``tokens`` raised (the error is reported as any provider error), ``True`` otherwise.
@@ -346,7 +346,14 @@ class GalleryWindow(QMainWindow):
         if read_tokens is None:
             self._tokens = {}
             return True
-        result: Mapping[str, object] | None = self._call_provider(read_tokens, default=None, report=report)
+
+        def tokens() -> Mapping[str, object]:
+            result = read_tokens()
+            if not isinstance(result, Mapping):
+                raise TypeError(f"tokens() returned {type(result).__name__}, expected a mapping")
+            return result
+
+        result: Mapping[str, object] | None = self._call_provider(tokens, default=None, report=report)
         self._tokens = {} if result is None else result
         return result is not None
 
