@@ -259,6 +259,8 @@ built-in example stories. Run without targets, it looks in this order:
    [tool.pyside6-storybook]
    stories = ["stories"]   # folders, .py files or dotted module names, relative to this file
    pythonpath = ["src"]    # optional: folders put on sys.path first, so stories can import your application
+   theme_provider = "my_app.theming:provider"   # optional: your own themes (see "Choosing a theme provider")
+   theme = "Dark"          # optional: the theme to start in
    ```
 
 2. **Entry points** of installed packages, each naming a module of stories:
@@ -271,6 +273,9 @@ built-in example stories. Run without targets, it looks in this order:
 3. **The built-in examples**, only when neither of the above is configured. A configured source that fails to load is reported
    as an error; it never falls back to the examples.
 
+`pythonpath`, `theme_provider` and `theme` are read from `pyproject.toml` also when you name targets or pass `--examples`, so a
+`pyproject.toml` that is not valid is an error then too; `stories` is ignored when there are targets.
+
 A story module that fails to import is listed in the gallery under "Load errors" with its traceback, and the gallery opens with
 the stories that did load.
 
@@ -279,14 +284,37 @@ the stories that did load.
 ```text
 pyside6-storybook [TARGET ...]        open the gallery with the stories in these folders, files or modules
   --examples                          also load the built-in example stories
-  --theme {Light,Dark,System}         the theme to start in
+  --theme NAME                        the theme to start in (built-in: Light, Dark, System)
+  --theme-provider MODULE:ATTRIBUTE   use your application's themes instead of the built-in ones (see "Choosing a theme provider")
   --list                              print the story ids and exit, without a window (works without a display)
   --no-reload                         do not load the stories again when a file changes (see "Hot reload")
   --version                           print the version
 ```
 
 `python -m pyside6_storybook` takes the same arguments. With `--list`, standard error also says which source the stories came
-from, and the exit code is 1 if any story module failed to load.
+from and which theme provider is used with its theme names, and the exit code is 1 if any story module failed to load. A theme
+provider that cannot be loaded, or an unknown theme, prints an error and exits with code 1; the built-in themes are never used
+instead.
+
+### Choosing a theme provider
+
+An application with its own themes lets the gallery use them through a `ThemeProvider`. There are three ways to choose one, and the
+first that applies wins:
+
+1. **Code:** `run(registry, theme_provider=MyProvider())`.
+2. **Command line:** `--theme-provider my_app.theming:provider`, and `--theme Ink` for the starting theme.
+3. **`pyproject.toml`:** `theme_provider = "my_app.theming:provider"` and `theme = "Ink"` under `[tool.pyside6-storybook]`.
+
+The command line wins over `pyproject.toml`, and without either the gallery uses the built-in Light, Dark and System themes. The
+value is `module:attribute`, and the attribute may be dotted (`my_app.theming:Theme.provider`). It is an instance, a class or a
+function that takes no arguments and returns a provider; the object must have a callable for each method of `ThemeProvider`. The
+module is imported after `pythonpath` and the working directory are on `sys.path`, and before your stories, so a theme manager that
+the stories and the provider both import is the same module in both.
+
+The provider and the modules it imports are not reloaded when a story changes, and editing them triggers no reload: restart the
+gallery after editing the provider. Import the theme manager at module level in the provider's module: the provider is loaded before
+the stories, so everything it imports then is kept. A module it imports only later (in `activate`, `set_theme` or `tokens`) is kept
+only if no story imported it first, and otherwise is reloaded with the stories, which would then hold a second copy of the manager.
 
 ## The gallery window
 

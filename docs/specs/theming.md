@@ -221,7 +221,8 @@ triggers nothing. The README says to restart the gallery after editing the provi
   first reload can run. With the provider loaded before the stories, a theme manager the stories import too is first imported by
   the provider, so it is kept as well.
 - A module the provider first imports later (in `set_theme` or `tokens`) is not kept and is reloaded with the stories. The guide
-  says to import the theme manager at module level or in `activate`.
+  says to import the theme manager at module level in the provider's module: a module first imported in `activate` is kept only
+  if no story imported it first (the stories load before `run()` activates the provider).
 
 **`run` from code** takes `theme_provider=` (§1). The three ways (code, command line, `pyproject.toml`) are documented together.
 

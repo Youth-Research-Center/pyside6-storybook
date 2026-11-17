@@ -5,6 +5,9 @@ and every other module that lives under the working directory or a ``pythonpath`
 registry at a new ``StoryRegistry`` and runs ``load_stories`` again, so every module executes again in import order and an edited
 widget class is picked up like an edited story. The result is accepted when it has a story and no source failed that did not already
 fail; otherwise the modules and the registry bindings are put back.
+
+The modules of the theme provider are kept: they are neither dropped nor watched, so the stories and the provider share one copy of
+the application's theme manager.
 """
 
 from __future__ import annotations
@@ -14,7 +17,7 @@ import importlib.util
 import logging
 import os
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -57,6 +60,7 @@ class ReloadSession:
         cwd: str | os.PathLike[str],
         pythonpath: Sequence[str | os.PathLike[str]] = (),
         initial: LoadResult,
+        keep: Collection[str] = (),
     ) -> None:
         """Create a session.
 
@@ -65,12 +69,16 @@ class ReloadSession:
             cwd: The working directory the targets are resolved against.
             pythonpath: The configured ``pythonpath`` folders; modules below them are reloaded too.
             initial: The first load, which is the baseline for the modules to drop, the errors that may keep failing and the files to watch.
+            keep: Names of modules a reload leaves alone, with their parent packages: they are not dropped and their files are not
+                watched. The command line passes the modules the theme provider loader recorded.
         """
         self._logger = logging.getLogger(self.__class__.__name__)
         self._targets = tuple(targets)
         self._cwd = Path(cwd).resolve()
         self._roots = (self._cwd, *(Path(folder).resolve() for folder in pythonpath))
         self._last = initial
+        self._kept: frozenset[str] = frozenset()
+        self.keep_modules(keep)
 
     @property
     def targets(self) -> tuple[str, ...]:
@@ -81,6 +89,20 @@ class ReloadSession:
     def last_accepted(self) -> LoadResult:
         """The last accepted load: the initial one until a reload is accepted."""
         return self._last
+
+    def keep_modules(self, names: Iterable[str]) -> None:
+        """Leave the named modules and their parent packages alone from now on (internal).
+
+        ``run`` calls it with the modules the theme provider imported in ``activate``, before the first reload can run.
+
+        Args:
+            names: Module names, as in ``sys.modules``.
+        """
+        kept = set(self._kept)
+        for name in names:
+            parts = name.split(".")
+            kept.update(".".join(parts[:length]) for length in range(1, len(parts) + 1))
+        self._kept = frozenset(kept)
 
     def reload(self) -> ReloadResult:
         """Load the targets again into a new registry and decide whether to keep it.
@@ -185,7 +207,10 @@ class ReloadSession:
         return set(self._managed_modules(modules))
 
     def _managed_modules(self, modules: Iterable[str]) -> dict[str, ModuleType]:
-        """Return the imported modules a reload owns: the named ones with their parent packages, and the project's own modules."""
+        """Return the imported modules a reload owns: the named ones with their parent packages, and the project's own modules.
+
+        The kept modules are never among them.
+        """
         names: set[str] = set()
         for name in modules:
             parts = name.split(".")
@@ -196,7 +221,7 @@ class ReloadSession:
         for name, module in list(sys.modules.items()):
             if name not in found and name != "__main__" and self._is_project_module(module):
                 found[name] = module
-        return found
+        return {name: module for name, module in found.items() if name not in self._kept}
 
     def _is_project_module(self, module: ModuleType) -> bool:
         if getattr(module, "__file__", None) is None:

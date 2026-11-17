@@ -13,6 +13,7 @@ from pyside6_storybook import StoryContext, StoryRegistry, load_stories
 from pyside6_storybook import registry as registry_module
 from pyside6_storybook.discovery.reload import ReloadSession
 from pyside6_storybook.discovery.sources import EXAMPLES_FOLDER
+from pyside6_storybook.themes.provider_loader import load_theme_provider
 
 _clock = itertools.count(2_000_000_000, 10)
 
@@ -271,3 +272,102 @@ def test_watched_files_include_a_story_source_that_failed_to_import(qapp: QAppli
     assert {tmp_path / "stories" / "a_story.py", broken, single} <= session.watched_files()
     assert session.watched_folders() == {tmp_path / "stories"}
     assert session.story_file_set() == {tmp_path / "stories" / "a_story.py", broken}
+
+
+def _write_theming_app(root: Path) -> None:
+    """A package ``theming_app`` whose ``manager`` module holds a singleton, and a provider module that imports it."""
+    write(root, "theming_app/__init__.py", "")
+    write(root, "theming_app/manager.py", "MANAGER = object()\n")
+    write(
+        root,
+        "theming_app/theming.py",
+        """
+from theming_app import manager
+
+
+class Provider:
+    def theme_names(self):
+        return ("Paper", "Ink")
+
+    def current_theme(self):
+        return "Paper"
+
+    def activate(self, app):
+        pass
+
+    def set_theme(self, name):
+        pass
+
+    def on_changed(self, callback):
+        pass
+
+    def deactivate(self):
+        pass
+
+
+provider = Provider()
+""",
+    )
+
+
+def _manager_story(text: str) -> str:
+    return story_source("Inputs/A", f"{text!r} + str(id(manager.MANAGER))", imports="from theming_app import manager")
+
+
+def test_a_kept_provider_module_is_neither_dropped_nor_watched(qapp: QApplication, tmp_path: Path, stories: StoryRegistry) -> None:
+    _write_theming_app(tmp_path)
+    _write(tmp_path, "stories/a_story.py", _manager_story("one"))
+    sys.path.insert(0, str(tmp_path))
+    loaded = load_theme_provider("theming_app.theming:provider")
+    result = load_stories(("stories",), cwd=tmp_path)
+    assert result.errors == ()
+    session = ReloadSession(("stories",), cwd=tmp_path, initial=result, keep=loaded.modules)
+    manager_module = sys.modules["theming_app.manager"]
+    package = sys.modules["theming_app"]
+    manager_id = str(id(manager_module.MANAGER))
+    assert _text(stories, "Inputs/A") == "one" + manager_id
+
+    _write(tmp_path, "stories/a_story.py", _manager_story("two"))
+    reloaded = session.reload()
+
+    assert reloaded.accepted
+    assert sys.modules["theming_app.manager"] is manager_module
+    assert sys.modules["theming_app"] is package
+    assert _text(reloaded.load.registry, "Inputs/A") == "two" + manager_id
+    watched = {path.resolve() for path in session.watched_files()}
+    assert (tmp_path / "stories" / "a_story.py").resolve() in watched
+    assert not any("theming_app" in path.parts for path in watched)
+
+
+def test_without_keep_the_provider_module_is_reloaded_and_watched(qapp: QApplication, tmp_path: Path, stories: StoryRegistry) -> None:
+    _write_theming_app(tmp_path)
+    _write(tmp_path, "stories/a_story.py", _manager_story("one"))
+    sys.path.insert(0, str(tmp_path))
+    __import__("theming_app.theming")
+    result = load_stories(("stories",), cwd=tmp_path)
+    session = ReloadSession(("stories",), cwd=tmp_path, initial=result)
+    first = sys.modules["theming_app.manager"]
+
+    assert any("theming_app" in path.parts for path in session.watched_files())
+    _write(tmp_path, "stories/a_story.py", _manager_story("two"))
+    assert session.reload().accepted
+
+    assert sys.modules["theming_app.manager"] is not first
+
+
+def test_keep_modules_adds_names_and_their_parents(qapp: QApplication, tmp_path: Path, stories: StoryRegistry) -> None:
+    _write_theming_app(tmp_path)
+    _write(tmp_path, "stories/a_story.py", _manager_story("one"))
+    sys.path.insert(0, str(tmp_path))
+    __import__("theming_app.manager")
+    result = load_stories(("stories",), cwd=tmp_path)
+    session = ReloadSession(("stories",), cwd=tmp_path, initial=result)
+    manager_module = sys.modules["theming_app.manager"]
+    package = sys.modules["theming_app"]
+
+    session.keep_modules(["theming_app.manager"])
+    _write(tmp_path, "stories/a_story.py", _manager_story("two"))
+    assert session.reload().accepted
+
+    assert sys.modules["theming_app.manager"] is manager_module
+    assert sys.modules["theming_app"] is package

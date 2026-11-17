@@ -90,7 +90,11 @@ def run(
     before = _ApplicationLook.of(app)
     try:
         polish_all_widgets()  # the provider may change the application style sheet; see pyside6_storybook.polishing
+        modules_before = set(sys.modules)
         provider.activate(app)
+        if reload is not None:
+            # A provider may import its theme manager here; a reload must not drop it, or the stories would get another copy.
+            reload.keep_modules(set(sys.modules) - modules_before)
         window = GalleryWindow(default_registry if registry is None else registry, provider, load_errors=load_errors, reload=reload)
         if theme is not None:
             # Through the window, so a provider that fails to apply a valid theme shows the error in the gallery instead of closing it.

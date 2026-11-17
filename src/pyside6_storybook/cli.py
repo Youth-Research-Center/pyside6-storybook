@@ -18,6 +18,8 @@ from pyside6_storybook.discovery.constants import EXAMPLES_MODULE
 from pyside6_storybook.discovery.reload import ReloadSession
 from pyside6_storybook.discovery.sources import StorySourcesError, put_on_sys_path, resolve_story_sources
 from pyside6_storybook.themes import BUILTIN_THEME_NAMES
+from pyside6_storybook.themes.provider import ThemeProvider
+from pyside6_storybook.themes.provider_loader import ThemeProviderError, load_theme_provider
 
 PROGRAM_NAME = "pyside6-storybook"
 
@@ -34,14 +36,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     With ``--list`` no window is opened, and the offscreen platform is used unless ``QT_QPA_PLATFORM`` says otherwise, so listing
     works without a display.
 
+    The theme provider comes from ``--theme-provider module:attribute``, else ``theme_provider`` in ``pyproject.toml``, else the
+    built-in themes; ``--theme`` and ``theme`` choose the starting theme the same way. The provider is loaded after the
+    ``QApplication`` exists and before the stories, so a theme module the stories import is first imported by the provider and a
+    reload keeps it. A provider that cannot be loaded, or an unknown theme, is an error: the built-in themes are never used instead.
+    With ``--list`` standard error also names the provider and its themes; the provider is not activated.
+
     ``--help``, ``--version`` and usage errors exit through ``SystemExit`` (code 0, 0 and 2), as ``argparse`` does.
 
     Args:
         argv: The arguments after the program name. Defaults to ``sys.argv[1:]``.
 
     Returns:
-        0 on success; 1 when the configuration is wrong, no stories were found, a target does not exist, or (with ``--list``) any
-        story module failed to load;
+        0 on success; 1 when the configuration is wrong, the theme provider cannot be loaded, the theme is unknown, no stories were
+        found, a target does not exist, or (with ``--list``) any story module failed to load;
         otherwise the gallery's exit code. Story modules that fail to load are reported on standard error, and the gallery still
         opens with the stories that did load and lists the failures under "Load errors".
     """
@@ -55,6 +63,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     targets = sources.targets
     _application = _ensure_application(offscreen=arguments.list)  # kept alive until main returns
     put_on_sys_path(sources.pythonpath, cwd=cwd)
+    provider_spec = arguments.theme_provider or sources.theme_provider
+    provider: ThemeProvider | None = None
+    kept_modules: tuple[str, ...] = ()
+    theme_names: Sequence[str] = BUILTIN_THEME_NAMES
+    if provider_spec is not None:
+        try:
+            loaded = load_theme_provider(provider_spec)
+            provider, kept_modules = loaded.provider, loaded.modules
+            try:
+                theme_names = tuple(provider.theme_names())
+            except Exception as error:
+                raise ThemeProviderError(f"theme provider {provider_spec!r}: theme_names() failed: {type(error).__name__}: {error}") from error
+        except ThemeProviderError as error:
+            _print_error(str(error))
+            return 1
+    theme = arguments.theme or sources.theme
+    if theme is not None and theme not in theme_names:
+        origin = "--theme" if arguments.theme else "theme in pyproject.toml"
+        _print_error(f"unknown theme {theme!r} ({origin}); the available themes are: {', '.join(theme_names)}")
+        return 1
     result = load_stories(targets, cwd=cwd)
     _print_load_errors(result.errors)
     if any(error.target_error for error in result.errors):
@@ -64,11 +92,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     if arguments.list:
         print(f"{PROGRAM_NAME}: stories from {sources.origin}", file=sys.stderr)
+        print(f"{PROGRAM_NAME}: theme provider {provider_spec or 'built-in'} (themes: {', '.join(theme_names)})", file=sys.stderr)
         for story_id in result.registry.ids():
             print(story_id)
         return 1 if result.errors else 0
-    session = None if arguments.no_reload else ReloadSession(targets, cwd=cwd, pythonpath=sources.pythonpath, initial=result)
-    return run(result.registry, theme=arguments.theme, load_errors=result.errors, reload=session)
+    session = (
+        None
+        if arguments.no_reload
+        else ReloadSession(targets, cwd=cwd, pythonpath=sources.pythonpath, initial=result, keep=kept_modules)
+    )
+    return run(result.registry, theme=theme, load_errors=result.errors, reload=session, theme_provider=provider)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -85,7 +118,18 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--examples", action="store_true", help="also load the built-in example stories, built from stock Qt widgets")
     parser.add_argument("--list", action="store_true", help="print the ids of the stories found, one per line, and exit without opening a window")
     parser.add_argument("--no-reload", action="store_true", help="do not load the stories again when a story file or a module they import changes")
-    parser.add_argument("--theme", choices=BUILTIN_THEME_NAMES, help=f"the theme to start in (default: {BUILTIN_THEME_NAMES[0]})")
+    parser.add_argument(
+        "--theme-provider",
+        metavar="MODULE:ATTRIBUTE",
+        help="a theme provider that applies the application's own themes: an instance, a class or a factory function "
+        "(default: the theme_provider key of pyproject.toml, else the built-in themes)",
+    )
+    parser.add_argument(
+        "--theme",
+        metavar="NAME",
+        help=f"the theme to start in, one of the provider's themes (built-in: {', '.join(BUILTIN_THEME_NAMES)}; "
+        f"default: the theme key of pyproject.toml, else the provider's current theme)",
+    )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser
 
