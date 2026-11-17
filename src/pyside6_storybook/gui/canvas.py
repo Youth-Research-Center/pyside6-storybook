@@ -188,9 +188,13 @@ class Canvas(QWidget):
         first_row.setSpacing(_CONTROL_SPACING)
         first_row.addLayout(self._pair("Background", self._background_combo))
         first_row.addLayout(self._pair("Size", self._size_combo))
-        for widget in self._custom_widgets:
-            first_row.addWidget(widget)
         first_row.addStretch(1)
+        # Width and Height get a row of their own, so choosing Custom does not make the toolbar, and with it the window, wider.
+        custom_row = QHBoxLayout()
+        custom_row.setSpacing(_CONTROL_SPACING)
+        for widget in self._custom_widgets:
+            custom_row.addWidget(widget)
+        custom_row.addStretch(1)
         self._zoom_out_button = self._build_zoom_button("canvasZoomOut", "Zoom out", "Zoom out (Ctrl+-)", "magnifying-glass-minus")
         self._zoom_level_label = QLabel(self._toolbar)
         self._zoom_level_label.setObjectName("canvasZoomLevel")
@@ -209,12 +213,14 @@ class Canvas(QWidget):
         toolbar_layout.setContentsMargins(0, 0, 0, 0)
         toolbar_layout.setSpacing(_ROW_SPACING)
         toolbar_layout.addLayout(first_row)
+        toolbar_layout.addLayout(custom_row)
         toolbar_layout.addLayout(second_row)
         self._show_custom_controls(visible=False)
 
         self._zoom_note = QLabel(_ZOOM_NOTE, self)
         self._zoom_note.setObjectName("canvasZoomNote")
         self._zoom_note.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        self._zoom_note.setWordWrap(True)  # unwrapped, a wide font made the canvas, and the window, wider while zoomed
         self._zoom_note.hide()
 
         self._scroll = QScrollArea(self)

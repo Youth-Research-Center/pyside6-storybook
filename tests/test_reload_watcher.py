@@ -1,11 +1,12 @@
 import itertools
 import os
 import re
+import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, QFileSystemWatcher, Qt
 from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QLineEdit
 from story_files import story_source, write
 
@@ -99,6 +100,19 @@ def test_a_real_edit_is_picked_up(qtbot, make_watcher, tmp_path: Path, stories: 
     assert watcher.watched_paths()
 
 
+def _replace(source: Path, target: Path) -> None:
+    """``os.replace``, retried briefly: on Windows a scanner that still has the new file open makes the rename fail with access denied."""
+    for _ in range(50):
+        try:
+            os.replace(source, target)
+        except PermissionError:
+            QApplication.processEvents()
+            time.sleep(0.05)
+        else:
+            return
+    os.replace(source, target)
+
+
 def test_a_rename_save_is_watched_again(qtbot, make_watcher, tmp_path: Path, stories: StoryRegistry) -> None:
     path = _write(tmp_path, "stories/a_story.py", story_source("Inputs/A", "'one'"))
     _, results = make_watcher(_session(tmp_path))
@@ -106,7 +120,7 @@ def test_a_rename_save_is_watched_again(qtbot, make_watcher, tmp_path: Path, sto
     for text in ("'two'", "'three'"):
         before = len(results)
         scratch = _write(tmp_path, "stories/a_story.py.tmp", story_source("Inputs/A", text))
-        os.replace(scratch, path)
+        _replace(scratch, path)
         qtbot.waitUntil(lambda before=before: len(results) > before, timeout=_WAIT_MS)
         assert _label_text(results[-1], "Inputs/A") == text.strip("'")
 
@@ -138,11 +152,16 @@ def test_a_swap_file_does_not_trigger_a_reload(qtbot, make_watcher, tmp_path: Pa
 
 
 def test_a_burst_of_changes_runs_one_reload(qtbot, make_watcher, tmp_path: Path, stories: StoryRegistry) -> None:
+    # The burst is emitted by the test: how soon the file system reports real writes differs by platform (macOS reports them late).
     path = _write(tmp_path, "stories/a_story.py", story_source("Inputs/A", "'one'"))
-    _, results = make_watcher(_session(tmp_path), debounce_ms=200)
+    session = _session(tmp_path)
+    _write(tmp_path, "stories/a_story.py", story_source("Inputs/A", "'five'"))
+    watcher, results = make_watcher(session, debounce_ms=200)
+    file_watcher = watcher.findChild(QFileSystemWatcher)
+    assert file_watcher is not None
 
-    for text in ("'two'", "'three'", "'four'", "'five'"):
-        path.write_text(story_source("Inputs/A", text), encoding="utf-8")
+    for _ in range(4):
+        file_watcher.fileChanged.emit(str(path))
         qtbot.wait(10)
     qtbot.waitUntil(lambda: len(results) >= 1, timeout=_WAIT_MS)
     qtbot.wait(_NEGATIVE_WAIT_MS)

@@ -105,6 +105,9 @@ All notable changes to this project are documented in this file.
 ### Fixed
 - The package no longer installs PySide6 6.12.0 on Python 3.11. That release drops a reference to `None`, `True` or `False` on many calls
   under Python 3.11, and a long session aborted the interpreter on exit ("none_dealloc"). Python 3.12 and newer still get 6.12.0.
+- Return and Enter in the story list did not open the selected story on macOS, where Qt's item views start editing on Return instead.
+- Choosing the Custom canvas size, or zooming in, could make the window wider with wide fonts (the Windows default font grew it from 1100
+  to 1244 pixels): the Width and Height boxes now have a row of their own, and the zoom note wraps.
 - `pyside6_storybook.app.run` left a Quit event posted when it returned, so every later event loop in the same process (a second `run()`,
   or a test's wait) stopped at once.
 - The Dark theme's input fields, unchecked check boxes and alternate table rows were almost invisible in the preview. The preview

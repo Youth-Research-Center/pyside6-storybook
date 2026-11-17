@@ -395,6 +395,25 @@ def test_a_padded_story_keeps_its_top_alignment_inside_a_size(qtbot, themes: Bui
     assert _story_widget(window).y() == _surface(window).contentsRect().top() + 10
 
 
+def test_choosing_custom_does_not_widen_the_window_under_a_wide_font(qtbot, themes: BuiltinThemes, restore_application_look: None) -> None:
+    # The Width and Height boxes have a row of their own: next to Background and Size they made the toolbar wider than the default
+    # window with the Windows fonts, and the window grew from 1100 to 1244 pixels.
+    font = QApplication.font()
+    font.setPointSizeF(font.pointSizeF() * 1.4)
+    QApplication.setFont(font)
+    window = _make_window(qtbot, themes)
+    toolbar = window.findChild(QWidget, "canvasToolbar")
+    assert toolbar is not None
+    fit_minimum = toolbar.minimumSizeHint().width()
+    fit_size = window.size()
+
+    _choose_size(window, "Custom")
+
+    assert _spin(window, "canvasWidth").isVisible()
+    assert toolbar.minimumSizeHint().width() == fit_minimum
+    assert window.size() == fit_size
+
+
 @pytest.mark.parametrize("size", ["Fit", "Dialog", "Custom"])
 def test_every_canvas_control_is_visible_and_at_least_its_minimum_size_hint_at_the_default_size(qtbot, themes: BuiltinThemes, size: str) -> None:
     window = _make_window(qtbot, themes)
@@ -444,7 +463,7 @@ def test_every_combo_and_spin_box_has_an_accessible_name_and_a_label_buddy(qtbot
         assert combo.sizeAdjustPolicy() == QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
 
 
-def test_the_toolbar_is_a_plain_widget_with_two_rows(qtbot, themes: BuiltinThemes) -> None:
+def test_the_toolbar_is_a_plain_widget_with_the_custom_size_boxes_on_a_row_of_their_own(qtbot, themes: BuiltinThemes) -> None:
     window = _make_window(qtbot, themes)
     toolbar = window.findChild(QWidget, "canvasToolbar")
 
@@ -452,7 +471,16 @@ def test_the_toolbar_is_a_plain_widget_with_two_rows(qtbot, themes: BuiltinTheme
     assert type(toolbar) is QWidget
     layout = toolbar.layout()
     assert layout is not None
-    assert layout.count() == 2
+    assert layout.count() == 3
+    custom_item = layout.itemAt(1)
+    assert custom_item is not None
+    custom_row = custom_item.layout()
+    assert custom_row is not None
+    row_items = [custom_row.itemAt(index) for index in range(custom_row.count())]
+    row_widgets = [item.widget() for item in row_items if item is not None]
+    width, height = _spin(window, "canvasWidth"), _spin(window, "canvasHeight")
+    assert [widget for widget in row_widgets if isinstance(widget, QSpinBox)] == [width, height]
+    assert [widget.buddy() for widget in row_widgets if isinstance(widget, QLabel)] == [width, height]
 
 
 def test_place_and_clear_work_on_a_canvas_on_its_own(qtbot) -> None:

@@ -276,6 +276,24 @@ def test_at_400_percent_a_one_pixel_line_is_four_black_device_pixels_without_ble
     assert names[start - first : start - first + int(4 * ratio)] == ["#000000"] * int(4 * ratio)
 
 
+def test_the_zoom_note_wraps_instead_of_widening_the_canvas(qtbot, themes: BuiltinThemes, restore_application_look: None) -> None:
+    # Unwrapped, the note made the canvas wider than its toolbar with the Windows fonts, so zooming grew the window for good.
+    font = QApplication.font()
+    font.setPointSizeF(font.pointSizeF() * 1.4)
+    QApplication.setFont(font)
+    window = _make_window(qtbot, themes, "Zoom/Big", width=900, height=600)
+    canvas = _canvas(window)
+    minimum = canvas.minimumSizeHint().width()
+
+    canvas.set_zoom(300)
+    QApplication.processEvents()
+
+    note = window.findChild(QLabel, "canvasZoomNote")
+    assert note is not None
+    assert note.isVisible()
+    assert canvas.minimumSizeHint().width() == minimum
+
+
 def test_reset_returns_to_the_live_page_without_a_pixmap_and_with_the_same_scroll_ranges(qtbot, themes: BuiltinThemes) -> None:
     window = _make_window(qtbot, themes, "Zoom/Big", width=900, height=600)
     canvas = _canvas(window)
