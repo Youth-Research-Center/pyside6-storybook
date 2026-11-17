@@ -431,6 +431,7 @@ class StorybookSession:
                     # own traceback, which is reported below.
                     if not exceptions.errors:
                         raise
+                    _logger.debug("check of %s in %s stopped by the story's exception", story.id, theme, exc_info=True)
                 finally:
                     rendered.dispose()
         finally:
