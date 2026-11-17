@@ -17,6 +17,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPalette, QStyleHints
 from PySide6.QtWidgets import QApplication
 
+from pyside6_storybook.polishing import polish_all_widgets
 from pyside6_storybook.themes.dark_theme import DARK_THEME
 from pyside6_storybook.themes.light_theme import LIGHT_THEME
 
@@ -100,6 +101,7 @@ class BuiltinThemes:
             app.setStyle(self._original_style_name)
         app.setPalette(self._original_palette)
         if app.styleSheet() != self._original_style_sheet:
+            polish_all_widgets()  # see pyside6_storybook.polishing: a style sheet change with unpolished widgets can crash Qt later
             app.setStyleSheet(self._original_style_sheet)
         self._restore_color_scheme(app)
 
@@ -124,6 +126,7 @@ class BuiltinThemes:
         style_sheet = app.styleSheet()
         if name or not style_sheet:
             return name
+        polish_all_widgets()  # see pyside6_storybook.polishing: clearing the style sheet with unpolished widgets can crash Qt later
         app.setStyleSheet("")
         try:
             return app.style().name()

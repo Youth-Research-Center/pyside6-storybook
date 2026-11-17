@@ -127,6 +127,8 @@ in the same pull request as the bump.
   - `themes/` - the built-in themes: `theme_definition.py` (`ThemeDefinition`: name, colour scheme and palette colours), one module
     per theme (`light_theme.py`, `dark_theme.py`) and `builtin_themes.py` (`BuiltinThemes`, which applies them)
   - `contrast.py` - WCAG contrast helpers
+  - `polishing.py` (internal) - `polish_all_widgets`, the workaround for a Qt crash when the application style sheet changes while a
+    widget was never polished
   - `resources/icons/` - package data, not code (`resources/__init__.py` makes it a package): `icon_manifest.toml` (the icons, the pinned
     Phosphor release), the generated `icon_bundle.json` and `licenses/phosphor-LICENSE.txt`. Never edit the generated files by hand
   - `app.py` - `run()`, which creates the `QApplication` and opens the window
@@ -196,6 +198,10 @@ Icons are bundled Phosphor SVGs, never downloaded at runtime, and the gallery im
 - Never connect a signal twice to the same slot. Connect in loops with `functools.partial`, not a lambda that closes over the loop variable.
 - Use `QSignalBlocker` when setting several linked controls, then apply the change once.
 - Guard slots that may run during teardown with `shiboken6.isValid`.
+- **Polish before a style sheet change.** Qt crashes in `setStyleSheet` when a widget that was never polished existed while the
+  application style sheet was cleared and was deleted after one was set again. Call `polish_all_widgets()` before the library changes
+  the application style sheet, and `GalleryWindow._polish_widgets()` after building widgets (it runs with `_apply_tab_order` and
+  polishes every widget, also those a failed render left for deletion).
 - Every icon-only, custom-painted or card-style control needs `setAccessibleName`/`setAccessibleDescription` and must be keyboard-focusable.
   Form labels set their editor as buddy, and the editor gets the label text as its accessible name.
 - Application-wide changes (style, palette, style sheet) are applied through `BuiltinThemes`, which remembers what it found and restores it on

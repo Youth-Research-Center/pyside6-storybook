@@ -42,6 +42,7 @@ from pyside6_storybook.gui.icons import ActionIcons
 from pyside6_storybook.gui.reload_status import ReloadStatus
 from pyside6_storybook.gui.reload_watcher import ReloadWatcher
 from pyside6_storybook.gui.sidebar import LOAD_ERRORS_HEADING, StorySidebar
+from pyside6_storybook.polishing import polish_all_widgets
 from pyside6_storybook.registry import Layout, Story, StoryContext, StoryRegistry
 from pyside6_storybook.registry.rendering import StoryRenderError, render_story
 from pyside6_storybook.themes import BuiltinThemes
@@ -219,6 +220,7 @@ class GalleryWindow(QMainWindow):
             self._reload_watcher = ReloadWatcher(reload, self)
             self._reload_watcher.reloaded.connect(self._on_reloaded)
         self._apply_tab_order()
+        self._polish_widgets()
         self._sidebar.select_first()
 
     def current_preview_widget(self) -> QWidget | None:
@@ -461,6 +463,16 @@ class GalleryWindow(QMainWindow):
         if dialog is not None and shiboken6.isValid(dialog):
             dialog.deleteLater()
 
+    def _polish_widgets(self) -> None:
+        """Polish every widget now, also those that are hidden and were never shown.
+
+        An application style sheet that is cleared while a widget has never been polished can crash Qt later (see
+        ``pyside6_storybook.polishing``), and a theme provider or the application may change the style sheet at any time. Every widget
+        of the application is polished, not only the window's: a failed render leaves the story's widget and a decorator's wrapper
+        outside the window until their deferred deletion.
+        """
+        polish_all_widgets()
+
     def _apply_tab_order(self) -> None:
         """Chain Tab through the window in reading order: search, tree, preview tabs, canvas controls, the preview, then the side pane.
 
@@ -575,12 +587,14 @@ class GalleryWindow(QMainWindow):
         self._preview_root = rendered.root
         self._canvas.place(rendered.root, story.layout if story.layout is not None else self._registry.default_layout)
         self._apply_tab_order()
+        self._polish_widgets()
 
     def _show_error(self, title: str, details: str) -> None:
         self._clear_preview()
         self._error_panel = ErrorPanel(title, details, self._canvas.surface)
         self._canvas.place(self._error_panel, Layout.FILL)
         self._apply_tab_order()
+        self._polish_widgets()
 
     def _clear_preview(self) -> None:
         """Remove the preview, first stopping its widget's actions from being logged, including signals it emits while it is hidden."""

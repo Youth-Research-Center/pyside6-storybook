@@ -105,6 +105,9 @@ All notable changes to this project are documented in this file.
 ### Fixed
 - The package no longer installs PySide6 6.12.0 on Python 3.11. That release drops a reference to `None`, `True` or `False` on many calls
   under Python 3.11, and a long session aborted the interpreter on exit ("none_dealloc"). Python 3.12 and newer still get 6.12.0.
+- The gallery could crash when the application style sheet was cleared and set again, for example by a theme that sets a style sheet:
+  Qt crashes when a widget that was never shown is deleted after such a change. The gallery now polishes its widgets after building them,
+  and the built-in themes polish every widget before they change the style sheet.
 - Return and Enter in the story list did not open the selected story on macOS, where Qt's item views start editing on Return instead.
 - Choosing the Custom canvas size, or zooming in, could make the window wider with wide fonts (the Windows default font grew it from 1100
   to 1244 pixels): the Width and Height boxes now have a row of their own, and the zoom note wraps.
