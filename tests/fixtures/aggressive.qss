@@ -1,0 +1,56 @@
+/* An application style sheet that restyles every kind of widget the gallery chrome uses: dark backgrounds, a saturated selection and an
+   18 pt font. AggressiveProvider fills the $placeholders and keeps the selection rule of one form or both. */
+QWidget {
+    background-color: $window;
+    color: $text;
+    font-size: 18pt;
+}
+QLabel {
+    background-color: $window;
+    color: $text;
+}
+QScrollArea {
+    background-color: $window;
+}
+QPushButton {
+    background-color: $button;
+    color: $text;
+    border: 2px solid $accent;
+    padding: 2px 8px;
+}
+QComboBox {
+    background-color: $button;
+    color: $text;
+    border: 1px solid $accent;
+}
+QLineEdit {
+    background-color: $base;
+    color: $text;
+}
+QListView {
+    background-color: $base;
+    color: $text;
+    selection-background-color: $selection;
+}
+QTabBar::tab {
+    background-color: $button;
+    color: $text;
+    padding: 4px 12px;
+}
+QTabBar::tab:selected {
+    background-color: $base;
+}
+QTreeView {
+    background-color: $base;
+    color: $text;
+}
+/* begin highlight */
+QTreeView {
+    selection-background-color: $selection;
+}
+/* end highlight */
+/* begin item */
+QTreeView::item:selected {
+    background: $selection;
+}
+/* end item */

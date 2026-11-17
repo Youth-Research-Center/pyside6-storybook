@@ -9,6 +9,7 @@ from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QFormLayout, QLabel, QVBoxLayout, QWidget
 
 from pyside6_storybook.controls import Control
+from pyside6_storybook.gui.chrome import mark_chrome
 from pyside6_storybook.gui.editors import ControlEditor, create_editor
 
 NO_CONTROLS_MESSAGE = "No configurable properties for this component."
@@ -40,6 +41,7 @@ class ControlsPanel(QWidget):
             TypeError: If a value in ``values`` has a type its control rejects.
         """
         super().__init__(parent)
+        mark_chrome(self)
         self._controls = tuple(controls)
         self._editors: dict[str, ControlEditor] = {}
         starting = dict(values) if values is not None else {}
@@ -57,6 +59,7 @@ class ControlsPanel(QWidget):
             _share_input_focus_policy(editor)
             editor.valueChanged.connect(self._on_editor_changed)
             label = QLabel(control.display_label, self)
+            mark_chrome(label)
             label.setBuddy(editor)
             if control.description:
                 label.setToolTip(control.description)
@@ -75,7 +78,7 @@ class ControlsPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         label = QLabel(NO_CONTROLS_MESSAGE, self)
-        label.setObjectName("controlsEmptyState")
+        mark_chrome(label, "sbkControlsEmptyState")
         label.setWordWrap(True)
         label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         font = label.font()

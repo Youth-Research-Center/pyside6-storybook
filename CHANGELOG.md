@@ -107,6 +107,11 @@ All notable changes to this project are documented in this file.
   `FloatControl` an `int` or `float` (not a `bool`), `TextControl` and `ChoiceControl` a string. `Story.default_args()` returns each
   default passed through the control's `coerce`, so a `FloatControl` default given as `1` starts as `1.0`.
 - `FloatControl` rejects a default or bound that needs more than 10 decimals, which the editor used to show rounded.
+- The gallery's widgets are styleable from an application style sheet. Their object names now have the prefix `sbk` in camel case
+  (`storySidebar` is `sbkStorySidebar`, `previewSurface` is `sbkPreviewSurface`, and so on; the README lists all 53), so a style sheet
+  or a test that looked a widget up by its old name must use the new one. The widgets that an application might style, and none that
+  contain a story's widget, carry the property `sbkChrome`, so `*[sbkChrome="true"] QPushButton` reaches the gallery's buttons and not
+  a story's. The selected story's text stays readable when a style sheet colours the selected row.
 
 ### Fixed
 - The package no longer installs PySide6 6.12.0 on Python 3.11. That release drops a reference to `None`, `True` or `False` on many calls

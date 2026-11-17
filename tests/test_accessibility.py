@@ -160,7 +160,7 @@ _TAB_ORDER = [
 
 def test_tab_visits_the_panes_in_reading_order_and_wraps_to_the_search(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
-    _child(window, StorySidebar, "storySidebar").focus_search()
+    _child(window, StorySidebar, "sbkStorySidebar").focus_search()
     qtbot.waitUntil(lambda: _focused_name() == "Search stories", timeout=5000)
 
     visited = [_focused_name()]
@@ -172,7 +172,7 @@ def test_tab_visits_the_panes_in_reading_order_and_wraps_to_the_search(qtbot, th
 
 def test_shift_tab_walks_the_same_order_backwards(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
-    _child(window, StorySidebar, "storySidebar").focus_search()
+    _child(window, StorySidebar, "sbkStorySidebar").focus_search()
     qtbot.waitUntil(lambda: _focused_name() == "Search stories", timeout=5000)
 
     visited = [_focused_name()] + [_tab(qtbot, backwards=True) for _ in range(len(_TAB_ORDER) - 1)]
@@ -184,7 +184,7 @@ def test_the_tab_order_follows_the_story_when_it_changes(qtbot, themes: BuiltinT
     window = _make(qtbot, themes)
     window.select_story("Display/Label")
     qtbot.wait(50)
-    _focus(qtbot, _child(window, QScrollArea, "previewScroll"))
+    _focus(qtbot, _child(window, QScrollArea, "sbkPreviewScroll"))
 
     assert _focused_name() == "Preview of Display/Label"
     assert [_tab(qtbot) for _ in range(4)] == ["Theme", "Controls and actions tabs", "Size", "Search stories"]
@@ -192,7 +192,7 @@ def test_the_tab_order_follows_the_story_when_it_changes(qtbot, themes: BuiltinT
 
 def test_the_tab_order_follows_the_docs_tab(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
-    tabs = _child(window, QTabWidget, "previewTabs")
+    tabs = _child(window, QTabWidget, "sbkPreviewTabs")
     tabs.setCurrentIndex(1)
     _focus(qtbot, tabs.tabBar())
 
@@ -206,16 +206,16 @@ def test_the_tab_order_follows_the_docs_tab(qtbot, themes: BuiltinThemeProvider)
 
 def test_the_panes_and_the_preview_area_have_accessible_names(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
-    sidebar = _child(window, StorySidebar, "storySidebar")
-    preview_pane = _child(window, QTabWidget, "previewTabs").parentWidget()
-    side_pane = _child(window, QTabWidget, "sideTabs").parentWidget()
+    sidebar = _child(window, StorySidebar, "sbkStorySidebar")
+    preview_pane = _child(window, QTabWidget, "sbkPreviewTabs").parentWidget()
+    side_pane = _child(window, QTabWidget, "sbkSideTabs").parentWidget()
     assert preview_pane is not None
     assert side_pane is not None
 
     assert sidebar.accessibleName() == "Story list"
     assert preview_pane.accessibleName() == "Preview"
     assert side_pane.accessibleName() == "Controls and actions"
-    scroll = _child(window, QScrollArea, "previewScroll")
+    scroll = _child(window, QScrollArea, "sbkPreviewScroll")
     assert scroll.focusPolicy() == Qt.FocusPolicy.StrongFocus
     assert scroll.accessibleName() == "Preview of Inputs/Button"
     window.select_story("Display/Plain")
@@ -225,14 +225,14 @@ def test_the_panes_and_the_preview_area_have_accessible_names(qtbot, themes: Bui
 def test_the_preview_area_is_named_without_a_story(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes, StoryRegistry())
 
-    assert _child(window, QScrollArea, "previewScroll").accessibleName() == "Preview"
+    assert _child(window, QScrollArea, "sbkPreviewScroll").accessibleName() == "Preview"
 
 
 def test_f6_cycles_through_the_panes_and_returns_to_the_last_focused_widget(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
-    _child(window, StorySidebar, "storySidebar").focus_search()
+    _child(window, StorySidebar, "sbkStorySidebar").focus_search()
     qtbot.waitUntil(lambda: _focused_name() == "Search stories", timeout=5000)
-    _focus(qtbot, _child(window, QTreeView, "storyTree"))
+    _focus(qtbot, _child(window, QTreeView, "sbkStoryTree"))
 
     _key(qtbot, Qt.Key.Key_F6)
     assert _focused_name() == "Preview tabs"
@@ -251,7 +251,7 @@ def test_f6_cycles_through_the_panes_and_returns_to_the_last_focused_widget(qtbo
 
 def test_shift_f6_cycles_backwards(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
-    _focus(qtbot, _child(window, QTreeView, "storyTree"))
+    _focus(qtbot, _child(window, QTreeView, "sbkStoryTree"))
 
     _key(qtbot, Qt.Key.Key_F6, Qt.KeyboardModifier.ShiftModifier)
     assert _focused_name() == "Theme"
@@ -264,7 +264,7 @@ def test_shift_f6_cycles_backwards(qtbot, themes: BuiltinThemeProvider) -> None:
 def test_f6_falls_back_to_the_first_widget_when_the_remembered_one_is_gone(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
     _focus(qtbot, _story_input(window, QPushButton, "Story button"))
-    _focus(qtbot, _child(window, QTreeView, "storyTree"))
+    _focus(qtbot, _child(window, QTreeView, "sbkStoryTree"))
     window.select_story("Display/Label")
 
     _key(qtbot, Qt.Key.Key_F6)
@@ -309,9 +309,9 @@ def test_every_focusable_chrome_widget_has_a_name_on_the_docs_and_actions_tabs(q
     stories = _registry()
     stories.get("Inputs/Button").variant("Wide", args={"text": "Wide"})
     window = _make(qtbot, themes, stories)
-    _child(window, QTabWidget, "previewTabs").setCurrentIndex(1)
-    _child(window, QTabWidget, "sideTabs").setCurrentIndex(1)
-    qtbot.waitUntil(lambda: _child(window, QTableWidget, "docsControlsTable").isVisible(), timeout=5000)
+    _child(window, QTabWidget, "sbkPreviewTabs").setCurrentIndex(1)
+    _child(window, QTabWidget, "sbkSideTabs").setCurrentIndex(1)
+    qtbot.waitUntil(lambda: _child(window, QTableWidget, "sbkDocsControlsTable").isVisible(), timeout=5000)
 
     _assert_every_chrome_widget_is_named(window)
     assert any(isinstance(widget, QTableWidget) for widget in _chrome_focusables(window))
@@ -375,7 +375,7 @@ def test_slash_does_not_fire_from_a_spin_box(qtbot, themes: BuiltinThemeProvider
 
 def test_slash_opens_the_search_from_the_tree(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
-    _focus(qtbot, _child(window, QTreeView, "storyTree"))
+    _focus(qtbot, _child(window, QTreeView, "sbkStoryTree"))
 
     _key(qtbot, Qt.Key.Key_Slash)
 
@@ -397,7 +397,7 @@ def test_alt_down_still_opens_a_combo_boxs_popup(qtbot, themes: BuiltinThemeProv
 
 def test_the_theme_switch_popup_opens_with_alt_down_too(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
-    switch = _child(window, QComboBox, "themeSwitch")
+    switch = _child(window, QComboBox, "sbkThemeSwitch")
     _focus(qtbot, switch)
 
     qtbot.keyClick(switch, Qt.Key.Key_Down, Qt.KeyboardModifier.AltModifier)
@@ -409,7 +409,7 @@ def test_the_theme_switch_popup_opens_with_alt_down_too(qtbot, themes: BuiltinTh
 
 def test_ctrl_alt_down_and_up_move_through_the_visible_stories(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
-    _focus(qtbot, _child(window, QTreeView, "storyTree"))
+    _focus(qtbot, _child(window, QTreeView, "sbkStoryTree"))
     ctrl_alt = Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier
 
     _key(qtbot, Qt.Key.Key_Down, ctrl_alt)
@@ -427,7 +427,7 @@ def test_ctrl_alt_down_and_up_move_through_the_visible_stories(qtbot, themes: Bu
 
 def test_ctrl_alt_down_expands_the_branch_of_the_story_it_opens(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
-    tree = _child(window, QTreeView, "storyTree")
+    tree = _child(window, QTreeView, "sbkStoryTree")
     model = tree.model()
     display = next(model.index(row, 0) for row in range(model.rowCount()) if model.index(row, 0).data() == "Display")
     tree.collapse(display)
@@ -442,7 +442,7 @@ def test_ctrl_alt_down_expands_the_branch_of_the_story_it_opens(qtbot, themes: B
 
 def test_ctrl_alt_down_skips_the_stories_the_search_hides(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
-    search = _child(window, QLineEdit, "storySearch")
+    search = _child(window, QLineEdit, "sbkStorySearch")
     qtbot.keyClicks(search, "plain")
     assert window.current_story_id() == "Inputs/Button"
 
@@ -453,7 +453,7 @@ def test_ctrl_alt_down_skips_the_stories_the_search_hides(qtbot, themes: Builtin
 
 def test_ctrl_t_switches_to_the_next_theme_and_wraps(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
-    switch = _child(window, QComboBox, "themeSwitch")
+    switch = _child(window, QComboBox, "sbkThemeSwitch")
     assert themes.current_theme() == "Light"
 
     _key(qtbot, Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
@@ -486,7 +486,7 @@ def test_ctrl_t_with_focus_in_the_preview_leaves_focus_on_the_canvas(qtbot, them
     qtbot.keyClick(QApplication.focusWidget(), Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
 
     assert themes.current_theme() == "Dark"
-    qtbot.waitUntil(lambda: QApplication.focusWidget() is _child(window, QScrollArea, "previewScroll"), timeout=5000)
+    qtbot.waitUntil(lambda: QApplication.focusWidget() is _child(window, QScrollArea, "sbkPreviewScroll"), timeout=5000)
     assert _focused_name() == "Preview of Inputs/Button"
 
 
@@ -497,7 +497,7 @@ def test_selecting_a_story_with_focus_in_the_preview_leaves_focus_on_the_canvas(
     _key(qtbot, Qt.Key.Key_Down, Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier)
 
     assert window.current_story_id() == "Display/Label"
-    assert QApplication.focusWidget() is _child(window, QScrollArea, "previewScroll")
+    assert QApplication.focusWidget() is _child(window, QScrollArea, "sbkPreviewScroll")
 
 
 # Help dialog
@@ -511,7 +511,7 @@ def _shortcut_keys(window: GalleryWindow) -> set[str]:
 
 
 def _dialog_rows(dialog: QDialog) -> list[tuple[str, str]]:
-    table = dialog.findChild(QTableWidget, "shortcutsTable")
+    table = dialog.findChild(QTableWidget, "sbkShortcutsTable")
     assert table is not None
     rows = []
     for row in range(table.rowCount()):
@@ -542,11 +542,11 @@ def _native(keys: str) -> str:
 
 def test_f1_opens_a_dialog_listing_every_shortcut_and_it_is_deleted_after_it_closes(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
-    assert window.findChild(QDialog, "shortcutsDialog") is None
+    assert window.findChild(QDialog, "sbkShortcutsDialog") is None
 
     _key(qtbot, Qt.Key.Key_F1)
 
-    dialog = window.findChild(QDialog, "shortcutsDialog")
+    dialog = window.findChild(QDialog, "sbkShortcutsDialog")
     assert dialog is not None
     assert dialog.parent() is window
     assert dialog.isVisible()
@@ -560,20 +560,20 @@ def test_f1_opens_a_dialog_listing_every_shortcut_and_it_is_deleted_after_it_clo
 
     dialog.close()
     QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    assert window.findChild(QDialog, "shortcutsDialog") is None
+    assert window.findChild(QDialog, "sbkShortcutsDialog") is None
 
 
 def test_f1_twice_keeps_one_dialog(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make(qtbot, themes)
 
     _key(qtbot, Qt.Key.Key_F1)
-    dialog = window.findChild(QDialog, "shortcutsDialog")
+    dialog = window.findChild(QDialog, "sbkShortcutsDialog")
     assert dialog is not None
     qtbot.waitUntil(lambda: QApplication.activeModalWidget() is dialog, timeout=5000)
-    _child(window, QTableWidget, "shortcutsTable").setFocus()
+    _child(window, QTableWidget, "sbkShortcutsTable").setFocus()
     qtbot.keyClick(QApplication.focusWidget(), Qt.Key.Key_F1)
 
-    assert len(window.findChildren(QDialog, "shortcutsDialog")) == 1
+    assert len(window.findChildren(QDialog, "sbkShortcutsDialog")) == 1
     dialog.close()
     QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
@@ -710,8 +710,8 @@ def test_chrome_text_is_not_clipped_and_nothing_has_a_fixed_height_at_a_24_point
     window.resize(1500, 1000)
 
     for preview_tab, side_tab in [(0, 0), (1, 1)]:
-        _child(window, QTabWidget, "previewTabs").setCurrentIndex(preview_tab)
-        _child(window, QTabWidget, "sideTabs").setCurrentIndex(side_tab)
+        _child(window, QTabWidget, "sbkPreviewTabs").setCurrentIndex(preview_tab)
+        _child(window, QTabWidget, "sbkSideTabs").setCurrentIndex(side_tab)
         qtbot.wait(100)
         for widget in _chrome_widgets(window):
             if not widget.isVisible():

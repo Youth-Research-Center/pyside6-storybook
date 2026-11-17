@@ -9,6 +9,7 @@ from PySide6.QtCore import QEvent, QTimer
 from PySide6.QtGui import QAccessible, QAccessibleAnnouncementEvent
 from PySide6.QtWidgets import QAbstractItemView, QHBoxLayout, QLabel, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 
+from pyside6_storybook.gui.chrome import mark_chrome
 from pyside6_storybook.gui.icons import ActionIcons
 
 MAX_ENTRIES = 500
@@ -67,13 +68,15 @@ class ActionsPanel(QWidget):
                 the gallery window passes its own, which it retints.
         """
         super().__init__(parent)
-        self.setObjectName("actionsPanel")
+        mark_chrome(self, "sbkActionsPanel")
         self._own_icons = icons is None
         self._icons = icons if icons is not None else ActionIcons()
         self._generation = 0
 
         self._tree = QTreeWidget(self)
-        self._tree.setObjectName("actionsTree")
+        mark_chrome(self._tree, "sbkActionsTree")
+        for part in (self._tree.viewport(), self._tree.header()):
+            mark_chrome(part)
         self._tree.setAccessibleName("Logged actions")
         self._tree.setHeaderLabels(list(HEADERS))
         self._tree.setRootIsDecorated(False)
@@ -83,11 +86,11 @@ class ActionsPanel(QWidget):
         self._tree.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 
         self._status = QLabel(self)
-        self._status.setObjectName("actionsStatus")
+        mark_chrome(self._status, "sbkActionsStatus")
         self._status.setAccessibleName("Number of logged actions")
 
         self._clear_button = QPushButton("Clear", self)
-        self._clear_button.setObjectName("actionsClear")
+        mark_chrome(self._clear_button, "sbkActionsClear")
         self._clear_button.setAccessibleName("Clear logged actions")
         self._clear_button.setToolTip("Remove every logged action")
         self._icons.bind(self._clear_button, "trash")

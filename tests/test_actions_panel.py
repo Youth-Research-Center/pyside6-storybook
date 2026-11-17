@@ -91,7 +91,7 @@ def test_clear_removes_every_entry_and_updates_the_count(qtbot) -> None:
     panel = _panel(qtbot)
     panel.record("a", ())
     panel.record("b", ())
-    button = panel.findChild(QPushButton, "actionsClear")
+    button = panel.findChild(QPushButton, "sbkActionsClear")
     assert button is not None
 
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
@@ -230,12 +230,12 @@ def test_moving_the_example_slider_logs_the_new_value(qtbot, stories: StoryRegis
 def test_the_side_pane_has_controls_and_actions_tabs(qtbot, themes: BuiltinThemeProvider) -> None:
     window, panel = _window(qtbot, _logging_registry(), themes)
 
-    tabs = window.findChild(QTabWidget, "sideTabs")
+    tabs = window.findChild(QTabWidget, "sbkSideTabs")
     assert tabs is not None
     assert [tabs.tabText(index) for index in range(tabs.count())] == ["Controls", "Actions"]
     assert tabs.documentMode()
     assert tabs.widget(1) is panel
-    assert window.findChild(QWidget, "controlsScroll") is tabs.widget(0)
+    assert window.findChild(QWidget, "sbkControlsScroll") is tabs.widget(0)
 
 
 class _Pinger(QWidget):

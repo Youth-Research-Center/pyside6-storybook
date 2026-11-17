@@ -5,6 +5,8 @@ from __future__ import annotations
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QWidget
 
+from pyside6_storybook.gui.chrome import mark_chrome
+
 
 class ControlEditor(QWidget):
     """A widget that edits the value of one control.
@@ -17,6 +19,15 @@ class ControlEditor(QWidget):
     """
 
     valueChanged = Signal(object)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        """Create the editor and mark it as chrome; ``create_editor`` marks its parts, which a subclass creates after this runs.
+
+        Args:
+            parent: The owning widget.
+        """
+        super().__init__(parent)
+        mark_chrome(self)
 
     def value(self) -> object:
         """Return the current value, in the control's value type."""

@@ -17,6 +17,7 @@ from pyside6_storybook.controls import (
     IntControl,
     TextControl,
 )
+from pyside6_storybook.gui.chrome import mark_chrome
 from pyside6_storybook.gui.editors.bool_editor import BoolEditor
 from pyside6_storybook.gui.editors.choice_editor import ChoiceEditor
 from pyside6_storybook.gui.editors.color_editor import ColorEditor
@@ -60,7 +61,10 @@ def create_editor(control: Control, value: object, parent: QWidget | None = None
     for control_type in type(control).__mro__:
         editor_type = EDITORS.get(control_type)
         if editor_type is not None:
-            return editor_type(control, value, parent)
+            editor = editor_type(control, value, parent)
+            for part in editor.findChildren(QWidget):
+                mark_chrome(part)
+            return editor
     raise TypeError(f"Unsupported control type: {type(control)!r}")
 
 

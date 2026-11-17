@@ -63,7 +63,7 @@ def test_run_starts_in_the_requested_theme_and_restores_the_palette(
 
     def inspect_and_quit() -> None:
         (window,) = [widget for widget in qapp.topLevelWidgets() if isinstance(widget, GalleryWindow)]
-        switch = window.findChild(QComboBox, "themeSwitch")
+        switch = window.findChild(QComboBox, "sbkThemeSwitch")
         assert switch is not None
         assert window.select_story("Display/Label")
         preview = window.current_preview_widget()

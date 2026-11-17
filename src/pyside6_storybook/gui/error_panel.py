@@ -6,6 +6,7 @@ from PySide6.QtCore import QEvent, QSize, Qt
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPlainTextEdit, QVBoxLayout, QWidget
 
+from pyside6_storybook.gui.chrome import mark_chrome
 from pyside6_storybook.gui.icons import DEFAULT_ICON_SIZE, IconRole, palette_icon
 
 _SPACING = 6
@@ -23,16 +24,16 @@ class ErrorPanel(QWidget):
             parent: The owning widget.
         """
         super().__init__(parent)
-        self.setObjectName("previewError")
+        mark_chrome(self, "sbkPreviewError")
         self.setAccessibleName(f"Error: {title}")
 
         self._icon = QLabel(self)
-        self._icon.setObjectName("errorIcon")
+        mark_chrome(self._icon, "sbkErrorIcon")
         self._icon.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
         self._render_icon()
 
         self._title = QLabel(title, self)
-        self._title.setObjectName("errorTitle")
+        mark_chrome(self._title, "sbkErrorTitle")
         self._title.setWordWrap(True)
         self._title.setTextFormat(Qt.TextFormat.PlainText)
         self._title.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard)
@@ -41,7 +42,8 @@ class ErrorPanel(QWidget):
         self._title.setFont(title_font)
 
         self._details = QPlainTextEdit(details, self)
-        self._details.setObjectName("errorDetails")
+        mark_chrome(self._details, "sbkErrorDetails")
+        mark_chrome(self._details.viewport())
         self._details.setAccessibleName("Error details")
         self._details.setReadOnly(True)
         self._details.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)

@@ -38,6 +38,7 @@ from pyside6_storybook.controls import (
     IntControl,
     TextControl,
 )
+from pyside6_storybook.gui.chrome import mark_chrome
 from pyside6_storybook.gui.icons import ActionIcons
 from pyside6_storybook.registry import Story, StoryRegistry
 
@@ -135,7 +136,7 @@ class DocsPanel(QWidget):
                 the gallery window passes its own, which it retints.
         """
         super().__init__(parent)
-        self.setObjectName("docsPanel")
+        mark_chrome(self, "sbkDocsPanel")
         self._own_icons = icons is None
         self._icons = icons if icons is not None else ActionIcons()
         self._source = ""
@@ -153,7 +154,7 @@ class DocsPanel(QWidget):
         """
         self.clear()
         content = QWidget(self)
-        content.setObjectName("docsContent")
+        mark_chrome(content, "sbkDocsContent")
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(_SPACING)
@@ -162,9 +163,9 @@ class DocsPanel(QWidget):
 
         module_doc = _module_doc(story)
         if module_doc:
-            layout.addWidget(self._section("Component description", self._text(module_doc, "docsModuleDoc", content), content))
+            layout.addWidget(self._section("Component description", self._text(module_doc, "sbkDocsModuleDoc", content), content))
         if story.doc:
-            layout.addWidget(self._section("Story description", self._text(story.doc, "docsStoryDoc", content), content))
+            layout.addWidget(self._section("Story description", self._text(story.doc, "sbkDocsStoryDoc", content), content))
         layout.addWidget(self._section("Controls", self._controls_body(story, content), content))
         siblings = _siblings(story, registry)
         if len(siblings) > 1 and story.component is not None:
@@ -194,11 +195,12 @@ class DocsPanel(QWidget):
 
     def _section(self, title: str, body: QWidget, parent: QWidget) -> QWidget:
         section = QWidget(parent)
+        mark_chrome(section)
         layout = QVBoxLayout(section)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(_SECTION_SPACING)
         heading = QLabel(title, section)
-        heading.setObjectName("docsHeading")
+        mark_chrome(heading, "sbkDocsHeading")
         heading.setTextFormat(Qt.TextFormat.PlainText)
         font = heading.font()
         font.setBold(True)
@@ -210,7 +212,7 @@ class DocsPanel(QWidget):
     @staticmethod
     def _text(text: str, object_name: str, parent: QWidget) -> QLabel:
         label = QLabel(text, parent)
-        label.setObjectName(object_name)
+        mark_chrome(label, object_name)
         label.setTextFormat(Qt.TextFormat.PlainText)
         label.setWordWrap(True)
         label.setTextInteractionFlags(_SELECTABLE_TEXT)
@@ -219,20 +221,23 @@ class DocsPanel(QWidget):
 
     def _controls_body(self, story: Story, parent: QWidget) -> QWidget:
         if not story.controls:
-            return self._text(NO_CONTROLS_MESSAGE, "docsNoControls", parent)
+            return self._text(NO_CONTROLS_MESSAGE, "sbkDocsNoControls", parent)
         body = QWidget(parent)
+        mark_chrome(body)
         layout = QVBoxLayout(body)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(_SECTION_SPACING)
         if story.variant_of is not None:
-            layout.addWidget(self._text(VARIANT_CAPTION, "docsVariantCaption", body))
+            layout.addWidget(self._text(VARIANT_CAPTION, "sbkDocsVariantCaption", body))
         layout.addWidget(self._controls_table(controls_rows(story.controls, story.default_args()), body))
         return body
 
     @staticmethod
     def _controls_table(rows: list[tuple[str, str, str, str]], parent: QWidget) -> QTableWidget:
         table = QTableWidget(len(rows), len(CONTROLS_HEADERS), parent)
-        table.setObjectName("docsControlsTable")
+        mark_chrome(table, "sbkDocsControlsTable")
+        for part in (table.viewport(), table.horizontalHeader(), table.verticalHeader()):
+            mark_chrome(part)
         table.setAccessibleName("Controls")
         table.setHorizontalHeaderLabels(list(CONTROLS_HEADERS))
         table.verticalHeader().setVisible(False)
@@ -257,15 +262,16 @@ class DocsPanel(QWidget):
 
     def _siblings_body(self, story: Story, siblings: list[Story], parent: QWidget) -> QWidget:
         body = QWidget(parent)
+        mark_chrome(body)
         layout = QVBoxLayout(body)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
         for sibling in siblings:
             if sibling is story:
-                label = self._text(f"{sibling.name} (this story)", "docsSiblingCurrent", body)
+                label = self._text(f"{sibling.name} (this story)", "sbkDocsSiblingCurrent", body)
             else:
                 label = QLabel(f'<a href="{html.escape(sibling.id)}">{html.escape(sibling.name)}</a>', body)
-                label.setObjectName("docsSiblingLink")
+                mark_chrome(label, "sbkDocsSiblingLink")
                 label.setTextFormat(Qt.TextFormat.RichText)
                 label.setTextInteractionFlags(_LINK_TEXT)
                 label.setAccessibleName(f"Open {sibling.id}")
@@ -278,15 +284,16 @@ class DocsPanel(QWidget):
             source = inspect.getsource(story.function)
         except (OSError, TypeError):
             self._source = ""
-            return self._text(NO_SOURCE_MESSAGE, "docsNoSource", parent)
+            return self._text(NO_SOURCE_MESSAGE, "sbkDocsNoSource", parent)
         self._source = source
         body = QWidget(parent)
+        mark_chrome(body)
         layout = QVBoxLayout(body)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(_SECTION_SPACING)
 
         copy_button = QPushButton("Copy", body)
-        copy_button.setObjectName("docsCopyButton")
+        mark_chrome(copy_button, "sbkDocsCopyButton")
         copy_button.setAccessibleName("Copy source")
         copy_button.setAccessibleDescription("Copy the story's source code to the clipboard")
         copy_button.setAutoDefault(False)
@@ -298,7 +305,8 @@ class DocsPanel(QWidget):
         layout.addLayout(buttons)
 
         view = _SourceView(source, body)
-        view.setObjectName("docsSource")
+        mark_chrome(view, "sbkDocsSource")
+        mark_chrome(view.viewport())
         view.setAccessibleName("Source")
         view.setReadOnly(True)
         view.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)

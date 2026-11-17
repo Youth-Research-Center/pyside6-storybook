@@ -192,7 +192,7 @@ def test_every_editor_is_owned_by_the_panel(qtbot) -> None:
 def test_no_controls_shows_empty_state_label(qtbot) -> None:
     panel = ControlsPanel([])
     qtbot.addWidget(panel)
-    label = panel.findChild(QLabel, "controlsEmptyState")
+    label = panel.findChild(QLabel, "sbkControlsEmptyState")
     assert label is not None
     assert label.text() == NO_CONTROLS_MESSAGE
     assert NO_CONTROLS_MESSAGE == "No configurable properties for this component."
@@ -202,7 +202,7 @@ def test_no_controls_shows_empty_state_label(qtbot) -> None:
 def test_empty_state_is_italic_and_styled_from_the_palette(qtbot) -> None:
     panel = ControlsPanel([])
     qtbot.addWidget(panel)
-    label = panel.findChild(QLabel, "controlsEmptyState")
+    label = panel.findChild(QLabel, "sbkControlsEmptyState")
     assert label is not None
     assert label.font().italic()
     assert label.foregroundRole() == QPalette.ColorRole.PlaceholderText
@@ -213,7 +213,7 @@ def test_empty_state_is_italic_and_styled_from_the_palette(qtbot) -> None:
 def test_panel_has_no_empty_state_when_there_are_controls(qtbot) -> None:
     panel = ControlsPanel([TextControl("a", "")])
     qtbot.addWidget(panel)
-    assert panel.findChild(QLabel, "controlsEmptyState") is None
+    assert panel.findChild(QLabel, "sbkControlsEmptyState") is None
 
 
 def test_int_editor_handles_the_full_supported_range(qtbot) -> None:

@@ -55,19 +55,19 @@ def _spin(window: QWidget, name: str) -> QSpinBox:
 
 
 def _canvas(window: QWidget) -> Canvas:
-    canvas = window.findChild(Canvas, "canvas")
+    canvas = window.findChild(Canvas, "sbkCanvas")
     assert canvas is not None
     return canvas
 
 
 def _surface(window: QWidget) -> QFrame:
-    surface = window.findChild(QFrame, "previewSurface")
+    surface = window.findChild(QFrame, "sbkPreviewSurface")
     assert surface is not None
     return surface
 
 
 def _scroll(window: QWidget) -> QScrollArea:
-    scroll = window.findChild(QScrollArea, "previewScroll")
+    scroll = window.findChild(QScrollArea, "sbkPreviewScroll")
     assert scroll is not None
     return scroll
 
@@ -80,7 +80,7 @@ def _choose(combo: QComboBox, text: str) -> None:
 
 
 def _choose_size(window: QWidget, name: str) -> None:
-    combo = _combo(window, "canvasSize")
+    combo = _combo(window, "sbkCanvasSize")
     index = next(i for i in range(combo.count()) if combo.itemText(i).startswith(name))
     combo.setCurrentIndex(index)
     QApplication.processEvents()
@@ -93,7 +93,7 @@ def _story_widget(window: GalleryWindow) -> QWidget:
 
 
 def _size_label(window: QWidget) -> QLabel:
-    label = window.findChild(QLabel, "canvasSizeLabel")
+    label = window.findChild(QLabel, "sbkCanvasSizeLabel")
     assert label is not None
     return label
 
@@ -103,7 +103,7 @@ def _pixel_name(image: QImage, origin: QPoint, x: int, y: int) -> str:
 
 
 def _size_texts(window: QWidget) -> list[str]:
-    combo = _combo(window, "canvasSize")
+    combo = _combo(window, "sbkCanvasSize")
     return [combo.itemText(index) for index in range(combo.count())]
 
 
@@ -118,7 +118,7 @@ def _size_texts(window: QWidget) -> list[str]:
 def test_a_background_sets_the_surfaces_background_role(qtbot, themes: BuiltinThemeProvider, background: str, role: QPalette.ColorRole) -> None:
     window = _make_window(qtbot, themes)
 
-    _choose(_combo(window, "canvasBackground"), background)
+    _choose(_combo(window, "sbkCanvasBackground"), background)
 
     assert _surface(window).backgroundRole() == role
     assert _canvas(window).background() is CanvasBackground(background)
@@ -126,7 +126,7 @@ def test_a_background_sets_the_surfaces_background_role(qtbot, themes: BuiltinTh
 
 def test_the_default_background_is_window_and_the_options_are_listed_in_order(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
-    combo = _combo(window, "canvasBackground")
+    combo = _combo(window, "sbkCanvasBackground")
 
     assert [combo.itemText(index) for index in range(combo.count())] == ["Window", "Base", "Alternate Base", "Checkerboard"]
     assert combo.currentText() == "Window"
@@ -139,7 +139,7 @@ def test_the_checkerboard_is_painted_from_the_palette_and_leaves_the_story_palet
     window_color = preview.palette().window().color()
     surface_window_brush = _surface(window).palette().window()
 
-    _choose(_combo(window, "canvasBackground"), "Checkerboard")
+    _choose(_combo(window, "sbkCanvasBackground"), "Checkerboard")
 
     assert _surface(window).backgroundRole() == QPalette.ColorRole.Window
     assert preview.palette().window().color() == window_color
@@ -150,7 +150,7 @@ def test_the_checkerboard_is_painted_from_the_palette_and_leaves_the_story_palet
 def test_the_checkerboard_alternates_eight_pixel_squares_of_base_and_mid_and_follows_a_theme_switch(qtbot, themes: BuiltinThemeProvider) -> None:
     registry = StoryRegistry()
     window = _make_window(qtbot, themes, registry, width=900, height=600)
-    _choose(_combo(window, "canvasBackground"), "Checkerboard")
+    _choose(_combo(window, "sbkCanvasBackground"), "Checkerboard")
 
     for theme in ("Light", "Dark"):
         window.set_theme(theme)
@@ -174,7 +174,7 @@ def test_the_checkerboard_alternates_eight_pixel_squares_of_base_and_mid_and_fol
 
 def test_base_keeps_meaning_the_themes_base_after_a_theme_switch(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes, StoryRegistry(), width=900, height=600)
-    _choose(_combo(window, "canvasBackground"), "Base")
+    _choose(_combo(window, "sbkCanvasBackground"), "Base")
     colors = []
 
     for theme in ("Light", "Dark"):
@@ -214,7 +214,7 @@ def test_a_size_larger_than_the_window_still_gives_the_exact_size_and_scrolls(qt
 
 def test_a_custom_size_shows_its_spin_boxes_and_gives_a_fill_story_exactly_that_size(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
-    width, height = _spin(window, "canvasWidth"), _spin(window, "canvasHeight")
+    width, height = _spin(window, "sbkCanvasWidth"), _spin(window, "sbkCanvasHeight")
     assert not width.isVisible()
     assert not height.isVisible()
 
@@ -236,7 +236,7 @@ def test_choosing_custom_after_a_preset_starts_at_that_presets_size(qtbot, theme
 
     _choose_size(window, "Custom")
 
-    assert (_spin(window, "canvasWidth").value(), _spin(window, "canvasHeight").value()) == (320, 480)
+    assert (_spin(window, "sbkCanvasWidth").value(), _spin(window, "sbkCanvasHeight").value()) == (320, 480)
     assert _story_widget(window).size() == QSize(320, 480)
 
 
@@ -308,7 +308,7 @@ def test_a_preset_that_disappears_after_set_registry_falls_back_to_fit(qtbot, th
     window.set_registry(reloaded)
     QApplication.processEvents()
 
-    assert _combo(window, "canvasSize").currentText() == "Fit"
+    assert _combo(window, "sbkCanvasSize").currentText() == "Fit"
     assert _canvas(window).active_size() is None
     assert _scroll(window).widgetResizable()
     assert "Tablet (768 × 1024)" not in _size_texts(window)
@@ -325,15 +325,15 @@ def test_a_preset_that_is_still_listed_and_a_custom_size_survive_set_registry(qt
     window.set_registry(reloaded)
     QApplication.processEvents()
 
-    assert _combo(window, "canvasSize").currentText() == "Tablet (768 × 1024)"
+    assert _combo(window, "sbkCanvasSize").currentText() == "Tablet (768 × 1024)"
     assert _story_widget(window).size() == QSize(768, 1024)
 
     _choose_size(window, "Custom")
-    _spin(window, "canvasWidth").setValue(300)
+    _spin(window, "sbkCanvasWidth").setValue(300)
     window.set_registry(_make_registry())
     QApplication.processEvents()
 
-    assert _combo(window, "canvasSize").currentText() == "Custom…"
+    assert _combo(window, "sbkCanvasSize").currentText() == "Custom…"
     assert _canvas(window).active_size() == QSize(300, 1024)
 
 
@@ -375,7 +375,7 @@ def test_a_registry_has_no_size_presets_by_default() -> None:
 
 def test_the_background_and_size_survive_switching_story_and_theme(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
-    _choose(_combo(window, "canvasBackground"), "Alternate Base")
+    _choose(_combo(window, "sbkCanvasBackground"), "Alternate Base")
     _choose_size(window, "Phone landscape")
 
     window.select_story("Padded/Story")
@@ -383,9 +383,9 @@ def test_the_background_and_size_survive_switching_story_and_theme(qtbot, themes
     window.select_story("Fill/Story")
     QApplication.processEvents()
 
-    assert _combo(window, "canvasBackground").currentText() == "Alternate Base"
+    assert _combo(window, "sbkCanvasBackground").currentText() == "Alternate Base"
     assert _surface(window).backgroundRole() == QPalette.ColorRole.AlternateBase
-    assert _combo(window, "canvasSize").currentText().startswith("Phone landscape")
+    assert _combo(window, "sbkCanvasSize").currentText().startswith("Phone landscape")
     assert _story_widget(window).size() == QSize(480, 320)
 
 
@@ -404,14 +404,14 @@ def test_choosing_custom_does_not_widen_the_window_under_a_wide_font(qtbot, them
     font.setPointSizeF(font.pointSizeF() * 1.4)
     QApplication.setFont(font)
     window = _make_window(qtbot, themes)
-    toolbar = window.findChild(QWidget, "canvasToolbar")
+    toolbar = window.findChild(QWidget, "sbkCanvasToolbar")
     assert toolbar is not None
     fit_minimum = toolbar.minimumSizeHint().width()
     fit_size = window.size()
 
     _choose_size(window, "Custom")
 
-    assert _spin(window, "canvasWidth").isVisible()
+    assert _spin(window, "sbkCanvasWidth").isVisible()
     assert toolbar.minimumSizeHint().width() == fit_minimum
     assert window.size() == fit_size
 
@@ -422,11 +422,11 @@ def test_every_canvas_control_is_visible_and_at_least_its_minimum_size_hint_at_t
 ) -> None:
     window = _make_window(qtbot, themes)
     _choose_size(window, size)
-    toolbar = window.findChild(QWidget, "canvasToolbar")
+    toolbar = window.findChild(QWidget, "sbkCanvasToolbar")
     assert toolbar is not None
-    controls: list[QWidget] = [_combo(window, "canvasBackground"), _combo(window, "canvasSize")]
+    controls: list[QWidget] = [_combo(window, "sbkCanvasBackground"), _combo(window, "sbkCanvasSize")]
     if size == "Custom":
-        controls += [_spin(window, "canvasWidth"), _spin(window, "canvasHeight")]
+        controls += [_spin(window, "sbkCanvasWidth"), _spin(window, "sbkCanvasHeight")]
     if size != "Fit":
         controls.append(_size_label(window))
     controls += [label for label in toolbar.findChildren(QLabel) if label.buddy() is not None and not label.isHidden()]
@@ -449,15 +449,15 @@ def test_every_canvas_control_is_visible_and_at_least_its_minimum_size_hint_at_t
 
 def test_every_combo_and_spin_box_has_an_accessible_name_and_a_label_buddy(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
-    toolbar = window.findChild(QWidget, "canvasToolbar")
+    toolbar = window.findChild(QWidget, "sbkCanvasToolbar")
     assert toolbar is not None
     buddies = {label.buddy(): label.text() for label in toolbar.findChildren(QLabel) if label.buddy() is not None}
 
     for name, accessible, text in (
-        ("canvasBackground", "Background", "Background"),
-        ("canvasSize", "Size", "Size"),
-        ("canvasWidth", "Width", "Width"),
-        ("canvasHeight", "Height", "Height"),
+        ("sbkCanvasBackground", "Background", "Background"),
+        ("sbkCanvasSize", "Size", "Size"),
+        ("sbkCanvasWidth", "Width", "Width"),
+        ("sbkCanvasHeight", "Height", "Height"),
     ):
         widget = toolbar.findChild(QWidget, name)
         assert widget is not None
@@ -469,7 +469,7 @@ def test_every_combo_and_spin_box_has_an_accessible_name_and_a_label_buddy(qtbot
 
 def test_the_toolbar_is_a_plain_widget_with_the_custom_size_boxes_on_a_row_of_their_own(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
-    toolbar = window.findChild(QWidget, "canvasToolbar")
+    toolbar = window.findChild(QWidget, "sbkCanvasToolbar")
 
     assert toolbar is not None
     assert type(toolbar) is QWidget
@@ -482,7 +482,7 @@ def test_the_toolbar_is_a_plain_widget_with_the_custom_size_boxes_on_a_row_of_th
     assert custom_row is not None
     row_items = [custom_row.itemAt(index) for index in range(custom_row.count())]
     row_widgets = [item.widget() for item in row_items if item is not None]
-    width, height = _spin(window, "canvasWidth"), _spin(window, "canvasHeight")
+    width, height = _spin(window, "sbkCanvasWidth"), _spin(window, "sbkCanvasHeight")
     assert [widget for widget in row_widgets if isinstance(widget, QSpinBox)] == [width, height]
     assert [widget.buddy() for widget in row_widgets if isinstance(widget, QLabel)] == [width, height]
 
@@ -505,7 +505,7 @@ def test_place_and_clear_work_on_a_canvas_on_its_own(qtbot) -> None:
 
 def test_the_size_list_shows_every_name_in_full_although_the_box_elides_it(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _make_window(qtbot, themes)
-    combo = _combo(window, "canvasSize")
+    combo = _combo(window, "sbkCanvasSize")
     view = combo.view()
 
     combo.showPopup()

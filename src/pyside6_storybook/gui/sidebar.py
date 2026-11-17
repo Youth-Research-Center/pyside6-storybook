@@ -7,11 +7,25 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 
 import shiboken6
-from PySide6.QtCore import QEvent, QItemSelectionModel, QModelIndex, QObject, QPersistentModelIndex, QSortFilterProxyModel, Qt, Signal
-from PySide6.QtGui import QAction, QKeyEvent, QPalette, QStandardItem, QStandardItemModel
-from PySide6.QtWidgets import QAbstractItemView, QFrame, QLabel, QLineEdit, QTreeView, QVBoxLayout, QWidget
+from PySide6.QtCore import QEvent, QItemSelectionModel, QModelIndex, QObject, QPersistentModelIndex, QPoint, QRect, QSortFilterProxyModel, Qt, Signal
+from PySide6.QtGui import QAction, QColor, QImage, QKeyEvent, QPainter, QPalette, QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
+    QFrame,
+    QLabel,
+    QLineEdit,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
+    QTreeView,
+    QVBoxLayout,
+    QWidget,
+)
 
+from pyside6_storybook.contrast import contrast_ratio, pick_contrasting_text
 from pyside6_storybook.discovery import LoadError
+from pyside6_storybook.gui.chrome import mark_chrome
 from pyside6_storybook.gui.icons import ActionIcons, IconRole
 from pyside6_storybook.registry import Story, StoryRegistry
 
@@ -106,6 +120,83 @@ class _StoryFilterModel(QSortFilterProxyModel):
         return isinstance(story_id, str) and self._text in story_id.casefold()
 
 
+_MIN_TEXT_CONTRAST = 4.5
+_SELECTION_CACHE_LIMIT = 64  # every row width is a new key while the sidebar is resized, so the cache is cleared when it grows past this
+_SelectionKey = tuple[int, str, int, int, int]
+
+
+class _SelectionDelegate(QStyledItemDelegate):
+    """Paints the text of a selected row in a colour that is readable on the row's real background.
+
+    An application style sheet can colour the selected row with ``selection-background-color``, which reaches the option's
+    ``Highlight``, or with ``QTreeView::item:selected { background: ... }``, which does not: the option still holds the old
+    ``Highlight``. The delegate therefore draws ``PE_PanelItemViewItem`` with the option into a small image, reads the colour at its
+    centre and uses it as the background. The palette's ``HighlightedText`` is kept when it reads on that colour, else black or white
+    is used. A style sheet ``color`` rule for selected items wins over this colour. The sampled colour is cached by palette, application
+    style sheet, state and size, and the cache is cleared when it holds 64 entries.
+    """
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        """Create the delegate.
+
+        Args:
+            parent: The owning object, normally the tree view.
+        """
+        super().__init__(parent)
+        self._cache: dict[_SelectionKey, QColor] = {}
+        self._sample_count = 0
+
+    @property
+    def sample_count(self) -> int:
+        """The number of times a row was drawn into an image to read its background, that is the number of cache misses."""
+        return self._sample_count
+
+    def selected_background(self, option: QStyleOptionViewItem) -> QColor:
+        """Return the colour that the style draws behind a row in the state and size of ``option``.
+
+        Args:
+            option: The row's option, with the tree as its widget.
+
+        Returns:
+            The colour at the centre of the row's background.
+        """
+        app = QApplication.instance()
+        style_sheet = app.styleSheet() if isinstance(app, QApplication) else ""
+        key = (option.palette.cacheKey(), style_sheet, option.state.value, option.rect.width(), option.rect.height())
+        cached = self._cache.get(key)
+        if cached is None:
+            cached = self._sample(option)
+            if len(self._cache) >= _SELECTION_CACHE_LIMIT:
+                self._cache.clear()
+            self._cache[key] = cached
+        return cached
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex) -> None:
+        """Paint the row, with a readable text colour when it is selected."""
+        if option.state & QStyle.StateFlag.State_Selected:
+            option = QStyleOptionViewItem(option)
+            background = self.selected_background(option).name()
+            text = option.palette.color(QPalette.ColorRole.HighlightedText)
+            if contrast_ratio(text.name(), background) < _MIN_TEXT_CONTRAST:
+                option.palette.setColor(QPalette.ColorRole.HighlightedText, QColor(pick_contrasting_text(background)))
+        super().paint(painter, option, index)
+
+    def _sample(self, option: QStyleOptionViewItem) -> QColor:
+        self._sample_count += 1
+        size = option.rect.size()
+        image = QImage(max(size.width(), 1), max(size.height(), 1), QImage.Format.Format_RGB32)
+        image.fill(option.palette.color(QPalette.ColorRole.Base))
+        sample = QStyleOptionViewItem(option)
+        sample.rect = QRect(QPoint(0, 0), image.size())
+        painter = QPainter(image)
+        try:
+            style = option.widget.style() if option.widget is not None else QApplication.style()
+            style.drawPrimitive(QStyle.PrimitiveElement.PE_PanelItemViewItem, sample, painter, option.widget)
+        finally:
+            painter.end()
+        return QColor(image.pixel(image.width() // 2, image.height() // 2))
+
+
 class StorySidebar(QWidget):
     """A search field and a tree of the stories.
 
@@ -140,7 +231,7 @@ class StorySidebar(QWidget):
         self._known_paths: set[str] = set()
 
         self._search = QLineEdit(self)
-        self._search.setObjectName("storySearch")
+        mark_chrome(self._search, "sbkStorySearch")
         self._search.setPlaceholderText("Search stories")
         self._search.setAccessibleName("Search stories")
         self._search.setClearButtonEnabled(True)
@@ -156,9 +247,11 @@ class StorySidebar(QWidget):
         self._proxy.setSourceModel(self._model)
 
         self._tree = QTreeView(self)
-        self._tree.setObjectName("storyTree")
+        mark_chrome(self._tree, "sbkStoryTree")
+        mark_chrome(self._tree.viewport())
         self._tree.setAccessibleName("Stories")
         self._tree.setModel(self._proxy)
+        self._tree.setItemDelegate(_SelectionDelegate(self._tree))
         self._tree.setHeaderHidden(True)
         self._tree.setUniformRowHeights(True)
         self._tree.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -169,7 +262,7 @@ class StorySidebar(QWidget):
         self._tree.selectionModel().currentChanged.connect(self._on_current_changed)
 
         self._empty_label = QLabel("", self)
-        self._empty_label.setObjectName("storySearchEmptyState")
+        mark_chrome(self._empty_label, "sbkStorySearchEmptyState")
         self._empty_label.setWordWrap(True)
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self._empty_label.setForegroundRole(QPalette.ColorRole.PlaceholderText)

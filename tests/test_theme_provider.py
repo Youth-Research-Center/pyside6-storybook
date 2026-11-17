@@ -44,7 +44,7 @@ def _window(qtbot, registry: StoryRegistry, provider: ThemeProvider) -> GalleryW
 
 
 def _switch(window: GalleryWindow) -> QComboBox:
-    switch = window.findChild(QComboBox, "themeSwitch")
+    switch = window.findChild(QComboBox, "sbkThemeSwitch")
     assert switch is not None
     return switch
 
