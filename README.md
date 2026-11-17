@@ -471,6 +471,9 @@ a context is built by hand). A provider can supply it with an optional `color_sc
 `Dark` when the application palette's `Window` colour has a lightness below 128 and `Light` otherwise. Like `tokens()`, the method
 is read after `activate` and after every change notification, and it is not part of the six-method protocol.
 
+The [theming guide](docs/theming.md) covers themes and providers in depth, and [`examples/themed_app`](examples/themed_app) is a
+worked example, run from its folder with `uv run --project ../.. pyside6-storybook`.
+
 An application that has its own theme manager plugs it in with a theme provider, an object that implements the `ThemeProvider`
 protocol. `BuiltinThemeProvider` is the default one and a model for your own:
 

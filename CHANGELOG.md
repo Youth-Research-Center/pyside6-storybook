@@ -5,6 +5,9 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Theming guide, `docs/theming.md`, with two screenshots (rendered by `scripts/docs/render_theming_images.py`), and the worked example
+  `examples/themed_app`: an application with two themes, a pill button, a token-painted gauge and a `ThemeProvider` for them. Run it from
+  its folder with `uv run --project ../.. pyside6-storybook`.
 - Choosing a theme provider: `--theme-provider module:attribute` on the command line, or `theme_provider = "module:attribute"` in
   `[tool.pyside6-storybook]`, loads an application's own `ThemeProvider` (an instance, a class or a no-argument function; the attribute
   may be dotted), and `theme` in `pyproject.toml` chooses the starting theme like `--theme`. The command line wins. The provider is

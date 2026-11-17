@@ -1,0 +1,6 @@
+# Settings for pyside6-storybook only: there is no [project] table, so do not run `uv` in this folder.
+# Run the gallery from here with `uv run --project ../.. pyside6-storybook`.
+[tool.pyside6-storybook]
+stories = ["themed_app/stories"]
+pythonpath = ["."]
+theme_provider = "themed_app.storybook:provider"
