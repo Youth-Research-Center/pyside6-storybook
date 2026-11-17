@@ -135,7 +135,8 @@ in the same pull request as the bump.
     `storybook_session.py` (`StorybookSession`: the `QApplication`, the provider lifecycle, the story registry, rendering a story in an
     opaque host, and `StorybookFailure`), `storybook_options.py` (`StorybookOptions`, the options and ini keys), `storybook_collector.py`
     (`StorybookCollector`), `storybook_item.py` (`StorybookItem`, the base of every item), `story_item.py` (`StoryItem`),
-    `load_error_item.py` (`StoryLoadErrorItem` and `ConfigurationItem`), `qt_messages.py` (`QtMessageCollector`) and `fixtures.py` (the
+    `load_error_item.py` (`StoryLoadErrorItem` and `ConfigurationItem`), `qt_messages.py` (`QtMessageCollector`), `exception_capture.py`
+    (`ExceptionCapture`, which collects what PySide6 hands to `sys.excepthook` while a story renders) and `fixtures.py` (the
     implementation of `render_story`)
   - `contrast.py` - WCAG contrast helpers
   - `polishing.py` (internal) - `polish_all_widgets`, the workaround for a Qt crash when the application style sheet changes while a

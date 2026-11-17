@@ -426,6 +426,21 @@ def test_storybook_qt_warnings_ignore_lets_every_warning_pass(pytester: pytest.P
     result.assert_outcomes(passed=2)
 
 
+def test_a_story_module_imported_before_collection_is_reported(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(pytester)
+    pytester.makeconftest("import sys\nfrom pathlib import Path\n\nsys.path.insert(0, str(Path(__file__).parent / 'stories'))\nimport demo_stories\n")
+
+    result = _run(pytester, "--storybook", "--storybook-themes", "Light", "-v")
+
+    result.assert_outcomes(failed=1)
+    result.stdout.fnmatch_lines(
+        [
+            "storybook::load-error[[]demo_stories[]] FAILED*",
+            "*demo_stories was imported before the plugin collected the stories*Inputs/Button, Inputs/Label are not tested*",
+        ]
+    )
+
+
 @pytest.mark.parametrize("extra", _WITH_AND_WITHOUT_PYTEST_QT)
 def test_a_custom_ignore_pattern_replaces_the_default(pytester: pytest.Pytester, stories: StoryRegistry, extra: tuple[str, ...]) -> None:
     _project(pytester, _WARNING_STORIES, ini='storybook_qt_warnings_ignore = ["custom warning"]')
@@ -450,26 +465,37 @@ _PAINT_STORY = _story_module(
 )
 
 
-def test_an_exception_in_a_qt_virtual_method_fails_the_item_with_pytest_qt(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+@pytest.mark.parametrize("extra", _WITH_AND_WITHOUT_PYTEST_QT)
+def test_an_exception_in_a_qt_virtual_method_fails_the_item(pytester: pytest.Pytester, stories: StoryRegistry, extra: tuple[str, ...]) -> None:
     _project(pytester, _PAINT_STORY)
+    hook = sys.excepthook
 
-    result = _run(pytester, "--storybook", "--storybook-themes", "Light")
+    result = _run(pytester, "--storybook", "--storybook-themes", "Light", *extra)
 
     result.assert_outcomes(failed=1)
-    assert "paint boom" in result.stdout.str()
+    output = result.stdout.str()
+    # PySide6 6.8 raises it out of processEvents with its own prefix; newer versions hand it to sys.excepthook. Both show the source line.
+    assert "paint boom" in output
+    assert 'raise RuntimeError("paint boom")' in output
+    assert sys.excepthook is hook
 
 
-def test_an_exception_in_a_qt_virtual_method_depends_on_the_pyside_version_without_pytest_qt(
-    pytester: pytest.Pytester, stories: StoryRegistry
-) -> None:
-    _project(pytester, _PAINT_STORY)
+@pytest.mark.parametrize("extra", _WITH_AND_WITHOUT_PYTEST_QT)
+def test_the_exception_hook_is_restored_when_a_story_raises(pytester: pytest.Pytester, stories: StoryRegistry, extra: tuple[str, ...]) -> None:
+    _project(pytester, _story_module(
+        """
+        @story("Broken/Raises")
+        def broken(ctx):
+            raise ValueError("story boom")
+        """
+    ))
+    hook = sys.excepthook
 
-    # In a subprocess: without pytest-qt the exception goes to sys.excepthook, which the outer test's pytest-qt would capture.
-    result = pytester.runpytest_subprocess("--storybook", "--storybook-themes", "Light", "-rP", *_NO_PYTEST_QT, timeout=120)
+    result = _run(pytester, "--storybook", "--storybook-themes", "Light", *extra)
 
-    # PySide6 6.8 raises it out of QApplication.processEvents, which fails the item; newer versions only print it and the item passes.
-    assert result.parseoutcomes() in ({"passed": 1}, {"failed": 1})
-    assert "paint boom" in result.stdout.str() + result.stderr.str()
+    result.assert_outcomes(failed=1)
+    assert "story boom" in result.stdout.str()
+    assert sys.excepthook is hook
 
 
 def test_a_warning_is_chained_to_the_handler_installed_before(pytester: pytest.Pytester, stories: StoryRegistry) -> None:

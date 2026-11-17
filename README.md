@@ -546,16 +546,16 @@ with `-k` or `--deselect`.
 - **The `QApplication`.** The plugin creates it (or reuses an existing one) before it imports any story, so a story module that builds
   a widget at import time works, as it does under the command line. pytest-qt's `qapp` fixture reuses it, and the plugin's
   `QApplication` ignores `qapp_cls`, `qapp_args` and `qt_qapp_name`.
-- **pytest-qt is optional for the story tests.** With it, an exception raised in a Qt virtual method (a `paintEvent`, for one) fails the
-  test, because pytest-qt captures it; without it, newer PySide6 versions only print the exception, and the test passes. The `render_story`
-  fixture needs pytest-qt.
+- **pytest-qt is optional for the story tests.** An exception raised in a Qt virtual method (a `paintEvent`, for one) or a slot while a
+  story renders fails its test with the story's traceback, with or without pytest-qt. The `render_story` fixture needs pytest-qt.
 - **The theme provider is activated lazily** before the first story test and deactivated when the next test is not a story test and at
   the end of the run, so the application's look is back before any other test runs. A provider can be activated again after
   `deactivate`; see [docs/theming.md](docs/theming.md).
 - **pytest-xdist.** The story tests are collected in the same order in every worker. With `-n`, the default `load` distribution spreads
   them over the workers; `--dist loadfile` and `--dist loadscope` put all of them on one worker.
 - **Stories imported earlier.** The plugin loads the stories into a new registry when it collects. A story module that something else
-  already imported (a test module or a `conftest.py`) is not executed again and its stories are not found.
+  already imported at module level (a test module or a `conftest.py`) is not executed again, so its stories cannot be tested; the run
+  reports it as a failing `load-error[<module>]` test that names the stories. Import story modules inside the tests that use them.
 
 ### The `render_story` fixture
 

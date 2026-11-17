@@ -27,6 +27,7 @@ from pyside6_storybook.discovery.sources import StorySources, StorySourcesError,
 from pyside6_storybook.polishing import polish_all_widgets
 from pyside6_storybook.registry import Story, StoryContext, StoryRegistry
 from pyside6_storybook.registry.rendering import RenderedStory, StoryRenderError, render_story
+from pyside6_storybook.testing.exception_capture import ExceptionCapture
 from pyside6_storybook.testing.qt_messages import QtMessageCollector
 from pyside6_storybook.testing.storybook_options import StorybookOptions
 from pyside6_storybook.themes import BuiltinThemeProvider, ThemeProvider
@@ -195,13 +196,15 @@ class StorybookSession:
             self.configuration_error = f"unknown theme {listed} (storybook_themes); the available themes are: {', '.join(names)}"
             return
         self.themes = self.options.themes or names
-        self._bindings = (registry_module.default_registry, pyside6_storybook.default_registry)
+        previous = registry_module.default_registry
+        self._bindings = (previous, pyside6_storybook.default_registry)
         fresh = StoryRegistry()
         registry_module.default_registry = fresh
         pyside6_storybook.default_registry = fresh
+        imported_before = set(sys.modules)
         result = load_stories(self.sources.targets, cwd=self._rootpath)
         self.registry = result.registry
-        self.load_errors = result.errors
+        self.load_errors = result.errors + _imported_too_early(result.modules, imported_before, previous, fresh)
 
     def collect_items(self, collector: StorybookCollector) -> list[pytest.Item]:
         """Prepare the session and build the items under ``collector``: stories in registry order, then themes, then load errors.
@@ -337,24 +340,32 @@ class StorybookSession:
     def check_story(self, story: Story, theme: str) -> None:
         """Render a story in a theme and dispose of it; what a story item runs.
 
-        Qt warnings logged meanwhile fail the item unless an ignore pattern matches them or ``storybook_qt_warnings`` is ``ignore``.
+        Qt warnings logged meanwhile fail the item unless an ignore pattern matches them or ``storybook_qt_warnings`` is ``ignore``. An
+        exception that PySide6 hands to ``sys.excepthook`` meanwhile (one raised in a ``paintEvent`` or a slot) fails it too, with or
+        without pytest-qt.
 
         Raises:
             StoryRenderError: If the story or a decorator fails.
-            StorybookFailure: If the theme provider fails or Qt logged a warning.
+            StorybookFailure: If the theme provider fails, Qt logged a warning or an exception reached ``sys.excepthook``.
         """
         collector = QtMessageCollector()
         self._collector = collector
         try:
-            with collector:
+            with collector, ExceptionCapture() as exceptions:
                 self.set_theme(theme)
                 self.render(story).dispose()
         finally:
             self._collector = None
         unexcused = collector.unexcused(self.options.qt_warnings_ignore) if self.options.qt_warnings_fail else []
+        parts: list[str] = []
+        if exceptions.errors:
+            parts.append(f"{len(exceptions.errors)} exception(s) raised in Qt while rendering {story.id} in {theme}:")
+            parts.extend(exceptions.errors)
         if unexcused:
             listed = "\n".join(f"  {message}" for message in unexcused)
-            raise StorybookFailure(f"Qt logged {len(unexcused)} warning(s) while rendering {story.id} in {theme}:\n{listed}")
+            parts.append(f"Qt logged {len(unexcused)} warning(s) while rendering {story.id} in {theme}:\n{listed}")
+        if parts:
+            raise StorybookFailure("\n".join(parts))
 
     def finish(self) -> None:
         """End the session: deactivate the provider, put both bindings of the default registry back and reinstall the Qt message handler."""
@@ -397,6 +408,27 @@ class StorybookSession:
             text = "".join(traceback.format_exception(error))
             summary = f"theme provider {type(self.provider).__name__}: {name}() failed: {type(error).__name__}: {error}"
             raise StorybookFailure(f"{summary}\n\n{text}") from error
+
+
+def _imported_too_early(
+    modules: tuple[str, ...], imported_before: set[str], previous: StoryRegistry, fresh: StoryRegistry
+) -> tuple[LoadError, ...]:
+    """Return a load error for each story module that was imported before collection and whose stories are therefore missing.
+
+    Python does not execute a module again, so its stories went to the registry that was the default when it was imported.
+    """
+    errors: list[LoadError] = []
+    for name in modules:
+        if name not in imported_before:
+            continue
+        missing = [story.id for story in previous if story.origin.module == name and story.id not in fresh]
+        if missing:
+            message = (
+                f"{name} was imported before the plugin collected the stories (by a test module or a conftest.py), so its stories "
+                f"{', '.join(missing)} are not tested; import it inside the tests that use it, not at module level"
+            )
+            errors.append(LoadError(name, message))
+    return tuple(errors)
 
 
 def _ensure_application() -> QApplication:
