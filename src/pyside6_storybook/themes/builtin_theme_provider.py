@@ -13,7 +13,7 @@ visible effect on those widgets while such a style sheet is set.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QPalette, QStyleHints
@@ -28,6 +28,21 @@ _THEMES = {theme.name: theme for theme in (LIGHT_THEME, DARK_THEME)}
 BUILTIN_THEME_NAMES = tuple(_THEMES)
 """The names of the built-in themes, in the order the theme switch lists them. The first one is the default."""
 _FUSION = "Fusion"
+_ROLE = QPalette.ColorRole
+_TOKEN_ROLES = {
+    "window": _ROLE.Window,
+    "window_text": _ROLE.WindowText,
+    "base": _ROLE.Base,
+    "alternate_base": _ROLE.AlternateBase,
+    "text": _ROLE.Text,
+    "button": _ROLE.Button,
+    "button_text": _ROLE.ButtonText,
+    "highlight": _ROLE.Highlight,
+    "highlighted_text": _ROLE.HighlightedText,
+    "accent": _ROLE.Accent,
+    "border": _ROLE.Mid,
+    "placeholder_text": _ROLE.PlaceholderText,
+}
 
 
 def underlying_style_name(app: QApplication) -> str:
@@ -73,6 +88,19 @@ class BuiltinThemeProvider:
     def current_theme(self) -> str:
         """Return the name of the current theme."""
         return self._current
+
+    def tokens(self) -> Mapping[str, object]:
+        """Return the design tokens: ``#rrggbb`` strings read from the application palette's Active group.
+
+        The tokens are ``window``, ``window_text``, ``base``, ``alternate_base``, ``text``, ``button``, ``button_text``, ``highlight``,
+        ``highlighted_text``, ``accent``, ``border`` (the ``Mid`` role) and ``placeholder_text``. Without a ``QApplication`` the
+        mapping is empty.
+        """
+        app = QApplication.instance()
+        if not isinstance(app, QApplication):
+            return {}
+        palette = app.palette()
+        return {name: palette.color(QPalette.ColorGroup.Active, role).name() for name, role in _TOKEN_ROLES.items()}
 
     def on_changed(self, callback: Callable[[], None]) -> None:
         """Register a callback that is called with no arguments after every theme change.

@@ -55,14 +55,19 @@ class StoryContext:
         theme: Name of the active theme.
         actions: Where ``log`` and ``log_signal`` send actions. The gallery passes its Actions panel; it is ``None`` otherwise, and
             then both methods do nothing. It does not take part in equality or ``repr``.
+        tokens: The design tokens of the active theme, by name, as the theme provider returns them from its optional ``tokens()``
+            method (the built-in themes give colours such as ``"accent"`` as ``#rrggbb`` strings). Stored as a read-only copy and
+            empty by default, so a story reads ``ctx.tokens.get("accent")`` and handles a missing token. It does not appear in ``repr``.
     """
 
     args: Mapping[str, Any]
     theme: str = "Light"
     actions: ActionSink | None = field(default=None, compare=False, repr=False, kw_only=True)
+    tokens: Mapping[str, Any] = field(default_factory=dict, kw_only=True, repr=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "args", MappingProxyType(dict(self.args)))
+        object.__setattr__(self, "tokens", MappingProxyType(dict(self.tokens)))
 
     def log_signal(self, signal: SignalInstance, name: str | None = None) -> None:
         """Show every emission of ``signal`` in the gallery's Actions panel. Without a sink this does nothing.

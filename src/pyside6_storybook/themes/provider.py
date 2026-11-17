@@ -24,6 +24,9 @@ class ThemeProvider(Protocol):
     5. ``deactivate`` undoes everything ``activate`` and ``set_theme`` changed, the font included, and clears the callbacks.
     6. A provider that sets an application-wide style sheet also sets a matching ``QPalette``: the gallery chrome is drawn from
        palette roles, and a style sheet alone leaves ``QApplication.palette()`` unchanged.
+    7. ``tokens() -> Mapping[str, object]`` is optional and not part of this protocol, so a provider without it still satisfies
+       it. When present, the gallery reads it after ``activate`` and after every change notification and gives the result to each
+       story as ``StoryContext.tokens``; a provider without it gives stories an empty mapping.
     """
 
     def theme_names(self) -> Sequence[str]:
