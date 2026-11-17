@@ -311,9 +311,10 @@ function that takes no arguments and returns a provider; the object must have a 
 module is imported after `pythonpath` and the working directory are on `sys.path`, and before your stories, so a theme manager that
 the stories and the provider both import is the same module in both.
 
-The provider and the modules it imports (and those it imports in `activate`) are not reloaded when a story changes, and editing them
-triggers no reload: restart the gallery after editing the provider. A module the provider first imports later, in `set_theme` or
-`tokens`, is reloaded with the stories, so import the theme manager at module level or in `activate`.
+The provider and the modules it imports are not reloaded when a story changes, and editing them triggers no reload: restart the
+gallery after editing the provider. Import the theme manager at module level in the provider's module: the provider is loaded before
+the stories, so everything it imports then is kept. A module it imports only later (in `activate`, `set_theme` or `tokens`) is kept
+only if no story imported it first, and otherwise is reloaded with the stories, which would then hold a second copy of the manager.
 
 ## The gallery window
 

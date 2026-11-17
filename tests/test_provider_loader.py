@@ -92,11 +92,16 @@ def test_the_modules_the_import_and_the_call_added_are_returned(modules: Path) -
     assert {"theming_app", "theming_app.manager", "theming_app.theming", "theming_app.lazy"} <= set(loaded.modules)
 
 
-def test_a_module_that_was_already_imported_is_not_recorded(modules: Path) -> None:
-    _provider_module(modules, "early_theming", "provider = Provider()\n")
-    __import__("early_theming")
+def test_the_provider_module_and_the_module_of_its_class_are_kept_even_when_imported_before(modules: Path) -> None:
+    # A reload drops a project's modules unless they are kept; the provider's own module must survive even if a story imported it first.
+    write(modules, "early_app/__init__.py", "")
+    write(modules, "early_app/providers.py", f"class Provider:\n{_METHODS}\n")
+    write(modules, "early_app/theming.py", "from early_app.providers import Provider\n\nprovider = Provider()\n")
+    __import__("early_app.theming")
 
-    assert "early_theming" not in load_theme_provider("early_theming:provider").modules
+    kept = set(load_theme_provider("early_app.theming:provider").modules)
+
+    assert {"early_app", "early_app.theming", "early_app.providers"} <= kept
 
 
 def test_an_instance_with_a_non_callable_method_is_rejected(modules: Path) -> None:

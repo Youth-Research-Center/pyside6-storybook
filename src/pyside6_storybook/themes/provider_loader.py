@@ -23,7 +23,8 @@ class LoadedProvider:
 
     Attributes:
         provider: The provider object.
-        modules: The ``sys.modules`` names that importing the module and calling the attribute added, which a reload keeps.
+        modules: The ``sys.modules`` names a reload keeps: those that importing the module and calling the attribute added, and the
+            provider's module and the module of its class with their parent packages, even if they were imported earlier.
     """
 
     provider: ThemeProvider
@@ -42,7 +43,7 @@ def load_theme_provider(spec: str) -> LoadedProvider:
         spec: ``module:attribute``.
 
     Returns:
-        The provider and the names of the modules the import and the call added to ``sys.modules``.
+        The provider and the names of the modules a reload keeps (see ``LoadedProvider.modules``).
 
     Raises:
         ThemeProviderError: If the spec is malformed, the module cannot be imported, the attribute is missing, the factory raises, or
@@ -72,8 +73,16 @@ def load_theme_provider(spec: str) -> LoadedProvider:
     missing = _missing_methods(target)
     if missing:
         raise ThemeProviderError(f"theme provider {spec!r}: the result is not a ThemeProvider; missing or not callable: {', '.join(missing)}")
-    modules = tuple(sorted(set(sys.modules) - before))
+    added = set(sys.modules) - before
+    # The provider's own module and the module that defines its class are kept even when something imported them earlier.
+    owners = {module_name, getattr(type(target), "__module__", module_name)}
+    modules = tuple(sorted(added | {name for owner in owners for name in _with_parents(owner) if name in sys.modules}))
     return LoadedProvider(provider=cast(ThemeProvider, target), modules=modules)
+
+
+def _with_parents(module_name: str) -> list[str]:
+    parts = module_name.split(".")
+    return [".".join(parts[:index]) for index in range(1, len(parts) + 1)]
 
 
 def _missing_methods(candidate: object) -> list[str]:
