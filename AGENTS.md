@@ -84,7 +84,7 @@ in the same pull request as the bump.
     the functions every control uses (label derivation, `label`/`description` validation, the float step and decimals rules). Controls
     share no base class: each has `label`, `description`, `display_label` and `coerce`
   - `registry/` - the story model, one module per type:
-    - `story_context.py`: `StoryContext` (with `args`, `theme`, `actions` and `tokens`), `StoryFunction`, `Decorator`;
+    - `story_context.py`: `StoryContext` (with `args`, `theme`, `actions`, `tokens` and `color_scheme`), `StoryFunction`, `Decorator`;
     - `story_definition.py`: `Story`, `StoryOrigin`; `Story.variant` registers a variant through the registry link that
       `StoryRegistry.register` sets;
     - `layout.py`: `Layout`, how the preview places a story's widget;

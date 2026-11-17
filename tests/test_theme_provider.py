@@ -306,3 +306,94 @@ def test_the_provider_does_not_keep_the_window_alive(qapp: QApplication, restore
         provider.set_theme("Ink")
     finally:
         provider.deactivate()
+
+
+@pytest.fixture
+def builtin(qapp: QApplication, restore_application_look: None) -> Iterator[BuiltinThemeProvider]:
+    provider = BuiltinThemeProvider()
+    provider.activate(qapp)
+    try:
+        yield provider
+    finally:
+        provider.deactivate()
+
+
+@pytest.fixture
+def scheme_registry() -> tuple[StoryRegistry, list[tuple[str, Qt.ColorScheme]]]:
+    seen: list[tuple[str, Qt.ColorScheme]] = []
+    stories = StoryRegistry()
+
+    @stories.story("Display/Label")
+    def label(ctx: StoryContext) -> QLabel:
+        seen.append((ctx.theme, ctx.color_scheme))
+        return QLabel(ctx.theme)
+
+    return stories, seen
+
+
+def test_a_colour_scheme_change_in_system_rerenders_after_the_event_loop_runs(
+    qtbot, scheme_registry, builtin: BuiltinThemeProvider, qapp: QApplication
+) -> None:
+    registry, seen = scheme_registry
+    window = _window(qtbot, registry, builtin)
+    window.select_story("Display/Label")
+    window.set_theme("System")
+    rendered = len(seen)
+
+    qapp.styleHints().colorSchemeChanged.emit(Qt.ColorScheme.Dark)
+    assert len(seen) == rendered
+    qtbot.waitUntil(lambda: len(seen) == rendered + 1, timeout=5000)
+
+    window.set_theme("Dark")
+    rendered = len(seen)
+    qapp.styleHints().colorSchemeChanged.emit(Qt.ColorScheme.Light)
+    QApplication.processEvents()
+    assert len(seen) == rendered
+
+
+def test_the_story_context_has_the_colour_scheme_of_each_builtin_theme(qtbot, scheme_registry, builtin: BuiltinThemeProvider) -> None:
+    registry, seen = scheme_registry
+    window = _window(qtbot, registry, builtin)
+    window.select_story("Display/Label")
+
+    window.set_theme("Dark")
+    window.set_theme("Light")
+    window.set_theme("System")
+
+    expected_system = builtin.color_scheme()
+    assert expected_system in (Qt.ColorScheme.Light, Qt.ColorScheme.Dark)
+    assert seen[-3:] == [("Dark", Qt.ColorScheme.Dark), ("Light", Qt.ColorScheme.Light), ("System", expected_system)]
+
+
+def test_a_provider_without_color_scheme_gets_the_palette_heuristic(qtbot, scheme_registry, paper: StyleSheetProvider) -> None:
+    registry, seen = scheme_registry
+    assert not hasattr(paper, "color_scheme")
+    window = _window(qtbot, registry, paper)
+    window.select_story("Display/Label")
+
+    window.set_theme("Ink")
+
+    assert seen[-2:] == [("Paper", Qt.ColorScheme.Light), ("Ink", Qt.ColorScheme.Dark)]
+
+
+def test_a_failing_color_scheme_is_shown_as_a_provider_error(
+    qtbot, scheme_registry, qapp: QApplication, restore_application_look: None
+) -> None:
+    registry, _seen = scheme_registry
+
+    class Failing(StyleSheetProvider):
+        def color_scheme(self) -> Qt.ColorScheme:
+            raise RuntimeError("no scheme")
+
+    failing = Failing()
+    failing.activate(qapp)
+    try:
+        window = _window(qtbot, registry, failing)
+        window.select_story("Display/Label")
+        window.set_theme("Ink")
+
+        panel = window.findChild(ErrorPanel)
+        assert panel is not None
+        assert "Theme provider failed: RuntimeError: no scheme" in _texts(panel)
+    finally:
+        failing.deactivate()

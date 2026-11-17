@@ -129,7 +129,7 @@ def test_switching_theme_rebuilds_the_preview_and_changes_the_palette(qtbot, reg
     window_color = qapp.palette().window().color().name()
     switch = window.findChild(QComboBox, "sbkThemeSwitch")
     assert switch is not None
-    assert [switch.itemText(i) for i in range(switch.count())] == ["Light", "Dark"]
+    assert [switch.itemText(i) for i in range(switch.count())] == ["Light", "Dark", "System"]
     assert switch.currentText() == "Light"
 
     switch.setCurrentIndex(1)

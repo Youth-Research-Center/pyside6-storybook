@@ -279,7 +279,7 @@ the stories that did load.
 ```text
 pyside6-storybook [TARGET ...]        open the gallery with the stories in these folders, files or modules
   --examples                          also load the built-in example stories
-  --theme {Light,Dark}                the theme to start in
+  --theme {Light,Dark,System}         the theme to start in
   --list                              print the story ids and exit, without a window (works without a display)
   --no-reload                         do not load the stories again when a file changes (see "Hot reload")
   --version                           print the version
@@ -432,8 +432,16 @@ project imports that failed to import is not watched until a story reloads. `--n
 
 ## Themes
 
-The gallery switches between two built-in themes, Light and Dark: the Fusion style with an explicit palette, so a widget looks
-the same on Windows, macOS and Linux. `Ctrl+T` switches to the next theme.
+The gallery switches between three built-in themes. Light and Dark are the Fusion style with an explicit palette, so a widget looks
+the same on Windows, macOS and Linux. System puts back the style, palette and style sheet your application had when the gallery
+started and lets the colour scheme follow the operating system, unless the application had forced one; it follows a change of the
+system's scheme while the gallery runs. `Ctrl+T` switches to the next theme: Light, Dark, System, and Light again. Where Qt has no
+colour-scheme setting, and on the offscreen platform, System is whatever Qt defaults to.
+
+A story reads whether the active theme is light or dark from `ctx.color_scheme`, a `Qt.ColorScheme` (`Qt.ColorScheme.Unknown` when
+a context is built by hand). A provider can supply it with an optional `color_scheme()` method; without one the gallery gives
+`Dark` when the application palette's `Window` colour has a lightness below 128 and `Light` otherwise. Like `tokens()`, the method
+is read after `activate` and after every change notification, and it is not part of the six-method protocol.
 
 An application that has its own theme manager plugs it in with a theme provider, an object that implements the `ThemeProvider`
 protocol. `BuiltinThemeProvider` is the default one and a model for your own:

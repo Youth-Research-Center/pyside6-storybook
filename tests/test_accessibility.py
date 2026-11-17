@@ -460,6 +460,9 @@ def test_ctrl_t_switches_to_the_next_theme_and_wraps(qtbot, themes: BuiltinTheme
     assert themes.current_theme() == "Dark"
     assert switch.currentText() == "Dark"
     _key(qtbot, Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    assert themes.current_theme() == "System"
+    assert switch.currentText() == "System"
+    _key(qtbot, Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
     assert themes.current_theme() == "Light"
     assert switch.currentText() == "Light"
 

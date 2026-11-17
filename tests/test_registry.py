@@ -642,5 +642,5 @@ def test_the_actions_field_is_keyword_only_and_not_part_of_equality_or_repr() ->
 
     assert StoryContext(args={"a": 1}, actions=sink) == StoryContext(args={"a": 1})
     assert "actions" not in repr(StoryContext(args={}, actions=sink))
-    assert [field.name for field in dataclasses.fields(StoryContext)] == ["args", "theme", "actions", "tokens"]
+    assert [field.name for field in dataclasses.fields(StoryContext)] == ["args", "theme", "actions", "tokens", "color_scheme"]
     assert dataclasses.fields(StoryContext)[2].kw_only

@@ -51,6 +51,7 @@ from pyside6_storybook.polishing import polish_all_widgets
 from pyside6_storybook.registry import Layout, Story, StoryContext, StoryRegistry
 from pyside6_storybook.registry.rendering import StoryRenderError, render_story
 from pyside6_storybook.themes import ThemeProvider
+from pyside6_storybook.themes.builtin_theme_provider import palette_color_scheme
 
 NO_STORIES_MESSAGE = "No stories are registered."
 NO_STORIES_FOUND_MESSAGE = "No stories were found"
@@ -183,6 +184,8 @@ class GalleryWindow(QMainWindow):
         self._call_provider(self._theme_provider.on_changed, functools.partial(_call_weak_method, handler), default=None, report=False)
         self._tokens: Mapping[str, object] = {}
         self._refresh_tokens(report=False)
+        self._color_scheme = Qt.ColorScheme.Unknown
+        self._refresh_color_scheme(report=False)
 
         self._controls_host = QWidget(self)
         mark_chrome(self._controls_host)
@@ -357,6 +360,28 @@ class GalleryWindow(QMainWindow):
         self._tokens = {} if result is None else result
         return result is not None
 
+    def _refresh_color_scheme(self, *, report: bool = True) -> bool:
+        """Read the colour scheme from the provider's optional ``color_scheme()``, or guess it from the application palette.
+
+        The guess is used for a provider without the method and for one that raises or returns something else.
+
+        Returns:
+            ``False`` if the provider's ``color_scheme`` raised (the error is reported as any provider error), ``True`` otherwise.
+        """
+        read_scheme = getattr(self._theme_provider, "color_scheme", None)
+        result: Qt.ColorScheme | None = None
+        if read_scheme is not None:
+
+            def color_scheme() -> Qt.ColorScheme:
+                value = read_scheme()
+                if not isinstance(value, Qt.ColorScheme):
+                    raise TypeError(f"color_scheme() returned {type(value).__name__}, expected a Qt.ColorScheme")
+                return value
+
+            result = self._call_provider(color_scheme, default=None, report=report)
+        self._color_scheme = result if result is not None else palette_color_scheme(QApplication.palette())
+        return read_scheme is None or result is not None
+
     def _show_provider_error(self, error: Exception) -> None:
         details = "".join(traceback.format_exception(error))
         self._show_error(f"{_THEME_ERROR_TITLE}: {type(error).__name__}: {error}", details)
@@ -378,7 +403,9 @@ class GalleryWindow(QMainWindow):
             return
         try:
             self._sync_theme_switch()
-            if self._refresh_tokens():
+            tokens_read = self._refresh_tokens()
+            scheme_read = self._refresh_color_scheme()
+            if tokens_read and scheme_read:
                 self._rebuild_preview()
         except Exception:
             self._logger.exception("Handling a theme change failed")
@@ -680,7 +707,13 @@ class GalleryWindow(QMainWindow):
         try:
             rendered = render_story(
                 story,
-                StoryContext(args=panel.values(), theme=theme, actions=self._actions_panel.new_sink(), tokens=self._tokens),
+                StoryContext(
+                    args=panel.values(),
+                    theme=theme,
+                    actions=self._actions_panel.new_sink(),
+                    tokens=self._tokens,
+                    color_scheme=self._color_scheme,
+                ),
                 registry=self._registry,
             )
         except StoryRenderError as error:

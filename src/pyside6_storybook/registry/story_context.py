@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Protocol
 
-from PySide6.QtCore import SignalInstance
+from PySide6.QtCore import Qt, SignalInstance
 from PySide6.QtWidgets import QWidget
 
 
@@ -58,12 +58,16 @@ class StoryContext:
         tokens: The design tokens of the active theme, by name, as the theme provider returns them from its optional ``tokens()``
             method (the built-in themes give colours such as ``"accent"`` as ``#rrggbb`` strings). Stored as a read-only copy and
             empty by default, so a story reads ``ctx.tokens.get("accent")`` and handles a missing token. It does not appear in ``repr``.
+        color_scheme: Whether the active theme is light or dark, as a ``Qt.ColorScheme``. The theme provider gives it through its
+            optional ``color_scheme()`` method; without one the gallery guesses from the application palette's ``Window`` colour.
+            ``Qt.ColorScheme.Unknown`` by default.
     """
 
     args: Mapping[str, Any]
     theme: str = "Light"
     actions: ActionSink | None = field(default=None, compare=False, repr=False, kw_only=True)
     tokens: Mapping[str, Any] = field(default_factory=dict, kw_only=True, repr=False)
+    color_scheme: Qt.ColorScheme = field(default=Qt.ColorScheme.Unknown, kw_only=True)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "args", MappingProxyType(dict(self.args)))
