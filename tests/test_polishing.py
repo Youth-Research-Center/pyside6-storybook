@@ -59,7 +59,7 @@ def test_widgets_a_failed_decorator_leaves_for_deletion_are_polished_too() -> No
             raise RuntimeError("decorator boom")
 
         registry.story("Broken/Decorated", decorators=[failing])(lambda ctx: QLabel("Story"))
-        themes = BuiltinThemes()
+        themes = BuiltinThemeProvider()
         themes.activate(app)
         window = GalleryWindow(registry, themes)
         assert window.select_story("Broken/Decorated")

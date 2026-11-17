@@ -68,7 +68,8 @@ def run(
     Args:
         registry: The stories to show. Defaults to ``default_registry``.
         argv: Command-line arguments for ``QApplication``. Defaults to ``sys.argv``.
-        theme: The theme to start in, one of the provider's ``theme_names()``. Defaults to the provider's current theme.
+        theme: The theme to start in, one of the provider's ``theme_names()``. Defaults to the provider's current theme. It is applied
+            through the window once it is built, so a provider that fails to apply it shows the error in the gallery.
         load_errors: Story sources that failed to load, listed in the gallery under "Load errors".
         reload: What to load again when a story file changes; the command line passes it. Internal. Without it, nothing is reloaded.
         theme_provider: Supplies and applies the themes. Defaults to a new ``BuiltinThemeProvider``.
@@ -90,9 +91,10 @@ def run(
     try:
         polish_all_widgets()  # the provider may change the application style sheet; see pyside6_storybook.polishing
         provider.activate(app)
-        if theme is not None:
-            provider.set_theme(theme)
         window = GalleryWindow(default_registry if registry is None else registry, provider, load_errors=load_errors, reload=reload)
+        if theme is not None:
+            # Through the window, so a provider that fails to apply a valid theme shows the error in the gallery instead of closing it.
+            window.set_theme(theme)
         window.resize(*_WINDOW_SIZE)
         window.show()
         exit_code = app.exec()

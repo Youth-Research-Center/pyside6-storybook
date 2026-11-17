@@ -1,7 +1,7 @@
 import gc
 import logging
 import weakref
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 import pytest
 import shiboken6
@@ -237,6 +237,51 @@ def test_a_raising_provider_shows_the_error_panel_and_the_window_stays_usable(
         assert any(record.exc_info for record in caplog.records)
         assert _switch(window).currentText() == "Paper"
 
+        assert window.select_story("Display/Label")
+        assert isinstance(window.current_preview_widget(), QLabel)
+    finally:
+        provider.deactivate()
+
+
+def test_run_shows_a_failure_to_apply_the_starting_theme_in_the_gallery(
+    qapp: QApplication, restore_application_look: None, registry: StoryRegistry
+) -> None:
+    titles: list[str] = []
+
+    def inspect_and_quit() -> None:
+        windows = [widget for widget in qapp.topLevelWidgets() if isinstance(widget, GalleryWindow) and widget.isVisible()]
+        panel = windows[0].findChild(ErrorPanel) if windows else None
+        titles.extend(_texts(panel) if panel is not None else [])
+        qapp.quit()
+
+    QTimer.singleShot(0, inspect_and_quit)
+
+    assert run(registry, argv=[], theme="Ink", theme_provider=RaisingProvider()) == 0
+    assert "Theme provider failed: RuntimeError: boom" in titles
+
+
+class _NamesFailProvider(StyleSheetProvider):
+    def theme_names(self) -> tuple[str, ...]:
+        raise RuntimeError("no names")
+
+
+class _CallbackFailProvider(StyleSheetProvider):
+    def on_changed(self, callback: Callable[[], None]) -> None:
+        raise RuntimeError("no callbacks")
+
+
+@pytest.mark.parametrize(("provider_type", "message"), [(_NamesFailProvider, "no names"), (_CallbackFailProvider, "no callbacks")])
+def test_a_provider_that_fails_while_the_window_is_built_shows_the_error_once_it_is_complete(
+    qtbot, registry: StoryRegistry, qapp: QApplication, restore_application_look: None, provider_type: type[StyleSheetProvider], message: str
+) -> None:
+    provider = provider_type()
+    provider.activate(qapp)
+    try:
+        window = _window(qtbot, registry, provider)
+
+        panel = window.findChild(ErrorPanel)
+        assert panel is not None
+        assert f"Theme provider failed: RuntimeError: {message}" in _texts(panel)
         assert window.select_story("Display/Label")
         assert isinstance(window.current_preview_widget(), QLabel)
     finally:

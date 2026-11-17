@@ -170,6 +170,8 @@ class GalleryWindow(QMainWindow):
         self._theme_switch = QComboBox(self)
         self._theme_switch.setObjectName("themeSwitch")
         self._theme_switch.setAccessibleName("Theme")
+        # A provider that fails while the window is built is shown in the preview once the window is complete.
+        self._startup_provider_error: Exception | None = None
         self._theme_switch.addItems(self._call_provider(self._theme_provider.theme_names, default=(), report=False))
         self._sync_theme_switch()
         self._theme_switch.currentIndexChanged.connect(self._on_theme_switch_changed)
@@ -233,6 +235,8 @@ class GalleryWindow(QMainWindow):
         self._apply_tab_order()
         self._polish_widgets()
         self._sidebar.select_first()
+        if self._startup_provider_error is not None:
+            self._show_provider_error(self._startup_provider_error)
 
     def current_preview_widget(self) -> QWidget | None:
         """Return the widget the story built, without its decorators, or ``None`` if there is none (also while an error is shown)."""
@@ -307,13 +311,19 @@ class GalleryWindow(QMainWindow):
         self._call_provider(self._theme_provider.set_theme, name, default=None)
 
     def _call_provider(self, function: Callable[..., _T], *args: object, default: _T, report: bool = True) -> _T:
-        """Call into the theme provider; an exception is logged, shown in the preview when ``report`` is set, and ``default`` returned."""
+        """Call into the theme provider; an exception is logged and ``default`` returned.
+
+        The exception is shown in the preview at once when ``report`` is set; otherwise (while the window is being built) the first one is
+        kept and shown when the window is complete.
+        """
         try:
             return function(*args)
         except Exception as error:
             self._logger.error("Theme provider call %s failed", getattr(function, "__name__", function), exc_info=error)
             if report:
                 self._show_provider_error(error)
+            elif self._startup_provider_error is None:
+                self._startup_provider_error = error
             return default
 
     def _show_provider_error(self, error: Exception) -> None:
