@@ -51,6 +51,31 @@ def test_a_style_sheet_cleared_while_the_gallery_window_exists_does_not_crash_la
     assert "survived" in result.stdout
 
 
+def test_widgets_a_failed_decorator_leaves_for_deletion_are_polished_too() -> None:
+    # A failed render hides the story's widget and the decorator's wrapper and deletes them later; they belong to no window.
+    result = _run(
+        """
+        def failing(widget, ctx):
+            raise RuntimeError("decorator boom")
+
+        registry.story("Broken/Decorated", decorators=[failing])(lambda ctx: QLabel("Story"))
+        themes = BuiltinThemes()
+        themes.activate(app)
+        window = GalleryWindow(registry, themes)
+        assert window.select_story("Broken/Decorated")
+        app.setStyleSheet("QLabel { color: #222222; }")
+        app.setStyleSheet("")
+        app.setStyleSheet("QLabel { color: #222222; }")
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        gc.collect()
+        app.setStyleSheet("QLabel { color: #eeeeee; }")
+        """
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "survived" in result.stdout
+
+
 def test_activating_the_themes_under_an_application_style_sheet_does_not_crash_later() -> None:
     # Activating reads the style under the style sheet by clearing the style sheet for a moment.
     result = _run(

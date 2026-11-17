@@ -201,7 +201,8 @@ Icons are bundled Phosphor SVGs, never downloaded at runtime, and the gallery im
 - Guard slots that may run during teardown with `shiboken6.isValid`.
 - **Polish before a style sheet change.** Qt crashes in `setStyleSheet` when a widget that was never polished existed while the
   application style sheet was cleared and was deleted after one was set again. Call `polish_all_widgets()` before the library changes
-  the application style sheet, and `GalleryWindow._polish_widgets()` after building widgets (it runs with `_apply_tab_order`).
+  the application style sheet, and `GalleryWindow._polish_widgets()` after building widgets (it runs with `_apply_tab_order` and
+  polishes every widget, also those a failed render left for deletion).
 - Every icon-only, custom-painted or card-style control needs `setAccessibleName`/`setAccessibleDescription` and must be keyboard-focusable.
   Form labels set their editor as buddy, and the editor gets the label text as its accessible name.
 - Application-wide changes (style, palette, style sheet) are applied through a `ThemeProvider` (`BuiltinThemeProvider` by default), which records what
