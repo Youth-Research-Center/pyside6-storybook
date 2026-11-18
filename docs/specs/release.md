@@ -91,18 +91,21 @@ The sdist gets an explicit include list:
 [tool.hatch.build.targets.sdist]
 include = [
     "src/", "tests/", "docs/", "examples/", "scripts/",
-    "README.md", "CHANGELOG.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "pyproject.toml", "uv.lock", "mkdocs.yml",
+    "README.md", "CHANGELOG.md", "RELEASING.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "pyproject.toml", "uv.lock", "mkdocs.yml",
+    ".github/workflows/",
 ]
 exclude = ["docs/specs/", "**/__pycache__"]
 ```
 
-The tests stay in the sdist for downstream packagers. `.github/`, the caches, `.venv`, `dist/` and `site/` stay out.
+The tests stay in the sdist for downstream packagers, together with what they read: `.github/workflows/` and `RELEASING.md`.
+The rest of `.github/`, the caches, `.venv`, `dist/` and `site/` stay out. A test that needs a file the sdist lacks skips. A `full`
+test unpacks the sdist and runs `pytest --collect-only -m "not full"` in it.
 
 The `full` packaging tests grow:
 
 **sdist contents.**
 - It contains the package, the tests and `LICENSE`.
-- It contains none of `.github/`, `.venv/`, `site/`, `docs/specs/` or `__pycache__`.
+- It contains none of `.github/dependabot.yml`, `.venv/`, `site/`, `docs/specs/` or `__pycache__`.
 
 **Wheel contents.**
 - It contains `py.typed`, at least one `*_stories.py` module and both licence files under `dist-info/licenses/`.
@@ -165,13 +168,13 @@ The README becomes the front page; the reference moves to the docs site (§5).
    Windows and `venv/bin/python` elsewhere; a step resolves it once into an output.
 5. Install with `"$PY" -m pip install --no-cache-dir "$(ls dist/*.whl)[pytest]"`.
 6. From a new empty directory, with `QT_QPA_PLATFORM=offscreen` and `timeout-minutes: 15`, run
-   `"$PY" -I ../checkout/scripts/smoke/smoke_test.py "$VERSION"`. The version comes from the `build` job's output.
+   `"$PY" -I ../checkout/scripts/smoke/smoke_check.py "$VERSION"`. The version comes from the `build` job's output.
 
 **`sdist`** (ubuntu-latest, Python 3.11, `needs: build`):
 - Install the Qt libraries, then install `dist/*.tar.gz` in a fresh venv (pip builds it from source).
 - Run the smoke script there too, so the sdist is proved to build a working package.
 
-### 2.2 The checks: `scripts/smoke/smoke_test.py`
+### 2.2 The checks: `scripts/smoke/smoke_check.py`
 
 A plain script, run with `python -I`, so neither its folder nor the working directory is on `sys.path`. It takes the expected
 version and exits non-zero with a clear message on the first failure. Each step prints `ok: <what>`, so the job log reads as a
@@ -259,7 +262,7 @@ concurrency:
      - **TestPyPI:** first `pip install --no-cache-dir "PySide6-Essentials>=6.8" "pytest>=8.0" "pytest-qt>=4.4"` from PyPI, then
        `pip install --no-cache-dir --no-deps --index-url https://test.pypi.org/simple/ "pyside6-storybook==$VERSION"`.
    - The install is retried every 30 s for up to 10 minutes, for index propagation.
-   - Then `python -I scripts/smoke/smoke_test.py "$VERSION"`. This is #41's acceptance (install, then the gallery opens with both
+   - Then `python -I scripts/smoke/smoke_check.py "$VERSION"`. This is #41's acceptance (install, then the gallery opens with both
      themes) checked on the published files on three systems.
 5. **`github-release`** (ubuntu, `needs: [target, verify]`, only for a tag push; `permissions: contents: write`).
    - Check out, download `dist`, and extract the notes with `python scripts/release/changelog_section.py "$VERSION" > notes.md`.
@@ -424,7 +427,7 @@ The README's reference sections move to pages, mostly as they are. Nothing is lo
 | `themes.md` | Built-in themes, providers, tokens, styling the gallery | `docs/theming.md` + README Themes, Design tokens, Styling the gallery |
 | `testing.md` | The pytest plugin, checks, snapshots, the fixture | README "Testing stories" |
 | `troubleshooting.md` | Load errors, duplicate ids, running headless, fonts and subpixel text in CI, the System theme in contrast checks | new, from existing notes |
-| `versions.md` | §4.2 | new |
+| `versions.md` | §4.2 | new (added with `RELEASING.md`) |
 | `reference.md` | One `::: pyside6_storybook.<name>` block per name in `__all__`, and one per name in `pyside6_storybook.checks` | mkdocstrings |
 | `roadmap.md` | The existing `docs/roadmap.md`, kept in place, with a link to the milestones at the top and its links made absolute | existing |
 | `changelog.md` | `--8<-- "CHANGELOG.md"` | snippet include |
