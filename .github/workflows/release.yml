@@ -99,8 +99,9 @@ jobs:
           else
             echo "python=$PWD/venv/bin/python" >> "$GITHUB_OUTPUT"
           fi
-      # The index may need a few minutes to list a new upload, so the install is retried. Dependencies always come from PyPI: a squatted
-      # name on TestPyPI is never installed.
+      # The index may need a few minutes to list a new upload, so the install is retried. Dependencies always come from PyPI: from
+      # TestPyPI only the release's own wheel is downloaded (without dependencies), then installed with its extra from PyPI, so a squatted
+      # name on TestPyPI is never installed and the dependencies are exactly the ones in the package's metadata.
       - name: Install the published version
         env:
           PY: ${{ steps.venv.outputs.python }}
@@ -112,8 +113,10 @@ jobs:
             if [ "$REPOSITORY" = "pypi" ]; then
               "$PY" -m pip install --no-cache-dir "pyside6-storybook[pytest]==$VERSION"
             else
-              "$PY" -m pip install --no-cache-dir "PySide6-Essentials>=6.8" "pytest>=8.0" "pytest-qt>=4.4" &&
-                "$PY" -m pip install --no-cache-dir --no-deps --index-url "$INDEX_URL" "pyside6-storybook==$VERSION"
+              rm -rf testpypi &&
+                "$PY" -m pip download --no-cache-dir --no-deps --only-binary :all: --index-url "$INDEX_URL" --dest testpypi \
+                  "pyside6-storybook==$VERSION" &&
+                "$PY" -m pip install --no-cache-dir "$(ls testpypi/*.whl)[pytest]"
             fi
           }
           for attempt in $(seq 1 20); do

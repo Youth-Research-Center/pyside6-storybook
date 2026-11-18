@@ -75,6 +75,16 @@ class TestReleaseWorkflow:
         assert id_token == ["publish"]
         assert contents_write == ["github-release"]
 
+    def test_verify_takes_the_dependencies_from_the_package_metadata_not_from_a_list_in_the_workflow(self) -> None:
+        # A hand-written dependency list drifts from pyproject.toml: "PySide6-Essentials>=6.8" installed 6.12.0 on Python 3.11, which the
+        # project excludes there. The TestPyPI path downloads only the release's wheel and installs it with its extra from PyPI.
+        (install,) = [step["run"] for step in _load(_RELEASE)["jobs"]["verify"]["steps"] if step.get("name") == "Install the published version"]
+
+        assert "PySide6" not in install
+        assert "pytest-qt" not in install
+        assert "pip download --no-cache-dir --no-deps --only-binary :all: --index-url" in install
+        assert '[pytest]"' in install
+
     def test_verify_and_the_github_release_need_the_target(self) -> None:
         jobs = _load(_RELEASE)["jobs"]
 
