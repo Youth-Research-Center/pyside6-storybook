@@ -86,7 +86,7 @@ extend-select = ["E501", "B", "Q", "I", "FBT"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["scripts/icons", "scripts/smoke"]
+pythonpath = ["scripts/icons", "scripts/release", "scripts/smoke"]
 timeout = 120
 qt_api = "pyside6"
 addopts = "--strict-markers"
@@ -95,4 +95,4 @@ markers = [
 ]
 
 [tool.ty.environment]
-extra-paths = ["scripts/icons", "scripts/smoke"]
+extra-paths = ["scripts/icons", "scripts/release", "scripts/smoke"]

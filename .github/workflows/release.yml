@@ -1,0 +1,167 @@
+name: Release
+
+# A tag v* publishes to PyPI and a manual run publishes the current ref to TestPyPI. Both build and smoke test the distributions with
+# package.yml, publish them with a trusted publisher (no token), install the published files on three systems and run the smoke script.
+# A tag push then creates the GitHub release. One-time setup (PyPI projects, trusted publishers, GitHub environments): see section 3.4 of
+# the release design in docs/specs/ (RELEASING.md describes it once it exists).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  target:
+    name: choose the index
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      repository: ${{ steps.target.outputs.repository }}
+      version: ${{ steps.target.outputs.version }}
+      prerelease: ${{ steps.target.outputs.prerelease }}
+      index-url: ${{ steps.target.outputs.index-url }}
+      upload-url: ${{ steps.target.outputs.upload-url }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Choose the index and check the tag
+        id: target
+        # The runner already sets GITHUB_EVENT_NAME, GITHUB_REF_TYPE, GITHUB_REF_NAME, GITHUB_SHA and GITHUB_OUTPUT.
+        run: python scripts/release/release_target.py
+
+  package:
+    needs: target
+    uses: ./.github/workflows/package.yml
+
+  publish:
+    name: publish to ${{ needs.target.outputs.repository }}
+    needs: [target, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: ${{ needs.target.outputs.repository }}
+      url: https://${{ needs.target.outputs.repository == 'pypi' && 'pypi.org' || 'test.pypi.org' }}/project/pyside6-storybook/${{ needs.target.outputs.version }}/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ needs.target.outputs.upload-url }}
+
+  verify:
+    name: verify (${{ matrix.os }})
+    needs: [target, publish]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - name: Install Qt system libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - uses: actions/checkout@v7
+        with:
+          path: checkout
+          sparse-checkout: scripts/smoke
+          sparse-checkout-cone-mode: false
+      - name: Create a virtual environment
+        id: venv
+        run: |
+          python -m venv venv
+          if [ -x venv/Scripts/python.exe ]; then
+            echo "python=$PWD/venv/Scripts/python.exe" >> "$GITHUB_OUTPUT"
+          else
+            echo "python=$PWD/venv/bin/python" >> "$GITHUB_OUTPUT"
+          fi
+      # The index may need a few minutes to list a new upload, so the install is retried. Dependencies always come from PyPI: a squatted
+      # name on TestPyPI is never installed.
+      - name: Install the published version
+        env:
+          PY: ${{ steps.venv.outputs.python }}
+          VERSION: ${{ needs.target.outputs.version }}
+          REPOSITORY: ${{ needs.target.outputs.repository }}
+          INDEX_URL: ${{ needs.target.outputs.index-url }}
+        run: |
+          install() {
+            if [ "$REPOSITORY" = "pypi" ]; then
+              "$PY" -m pip install --no-cache-dir "pyside6-storybook[pytest]==$VERSION"
+            else
+              "$PY" -m pip install --no-cache-dir "PySide6-Essentials>=6.8" "pytest>=8.0" "pytest-qt>=4.4" &&
+                "$PY" -m pip install --no-cache-dir --no-deps --index-url "$INDEX_URL" "pyside6-storybook==$VERSION"
+            fi
+          }
+          for attempt in $(seq 1 20); do
+            if install; then
+              exit 0
+            fi
+            echo "Attempt $attempt of 20 failed; trying again in 30 seconds."
+            sleep 30
+          done
+          echo "::error::pyside6-storybook $VERSION could not be installed from $REPOSITORY within 10 minutes"
+          exit 1
+      - name: Smoke test the published package
+        timeout-minutes: 15
+        env:
+          PY: ${{ steps.venv.outputs.python }}
+          VERSION: ${{ needs.target.outputs.version }}
+        run: |
+          mkdir empty
+          cd empty
+          "$PY" -I ../checkout/scripts/smoke/smoke_check.py "$VERSION"
+
+  github-release:
+    name: GitHub release
+    if: github.ref_type == 'tag'
+    needs: [target, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.target.outputs.version }}
+          PRERELEASE: ${{ needs.target.outputs.prerelease }}
+        run: |
+          python scripts/release/changelog_section.py "$VERSION" > notes.md
+          flags=()
+          if [ "$PRERELEASE" = "true" ]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$TAG" --title "$TAG" --notes-file notes.md "${flags[@]}" dist/*

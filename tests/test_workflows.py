@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+import release_target
 import yaml
 
 _WORKFLOWS = Path(__file__).resolve().parents[1] / ".github" / "workflows"
@@ -58,3 +59,41 @@ def test_every_run_step_uses_bash(path: Path) -> None:
     for job_id, step in _run_steps(workflow):
         job_default = workflow["jobs"][job_id].get("defaults", {}).get("run", {}).get("shell")
         assert (step.get("shell") or job_default or default_shell) == "bash", (job_id, step)
+
+
+_RELEASE = _WORKFLOWS / "release.yml"
+
+
+@pytest.mark.skipif(not _RELEASE.is_file(), reason="release.yml is not part of this source tree")
+class TestReleaseWorkflow:
+    def test_the_token_permissions_are_minimal(self) -> None:
+        workflow = _load(_RELEASE)
+
+        assert workflow["permissions"] == {"contents": "read"}
+        id_token = [job_id for job_id, job in workflow["jobs"].items() if job.get("permissions", {}).get("id-token") == "write"]
+        contents_write = [job_id for job_id, job in workflow["jobs"].items() if job.get("permissions", {}).get("contents") == "write"]
+        assert id_token == ["publish"]
+        assert contents_write == ["github-release"]
+
+    def test_verify_and_the_github_release_need_the_target(self) -> None:
+        jobs = _load(_RELEASE)["jobs"]
+
+        assert "target" in jobs["verify"]["needs"]
+        assert "target" in jobs["github-release"]["needs"]
+
+    def test_publish_uses_the_trusted_publisher_without_a_password(self) -> None:
+        steps = _load(_RELEASE)["jobs"]["publish"]["steps"]
+
+        publish = [step for step in steps if step.get("uses", "").startswith("pypa/gh-action-pypi-publish@")]
+        assert len(publish) == 1
+        assert "password" not in publish[0].get("with", {})
+        assert "skip-existing" not in publish[0].get("with", {})
+
+    def test_the_environment_name_comes_from_the_target_and_the_names_are_pypi_and_testpypi(self) -> None:
+        environment = _load(_RELEASE)["jobs"]["publish"]["environment"]
+
+        assert environment["name"] == "${{ needs.target.outputs.repository }}"
+        assert set(release_target.INDEXES) == {"pypi", "testpypi"}
+
+    def test_the_github_release_runs_for_tag_pushes_only(self) -> None:
+        assert _load(_RELEASE)["jobs"]["github-release"]["if"] == "github.ref_type == 'tag'"
