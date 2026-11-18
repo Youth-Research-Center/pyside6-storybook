@@ -71,9 +71,14 @@ def package_directory() -> Path:
 
 
 def _run(command: Sequence[str | os.PathLike[str]], *, package_dir: Path, timeout: int = SUBPROCESS_TIMEOUT) -> subprocess.CompletedProcess[str]:
-    """Run a command that imports the package from ``package_dir``'s parent folder, and capture its output."""
+    """Run a command and capture its output; when ``package_dir`` is not the installed package (a test's copy), import it from there.
+
+    The real run leaves ``PYTHONPATH`` alone: putting ``site-packages`` on it would place the installed packages before the standard
+    library.
+    """
     environment = dict(os.environ)
-    environment["PYTHONPATH"] = os.pathsep.join(filter(None, [str(package_dir.parent), environment.get("PYTHONPATH")]))
+    if package_dir != package_directory():
+        environment["PYTHONPATH"] = os.pathsep.join(filter(None, [str(package_dir.parent), environment.get("PYTHONPATH")]))
     try:
         return subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False, env=environment)
     except subprocess.TimeoutExpired as error:
