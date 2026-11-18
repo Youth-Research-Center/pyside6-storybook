@@ -74,6 +74,11 @@ def render_gallery(app: QApplication, registry: StoryRegistry, path: Path) -> No
         window.show()
         window.select_story(_STORY)
         app.processEvents()
+        # Showing the window gives the search field focus; its frame and caret do not belong in a picture of the gallery.
+        focused = app.focusWidget()
+        if focused is not None:
+            focused.clearFocus()
+        app.processEvents()
         _save(window, path)
     finally:
         window.close()
