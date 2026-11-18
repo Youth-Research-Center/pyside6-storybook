@@ -21,7 +21,9 @@ class ThemeProvider(Protocol):
     3. ``set_theme`` applies a theme and raises ``ValueError`` for a name that ``theme_names`` does not list.
     4. ``on_changed`` registers a callback that the provider calls with no arguments after every theme change, whether the gallery
        asked for it or the provider made it itself. Several callbacks may be registered and are called in order.
-    5. ``deactivate`` undoes everything ``activate`` and ``set_theme`` changed, the font included, and clears the callbacks.
+    5. ``deactivate`` undoes everything ``activate`` and ``set_theme`` changed, the font included, and clears the callbacks. A provider
+       can be activated again after ``deactivate``: the pytest plugin activates it before the first story test, deactivates it
+       when the next test is not a story test and activates it again for the next one.
     6. A provider that sets an application-wide style sheet also sets a matching ``QPalette``: the gallery chrome is drawn from
        palette roles, and a style sheet alone leaves ``QApplication.palette()`` unchanged.
     7. ``tokens() -> Mapping[str, object]`` is optional and not part of this protocol, so a provider without it still satisfies

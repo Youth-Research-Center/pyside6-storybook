@@ -1,3 +1,4 @@
+import re
 import shutil
 import subprocess
 import sys
@@ -28,6 +29,31 @@ def test_the_wheel_contains_the_icon_bundle_and_licence_and_no_build_scripts(tmp
     assert "pyside6_storybook/resources/icons/icon_manifest.toml" in names
     assert "pyside6_storybook/resources/icons/licenses/phosphor-LICENSE.txt" in names
     assert not [name for name in names if name.startswith("scripts/") or "/scripts/" in name or "icon_bundle/" in name]
+
+
+@pytest.mark.full
+def test_the_wheel_ships_the_pytest_plugin_module_and_registers_it_as_a_pytest_plugin(tmp_path: Path) -> None:
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("uv is not installed")
+
+    result = subprocess.run(
+        [uv, "build", "--wheel", "--out-dir", str(tmp_path)], cwd=_REPO_ROOT, capture_output=True, text=True, timeout=300, check=False
+    )
+    assert result.returncode == 0, result.stderr
+
+    (wheel,) = tmp_path.glob("*.whl")
+    with zipfile.ZipFile(wheel) as archive:
+        names = archive.namelist()
+        (entry_points_name,) = [name for name in names if name.endswith(".dist-info/entry_points.txt")]
+        entry_points = archive.read(entry_points_name).decode("utf-8")
+        (metadata_name,) = [name for name in names if name.endswith(".dist-info/METADATA")]
+        metadata = archive.read(metadata_name).decode("utf-8")
+    assert "pyside6_storybook_pytest.py" in names
+    assert "pyside6_storybook/testing/storybook_session.py" in names
+    assert "[pytest11]\npyside6_storybook = pyside6_storybook_pytest\n" in entry_points
+    assert "Provides-Extra: pytest" in metadata
+    assert re.search(r"Requires-Dist: pytest-qt>=4.4; extra == ['\"]pytest['\"]", metadata)
 
 
 def test_the_installed_pyside6_keeps_its_reference_to_none_on_calls_that_return_nothing(qapp: QApplication) -> None:

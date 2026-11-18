@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- pytest plugin: install the `pytest` extra (`pyside6-storybook[pytest]`, which adds `pytest` and `pytest-qt`) and run `pytest --storybook`
+  (or set `storybook = true`) to render every story in every theme as one test, `storybook::<story id>[<theme>]`, which fails when the
+  story or a decorator raises (with the story's own traceback, also from a `paintEvent` or a slot, with or without pytest-qt), the
+  story returns no widget, the theme provider fails, or Qt logs a
+  warning (`--storybook-qt-warnings`, `storybook_qt_warnings_ignore`; `propagateSizeHints` is ignored by default). A story file that
+  fails to import, or was imported before collection so its stories cannot be tested, is a failing
+  `storybook::load-error[...]` test, a provider or theme that cannot be used is a failing
+  `storybook::configuration` test, and a project without configured stories is a usage error instead of testing the built-in examples.
+  Options and ini keys: `--storybook-stories`, `--storybook-theme-provider`, `--storybook-themes`. The tests carry the `storybook`
+  marker and work with `-k`, `--deselect`, `--lf` and pytest-xdist. The new `render_story(story_id, *, args=None, theme=None)` fixture
+  renders a story by id in a test you write yourself. The plugin imports neither Qt nor the library unless it is enabled.
+  `StorySources` has the keyword-only `fallback`, true for the built-in examples fallback. See "Testing stories" in the README.
 - Theming guide, `docs/theming.md`, with two screenshots (rendered by `scripts/docs/render_theming_images.py`), and the worked example
   `examples/themed_app`: an application with two themes, a pill button, a token-painted gauge and a `ThemeProvider` for them. Run it from
   its folder with `uv run --project ../.. pyside6-storybook`.

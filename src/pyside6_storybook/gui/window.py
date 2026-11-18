@@ -52,6 +52,7 @@ from pyside6_storybook.registry import Layout, Story, StoryContext, StoryRegistr
 from pyside6_storybook.registry.rendering import StoryRenderError, render_story
 from pyside6_storybook.themes import ThemeProvider
 from pyside6_storybook.themes.builtin_theme_provider import palette_color_scheme
+from pyside6_storybook.themes.provider_values import read_color_scheme, read_tokens
 
 NO_STORIES_MESSAGE = "No stories are registered."
 NO_STORIES_FOUND_MESSAGE = "No stories were found"
@@ -345,16 +346,8 @@ class GalleryWindow(QMainWindow):
         Returns:
             ``False`` if the provider's ``tokens`` raised (the error is reported as any provider error), ``True`` otherwise.
         """
-        read_tokens = getattr(self._theme_provider, "tokens", None)
-        if read_tokens is None:
-            self._tokens = {}
-            return True
-
         def tokens() -> Mapping[str, object]:
-            result = read_tokens()
-            if not isinstance(result, Mapping):
-                raise TypeError(f"tokens() returned {type(result).__name__}, expected a mapping")
-            return result
+            return read_tokens(self._theme_provider)
 
         result: Mapping[str, object] | None = self._call_provider(tokens, default=None, report=report)
         self._tokens = {} if result is None else result
@@ -368,19 +361,16 @@ class GalleryWindow(QMainWindow):
         Returns:
             ``False`` if the provider's ``color_scheme`` raised (the error is reported as any provider error), ``True`` otherwise.
         """
-        read_scheme = getattr(self._theme_provider, "color_scheme", None)
+        has_scheme = getattr(self._theme_provider, "color_scheme", None) is not None
         result: Qt.ColorScheme | None = None
-        if read_scheme is not None:
+        if has_scheme:
 
-            def color_scheme() -> Qt.ColorScheme:
-                value = read_scheme()
-                if not isinstance(value, Qt.ColorScheme):
-                    raise TypeError(f"color_scheme() returned {type(value).__name__}, expected a Qt.ColorScheme")
-                return value
+            def color_scheme() -> Qt.ColorScheme | None:
+                return read_color_scheme(self._theme_provider)
 
             result = self._call_provider(color_scheme, default=None, report=report)
         self._color_scheme = result if result is not None else palette_color_scheme(QApplication.palette())
-        return read_scheme is None or result is not None
+        return not has_scheme or result is not None
 
     def _show_provider_error(self, error: Exception) -> None:
         details = "".join(traceback.format_exception(error))

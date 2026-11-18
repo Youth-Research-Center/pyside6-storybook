@@ -41,6 +41,7 @@ class StorySources:
         pythonpath: Folders to put on ``sys.path`` before loading, from the configuration. Absolute paths.
         theme_provider: The ``module:attribute`` of the configured theme provider, or ``None``.
         theme: The configured starting theme, or ``None``.
+        fallback: ``True`` when the targets are the built-in examples because nothing was configured, so no caller has to parse ``origin``.
     """
 
     targets: tuple[str, ...]
@@ -48,6 +49,7 @@ class StorySources:
     pythonpath: tuple[Path, ...] = field(default=(), kw_only=True)
     theme_provider: str | None = field(default=None, kw_only=True)
     theme: str | None = field(default=None, kw_only=True)
+    fallback: bool = field(default=False, kw_only=True)
 
 
 def resolve_story_sources(command_line_targets: Sequence[str], *, examples: bool, cwd: Path) -> StorySources:
@@ -59,7 +61,8 @@ def resolve_story_sources(command_line_targets: Sequence[str], *, examples: bool
         cwd: The working directory, where ``pyproject.toml`` is looked for.
 
     Returns:
-        The targets, their origin, the configured ``pythonpath``, ``theme_provider`` and ``theme``.
+        The targets, their origin, the configured ``pythonpath``, ``theme_provider`` and ``theme``, and whether the built-in examples
+            were used because nothing was configured (``fallback``).
 
     Raises:
         StorySourcesError: If ``pyproject.toml`` is not valid TOML or its ``[tool.pyside6-storybook]`` table is wrong. The file is
@@ -90,6 +93,7 @@ def resolve_story_sources(command_line_targets: Sequence[str], *, examples: bool
         pythonpath=pythonpath,
         theme_provider=theme_provider,
         theme=theme,
+        fallback=True,
     )
 
 
