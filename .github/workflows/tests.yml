@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -36,6 +40,8 @@ jobs:
           path: .icon-cache
           key: icon-cache-${{ hashFiles('src/pyside6_storybook/resources/icons/icon_manifest.toml') }}
       - run: uv run --no-sync python scripts/icons/build_icon_bundle.py --check
+      - name: Lint the workflows
+        run: uvx --from actionlint-py==1.7.12.25 actionlint
 
   test-core:
     name: core tests (ubuntu-latest, Python 3.11)

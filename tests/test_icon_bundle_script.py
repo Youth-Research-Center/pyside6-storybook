@@ -229,7 +229,8 @@ def test_render_notices_names_this_project_and_lists_copyright_and_icons(tmp_pat
     assert "Phosphor Icons 2.1.1" in notices
     assert "Copyright (c) 2023 Phosphor Icons" in notices
     assert "folder" in notices and "mountains" in notices
-    assert "src/pyside6_storybook/resources/icons/licenses/phosphor-LICENSE.txt" in notices
+    assert "`pyside6_storybook/resources/icons/licenses/phosphor-LICENSE.txt`" in notices
+    assert "src/pyside6_storybook" not in notices
     assert "pyside6-storybook" in notices
     assert "pandaplot" not in notices.lower()
 

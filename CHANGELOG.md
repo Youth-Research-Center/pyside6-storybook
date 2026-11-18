@@ -5,6 +5,9 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- PyPI metadata: the licence files (`LICENSE`, `THIRD_PARTY_NOTICES.md`), authors, keywords, classifiers (Python 3.11 to 3.14, Pytest,
+  Typed) and the project URLs (homepage, documentation, repository, issues, changelog). The sdist has an explicit include list: the package,
+  the tests with the workflows they read, the docs and the scripts, without `docs/specs/` and `.github/dependabot.yml`.
 - Screenshot snapshots: `pytest --storybook-snapshots` (ini `storybook_snapshots`) adds `storybook::<id>[<theme>-snapshot]` for every story and
   theme, which compares a screenshot of the rendered story with the baseline
   `tests/storybook_snapshots/<platform>/<id with / as __>[<theme>].png`. `--storybook-update-snapshots` writes or replaces the baselines; a
