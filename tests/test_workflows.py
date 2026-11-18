@@ -107,3 +107,28 @@ class TestReleaseWorkflow:
 
     def test_the_github_release_runs_for_tag_pushes_only(self) -> None:
         assert _load(_RELEASE)["jobs"]["github-release"]["if"] == "github.ref_type == 'tag'"
+
+
+_DOCS = _WORKFLOWS / "docs.yml"
+
+
+@pytest.mark.skipif(not _DOCS.is_file(), reason="docs.yml is not part of this source tree")
+class TestDocsWorkflow:
+    def test_deploy_is_the_only_job_that_can_write_pages_or_request_an_id_token(self) -> None:
+        workflow = _load(_DOCS)
+
+        assert workflow["permissions"] == {"contents": "read"}
+        privileged = [
+            job_id
+            for job_id, job in workflow["jobs"].items()
+            if job.get("permissions", {}).get("pages") == "write" or job.get("permissions", {}).get("id-token") == "write"
+        ]
+        assert privileged == ["deploy"]
+
+    def test_deploy_runs_for_pushes_to_main_only_and_uses_the_pages_environment(self) -> None:
+        deploy = _load(_DOCS)["jobs"]["deploy"]
+
+        assert deploy["environment"]["name"] == "github-pages"
+        assert "github.event_name == 'push'" in deploy["if"]
+        assert "refs/heads/main" in deploy["if"]
+        assert deploy["needs"] == "build"

@@ -4,7 +4,8 @@ pyside6-storybook shows your stories under a theme. It ships three themes, and a
 it in with a theme provider, so the gallery shows the stories exactly as the application would. This guide explains the built-in
 themes, when to write a provider, the provider protocol and its contract, design tokens, the System theme, how to choose a provider,
 how the gallery's own widgets behave under an application style sheet, and what to check when something goes wrong. The folder
-[`examples/themed_app`](../examples/themed_app) is a complete, runnable example and is walked through at the end.
+[`examples/themed_app`](https://github.com/Youth-Research-Center/pyside6-storybook/tree/main/examples/themed_app) is a complete, runnable
+example and is walked through at the end.
 
 ## The built-in themes
 
@@ -123,7 +124,8 @@ focus indicators stay readable. Qt cannot exempt a subtree from an application s
 
 Every widget of the gallery has an object name with the prefix `sbk`, and widgets you may want to style carry the property
 `sbkChrome="true"`; the widgets that hold the preview do not, so `*[sbkChrome="true"] QPushButton` never reaches a story's buttons.
-The README's section [Styling the gallery](../README.md#styling-the-gallery) lists every name.
+The README's section [Styling the
+gallery](https://github.com/Youth-Research-Center/pyside6-storybook/blob/main/README.md#styling-the-gallery) lists every name.
 
 ```css
 *[sbkChrome="true"] QPushButton { padding: 2px 8px; }
@@ -159,7 +161,8 @@ They are rendered by `uv run python scripts/docs/render_theming_images.py`.
 
 ## Worked example: `examples/themed_app`
 
-[`examples/themed_app`](../examples/themed_app) is a small application with two themes, Paper (light) and Ink (dark). It is not part of
+[`examples/themed_app`](https://github.com/Youth-Research-Center/pyside6-storybook/tree/main/examples/themed_app) is a small application
+with two themes, Paper (light) and Ink (dark). It is not part of
 the wheel. Its files:
 
 - `themed_app/theme_manager.py`: `ThemeManager`, a `QObject` with a `themeChanged` signal. Each theme is a style sheet, a full

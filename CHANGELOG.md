@@ -5,6 +5,9 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Documentation site (MkDocs with Material and mkdocstrings) at https://youth-research-center.github.io/pyside6-storybook/: a home page, the
+  theming guide, the API reference generated from the docstrings, the changelog and the roadmap. The `docs` dependency group installs it;
+  `docs.yml` builds it with `mkdocs build --strict` and deploys it to GitHub Pages from `main`.
 - PyPI metadata: the licence files (`LICENSE`, `THIRD_PARTY_NOTICES.md`), authors, keywords, classifiers (Python 3.11 to 3.14, Pytest,
   Typed) and the project URLs (homepage, documentation, repository, issues, changelog). The sdist has an explicit include list: the package,
   the tests with the workflows they read, the docs and the scripts, without `docs/specs/` and `.github/dependabot.yml`.
