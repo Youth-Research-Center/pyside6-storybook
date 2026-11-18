@@ -66,9 +66,9 @@ jobs:
           shopt -s nullglob
           wheels=(dist/*.whl)
           sdists=(dist/*.tar.gz)
-          total="$(ls dist | wc -l)"
-          if [ "${#wheels[@]}" -ne 1 ] || [ "${#sdists[@]}" -ne 1 ] || [ "$total" -ne 2 ]; then
-            echo "::error::dist/ must hold exactly one wheel and one sdist, found: $(ls dist)"
+          everything=(dist/*)
+          if [ "${#wheels[@]}" -ne 1 ] || [ "${#sdists[@]}" -ne 1 ] || [ "${#everything[@]}" -ne 2 ]; then
+            echo "::error::dist/ must hold exactly one wheel and one sdist, found: ${everything[*]}"
             exit 1
           fi
           if [ "${wheels[0]}" != "dist/pyside6_storybook-${version}-py3-none-any.whl" ]; then
