@@ -743,7 +743,7 @@ a context is built by hand). A provider can supply it with an optional `color_sc
 is read after `activate` and after every change notification, and it is not part of the six-method protocol.
 
 The [theming guide](https://github.com/Youth-Research-Center/pyside6-storybook/blob/main/docs/theming.md) covers themes and providers in depth, and
-[`examples/themed_app`](https://github.com/Youth-Research-Center/pyside6-storybook/tree/main/examples/themed_app)  is a worked example,
+[`examples/themed_app`](https://github.com/Youth-Research-Center/pyside6-storybook/tree/main/examples/themed_app) is a worked example,
 run from its folder with `uv run --project ../.. pyside6-storybook`.
 
 An application that has its own theme manager plugs it in with a theme provider, an object that implements the `ThemeProvider`
