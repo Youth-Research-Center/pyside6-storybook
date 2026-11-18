@@ -259,8 +259,10 @@ concurrency:
    - Install the Qt libraries on Linux, and check out `scripts/smoke` as in §2.1.
    - Create a fresh venv. Dependencies always come from PyPI, so a squatted name on TestPyPI can never be installed:
      - **PyPI:** `pip install --no-cache-dir "pyside6-storybook[pytest]==$VERSION"`.
-     - **TestPyPI:** first `pip install --no-cache-dir "PySide6-Essentials>=6.8" "pytest>=8.0" "pytest-qt>=4.4"` from PyPI, then
-       `pip install --no-cache-dir --no-deps --index-url https://test.pypi.org/simple/ "pyside6-storybook==$VERSION"`.
+     - **TestPyPI:** `pip download --no-cache-dir --no-deps --only-binary :all: --index-url https://test.pypi.org/simple/ --dest
+       testpypi "pyside6-storybook==$VERSION"`, then `pip install --no-cache-dir "testpypi/<wheel>[pytest]"` from PyPI. Only the
+       release's own file comes from TestPyPI. Its dependencies come from its own metadata and are resolved against PyPI; a
+       hand-written list drifts (on Python 3.11 it took PySide6 6.12.0, which the project excludes there).
    - The install is retried every 30 s for up to 10 minutes, for index propagation.
    - Then `python -I scripts/smoke/smoke_check.py "$VERSION"`. This is #41's acceptance (install, then the gallery opens with both
      themes) checked on the published files on three systems.
