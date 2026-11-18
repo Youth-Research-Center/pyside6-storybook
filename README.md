@@ -590,7 +590,8 @@ that its text has enough contrast against its background (WCAG AA: 4.5:1, or 3:1
 when the application's own palette is not the one you ship.
 
 The check measures pixels, not palette roles, because the palette is wrong for widgets that a style sheet colours and for custom
-painting. The story is shown and rendered once into an image. For each visible, enabled widget with text, the check takes the box of
+painting. The story is shown and rendered once into an image, with text in greyscale anti-aliasing even where the system draws
+subpixel (coloured) text, so the colours measured are the text's own. For each visible, enabled widget with text, the check takes the box of
 the text itself inside the widget's text area: the most frequent colour in it is the background, and among the colours that cover at
 least 3 pixels, the one with the highest contrast against it is the text. A box that holds a single colour fails, because the text is
 drawn in the background colour or not at all. A failure names the widget, the two colours as `#rrggbb`, the measured ratio, the

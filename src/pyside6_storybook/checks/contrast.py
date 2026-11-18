@@ -8,7 +8,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 
 from PySide6.QtCore import QPoint, QRect, Qt
-from PySide6.QtGui import QFont, QFontMetrics, QImage, QPalette, QTextDocument
+from PySide6.QtGui import QFont, QFontMetrics, QImage, QPainter, QPalette, QPicture, QTextDocument
 from PySide6.QtWidgets import (
     QAbstractButton,
     QAbstractItemView,
@@ -110,16 +110,24 @@ def check_text_contrast(
 
 
 def _render(widget: QWidget) -> QImage:
-    """Return what ``widget`` looks like, as an image of device pixel ratio 1.
+    """Return what ``widget`` looks like, as an image of device pixel ratio 1, with text in greyscale anti-aliasing.
 
     The whole window is rendered and ``widget`` is cut out of it, so a translucent background is blended over what is behind it
-    as it is on the screen, and not drawn opaque.
+    as it is on the screen, and not drawn opaque. The window is recorded into a ``QPicture`` and replayed onto the image: a widget
+    that paints itself draws text in the font engine's own format, which is subpixel (coloured fringes and no pixel in the text's
+    colour) where the system asks for it, while text replayed onto an image is greyscale, so the measured colour is the text's own.
     """
     window = widget.window()
+    picture = QPicture()
+    window.render(picture)
     image = QImage(window.size(), QImage.Format.Format_RGB32)
     image.setDevicePixelRatio(1.0)
     image.fill(window.palette().color(QPalette.ColorRole.Window))
-    window.render(image)
+    painter = QPainter(image)
+    try:
+        painter.drawPicture(0, 0, picture)
+    finally:
+        painter.end()
     return image.copy(QRect(widget.mapTo(window, QPoint(0, 0)), widget.size()))
 
 

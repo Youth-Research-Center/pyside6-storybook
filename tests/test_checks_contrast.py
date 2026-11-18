@@ -1,5 +1,11 @@
 """``check_text_contrast`` on hand-built widgets: each case names the measured ratio in its assertion message."""
 
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QPixmap
@@ -271,3 +277,72 @@ def _spin_box() -> QDoubleSpinBox:
     box.setAlignment(Qt.AlignmentFlag.AlignLeft)
     box.setValue(12.5)
     return box
+
+
+_SUBPIXEL_SCRIPT = """
+from PySide6.QtGui import QFont, QImage
+from PySide6.QtWidgets import QApplication, QLabel
+
+from pyside6_storybook.checks import check_text_contrast
+
+app = QApplication([])
+
+
+def fringed(widget):
+    image = QImage(widget.size(), QImage.Format.Format_RGB32)
+    widget.render(image)
+    for y in range(image.height()):
+        for x in range(image.width()):
+            colour = image.pixelColor(x, y)
+            channels = (colour.red(), colour.green(), colour.blue())
+            if max(channels) - min(channels) > 16:
+                return True
+    return False
+
+
+label = QLabel("Sample text")
+label.setMargin(8)
+# Small text in the CI font: no stem is wide enough for a subpixel render to reach the text's colour in any pixel.
+label.setFont(QFont("DejaVu Sans", 8))
+label.setStyleSheet("background-color: #ffffff; color: #b7b7b7;")
+label.show()
+app.processEvents()
+print("fringed" if fringed(label) else "greyscale")
+for issue in check_text_contrast(label):
+    print(issue.message)
+"""
+
+_SUBPIXEL_FONTCONFIG = """<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <include ignore_missing="yes">{base}</include>
+  <match target="font">
+    <edit name="antialias" mode="assign"><bool>true</bool></edit>
+    <edit name="rgba" mode="assign"><const>rgb</const></edit>
+    <edit name="lcdfilter" mode="assign"><const>lcddefault</const></edit>
+  </match>
+</fontconfig>
+"""
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="fontconfig decides the subpixel rendering only on Linux")
+def test_subpixel_text_is_measured_in_its_own_colour(tmp_path: Path) -> None:
+    # Where fontconfig asks for subpixel (LCD) text, as on GitHub's Ubuntu runners, a widget draws text with coloured fringes and no
+    # pixel in the text's own colour, so the check measured #b095a8 for #909090. The check replays the render onto an image, where text
+    # is greyscale. Fontconfig is read when the process starts, so the check runs in a subprocess.
+    config = tmp_path / "fonts.conf"
+    config.write_text(_SUBPIXEL_FONTCONFIG.format(base=os.environ.get("FONTCONFIG_FILE") or "/etc/fonts/fonts.conf"), encoding="utf-8")
+    env = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "FONTCONFIG_FILE": str(config)}
+    result = subprocess.run([sys.executable, "-c", _SUBPIXEL_SCRIPT], capture_output=True, text=True, timeout=60, env=env, check=False)
+
+    assert result.returncode == 0, result.stderr[-2000:]
+    lines = result.stdout.splitlines()
+    if lines[0] != "fringed":
+        pytest.skip("this system's fontconfig does not render subpixel text")
+    assert len(lines) == 2, lines
+    # The text is measured in a neutral grey within a few levels of #b7b7b7 (thin greyscale strokes stop just short of it), never in
+    # a fringe colour such as #c6bed2.
+    match = re.search(r"is #([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2}) on #ffffff", lines[1])
+    assert match is not None, lines[1]
+    channels = [int(channel, 16) for channel in match.groups()]
+    assert len(set(channels)) == 1 and abs(channels[0] - 0xB7) <= 4, lines[1]
