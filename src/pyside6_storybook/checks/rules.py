@@ -11,7 +11,10 @@ RULE_FOCUS = "focus"
 RULE_CONTRAST = "contrast"
 """Text needs enough contrast against its background."""
 
-CHECK_RULES = (RULE_NAME, RULE_FOCUS, RULE_CONTRAST)
+RULE_SNAPSHOT = "snapshot"
+"""The story's screenshot is not compared with a baseline (it animates, or shows the time)."""
+
+CHECK_RULES = (RULE_NAME, RULE_FOCUS, RULE_CONTRAST, RULE_SNAPSHOT)
 """Every rule ``checks_ignore`` accepts."""
 
-__all__ = ["CHECK_RULES", "RULE_CONTRAST", "RULE_FOCUS", "RULE_NAME"]
+__all__ = ["CHECK_RULES", "RULE_CONTRAST", "RULE_FOCUS", "RULE_NAME", "RULE_SNAPSHOT"]

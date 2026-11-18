@@ -1395,3 +1395,344 @@ def test_the_examples_pass_the_a11y_and_contrast_rules_in_light_and_dark(
     # Light and Dark, not System: Qt's own palette (offscreen) is white on #308cc6 in the Palette story, 3.69:1.
     assert count == 20 * (2 + 2 + 2)
     result.assert_outcomes(passed=count)
+
+
+# --- screenshot snapshots (--storybook-snapshots) -------------------------------------------------------------------------------
+
+_SNAPSHOT_STORIES = _story_module(
+    """
+    from pathlib import Path
+
+    from PySide6.QtWidgets import QLabel
+
+
+    def _swatch(ctx):
+        # The colour and the size come from files, so a test changes the story's look between two runs without re-importing the module.
+        colour = Path("colour.txt").read_text(encoding="utf-8").strip() if Path("colour.txt").exists() else "#336699"
+        width = int(Path("width.txt").read_text(encoding="utf-8")) if Path("width.txt").exists() else 60
+        label = QLabel()
+        label.setFixedSize(width, 30)
+        label.setStyleSheet(f"background-color: {colour};")
+        return label
+
+
+    @story("Snap/Swatch")
+    def swatch(ctx):
+        return _swatch(ctx)
+
+
+    @story("Snap/Clock", checks_ignore={"snapshot": "shows the current time"})
+    def clock(ctx):
+        raise ValueError("rendered anyway")
+    """
+)
+_SNAPSHOT_FLAGS = ("--storybook", "--storybook-snapshots", "--storybook-themes", "Light")
+
+
+def _baseline(pytester: pytest.Pytester, name: str = "Snap__Swatch[Light]") -> Path:
+    return pytester.path / "tests" / "storybook_snapshots" / sys.platform / f"{name}.png"
+
+
+def _failures(pytester: pytest.Pytester) -> Path:
+    return pytester.path / "storybook-snapshot-failures" / sys.platform
+
+
+def _snapshot_project(pytester: pytest.Pytester, *, ini: str = "") -> None:
+    _project(pytester, _SNAPSHOT_STORIES, ini=ini)
+
+
+def _update(pytester: pytest.Pytester, *extra: str) -> pytest.RunResult:
+    return _run(pytester, "--storybook", "--storybook-update-snapshots", "--storybook-themes", "Light", "-k", "Swatch and snapshot", *extra)
+
+
+def _compare(pytester: pytest.Pytester, *extra: str) -> pytest.RunResult:
+    return _run(pytester, *_SNAPSHOT_FLAGS, "-k", "Swatch and snapshot", *extra)
+
+
+def test_the_snapshot_items_exist_only_when_asked_for(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _snapshot_project(pytester)
+
+    plain = _run(pytester, "--storybook", *_TWO_THEMES, "--collect-only", "-q")
+    asked = _run(pytester, "--storybook", "--storybook-snapshots", *_TWO_THEMES, "--collect-only", "-q")
+    updating = _run(pytester, "--storybook", "--storybook-update-snapshots", *_TWO_THEMES, "--collect-only", "-q")
+
+    assert "snapshot" not in plain.stdout.str()
+    expected = ["storybook::Snap/Swatch[Light-snapshot]", "storybook::Snap/Swatch[Dark-snapshot]"]
+    assert [line for line in asked.outlines if "Swatch" in line and "snapshot" in line] == expected
+    assert [line for line in updating.outlines if "Swatch" in line and "snapshot" in line] == expected
+
+
+def test_the_ini_key_turns_the_snapshot_items_on(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _snapshot_project(pytester, ini="storybook_snapshots = true")
+
+    result = _run(pytester, "--storybook", "--storybook-themes", "Light", "--collect-only", "-q")
+
+    assert "storybook::Snap/Swatch[Light-snapshot]" in result.outlines
+
+
+def test_the_snapshot_items_follow_the_other_items_of_their_story_and_do_not_need_the_a11y_option(
+    pytester: pytest.Pytester, stories: StoryRegistry
+) -> None:
+    _snapshot_project(pytester)
+
+    without = _run(pytester, *_SNAPSHOT_FLAGS, "--collect-only", "-q")
+    both = _run(pytester, *_SNAPSHOT_FLAGS, "--storybook-a11y", "--storybook-themes", "Light,Dark", "--collect-only", "-q")
+
+    assert [line for line in without.outlines if "Swatch" in line] == ["storybook::Snap/Swatch[Light]", "storybook::Snap/Swatch[Light-snapshot]"]
+    assert [line for line in both.outlines if "Swatch" in line] == [
+        "storybook::Snap/Swatch[Light]",
+        "storybook::Snap/Swatch[Dark]",
+        "storybook::Snap/Swatch[a11y-name]",
+        "storybook::Snap/Swatch[a11y-focus]",
+        "storybook::Snap/Swatch[Light-contrast]",
+        "storybook::Snap/Swatch[Dark-contrast]",
+        "storybook::Snap/Swatch[Light-snapshot]",
+        "storybook::Snap/Swatch[Dark-snapshot]",
+    ]
+
+
+@pytest.mark.parametrize("pytest_qt", _WITH_AND_WITHOUT_PYTEST_QT)
+def test_a_baseline_is_created_by_the_update_option_and_then_matches(
+    pytester: pytest.Pytester, stories: StoryRegistry, pytest_qt: tuple[str, ...]
+) -> None:
+    _snapshot_project(pytester)
+
+    created = _update(pytester, *pytest_qt)
+    matched = _compare(pytester, *pytest_qt)
+
+    created.assert_outcomes(passed=1)
+    matched.assert_outcomes(passed=1)
+    assert _baseline(pytester).is_file()
+    assert not _failures(pytester).exists()
+
+
+def test_a_missing_baseline_fails_and_is_not_created(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _snapshot_project(pytester)
+
+    result = _compare(pytester)
+
+    result.assert_outcomes(failed=1)
+    assert f"no baseline at {_baseline(pytester)}; run pytest --storybook --storybook-update-snapshots to create it" in result.stdout.str()
+    assert not _baseline(pytester).exists()
+    assert (_failures(pytester) / "Snap__Swatch[Light].actual.png").is_file()
+
+
+def test_a_changed_colour_fails_and_writes_the_actual_and_diff_images(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    from PySide6.QtGui import QColor, QImage
+
+    _snapshot_project(pytester)
+    _update(pytester).assert_outcomes(passed=1)
+    (pytester.path / "colour.txt").write_text("#993333", encoding="utf-8")
+
+    result = _compare(pytester)
+
+    result.assert_outcomes(failed=1)
+    actual = _failures(pytester) / "Snap__Swatch[Light].actual.png"
+    diff = _failures(pytester) / "Snap__Swatch[Light].diff.png"
+    output = result.stdout.str()
+    assert str(_baseline(pytester)) in output
+    assert str(actual) in output
+    assert str(diff) in output
+    assert "100.0000% of the pixels differ" in output
+    assert "tolerance of 0 per channel" in output
+    assert QImage(str(actual)).pixelColor(5, 5) == QColor("#993333")
+    assert QImage(str(diff)).pixelColor(5, 5) == QColor(255, 0, 0)
+    assert QImage(str(_baseline(pytester))).pixelColor(5, 5) == QColor("#336699")
+
+
+def test_a_passing_run_removes_the_images_of_an_earlier_failure(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _snapshot_project(pytester)
+    _update(pytester)
+    colour = pytester.path / "colour.txt"
+    colour.write_text("#993333", encoding="utf-8")
+    _compare(pytester).assert_outcomes(failed=1)
+
+    colour.unlink()
+    result = _compare(pytester)
+
+    result.assert_outcomes(passed=1)
+    assert list(_failures(pytester).glob("*.png")) == []
+
+
+def test_a_size_change_fails_and_names_both_sizes(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _snapshot_project(pytester)
+    _update(pytester)
+    (pytester.path / "width.txt").write_text("80", encoding="utf-8")
+
+    result = _compare(pytester)
+
+    result.assert_outcomes(failed=1)
+    assert "another size than its baseline: " in result.stdout.str()
+    assert "80x30 instead of 60x30" in result.stdout.str()
+    assert (_failures(pytester) / "Snap__Swatch[Light].actual.png").is_file()
+    assert (_failures(pytester) / "Snap__Swatch[Light].diff.png").is_file()
+
+
+def test_the_tolerance_and_the_max_diff_come_from_the_ini_keys(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _snapshot_project(pytester)
+    _update(pytester)
+    (pytester.path / "colour.txt").write_text("#346699", encoding="utf-8")  # one channel off by 1
+
+    strict = _compare(pytester)
+    tolerant = _compare(pytester, "-o", "storybook_snapshot_tolerance=1")
+    limited = _compare(pytester, "-o", "storybook_snapshot_max_diff=1")
+
+    strict.assert_outcomes(failed=1)
+    tolerant.assert_outcomes(passed=1)
+    limited.assert_outcomes(passed=1)
+
+
+def test_a_story_that_ignores_the_snapshot_rule_is_skipped_by_a_marker_without_rendering(
+    pytester: pytest.Pytester, stories: StoryRegistry
+) -> None:
+    _snapshot_project(pytester)
+
+    result = _run(pytester, *_SNAPSHOT_FLAGS, "-k", "Clock and snapshot", "-rs")
+
+    result.assert_outcomes(skipped=1)
+    result.stdout.fnmatch_lines(["SKIPPED [[]1[]] stories/demo_stories.py: snapshot ignored: shows the current time"])
+    assert "rendered anyway" not in result.stdout.str()
+
+
+def test_the_update_option_does_not_rewrite_an_unchanged_baseline_and_replaces_a_changed_one(
+    pytester: pytest.Pytester, stories: StoryRegistry
+) -> None:
+    from PySide6.QtGui import QColor, QImage
+
+    _snapshot_project(pytester)
+    _update(pytester)
+    baseline = _baseline(pytester)
+    baseline.write_bytes(baseline.read_bytes())
+    marker = baseline.stat().st_mtime_ns
+
+    _update(pytester).assert_outcomes(passed=1)
+    assert baseline.stat().st_mtime_ns == marker
+
+    (pytester.path / "colour.txt").write_text("#993333", encoding="utf-8")
+    _update(pytester).assert_outcomes(passed=1)
+    assert QImage(str(baseline)).pixelColor(5, 5) == QColor("#993333")
+
+
+@pytest.mark.parametrize("pytest_qt", _WITH_AND_WITHOUT_PYTEST_QT)
+def test_a_snapshot_item_fails_on_a_story_exception_and_on_a_qt_warning(
+    pytester: pytest.Pytester, stories: StoryRegistry, pytest_qt: tuple[str, ...]
+) -> None:
+    _project(
+        pytester,
+        _story_module(
+            """
+            from PySide6.QtCore import qWarning
+
+
+            @story("Snap/Boom")
+            def boom(ctx):
+                raise RuntimeError("story boom")
+
+
+            @story("Snap/Warn")
+            def warn(ctx):
+                qWarning("snapshot probe warning")
+                return QLabel("x")
+            """
+        ),
+    )
+
+    result = _run(pytester, *_SNAPSHOT_FLAGS, "-k", "snapshot", *pytest_qt)
+
+    result.assert_outcomes(failed=2)
+    assert "story boom" in result.stdout.str()
+    assert "snapshot probe warning" in result.stdout.str()
+    assert not _baseline(pytester, "Snap__Warn[Light]").exists()
+
+
+def test_the_update_option_does_not_write_a_baseline_for_a_story_that_fails(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(
+        pytester,
+        _story_module(
+            """
+            from PySide6.QtCore import qWarning
+
+
+            @story("Snap/Warn")
+            def warn(ctx):
+                qWarning("snapshot probe warning")
+                return QLabel("x")
+            """
+        ),
+    )
+
+    result = _run(pytester, "--storybook", "--storybook-update-snapshots", "--storybook-themes", "Light", "-k", "snapshot")
+
+    result.assert_outcomes(failed=1)
+    assert not _baseline(pytester, "Snap__Warn[Light]").exists()
+
+
+def test_an_unreadable_baseline_fails_with_a_hint(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _snapshot_project(pytester)
+    _baseline(pytester).parent.mkdir(parents=True)
+    _baseline(pytester).write_bytes(b"not a png")
+
+    result = _compare(pytester)
+
+    result.assert_outcomes(failed=1)
+    assert "is not a readable image" in result.stdout.str()
+
+
+def test_the_folders_come_from_the_ini_keys(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _snapshot_project(pytester, ini='storybook_snapshot_dir = "baselines"\nstorybook_snapshot_failures = "out"')
+    _update(pytester).assert_outcomes(passed=1)
+    assert (pytester.path / "baselines" / sys.platform / "Snap__Swatch[Light].png").is_file()
+    (pytester.path / "colour.txt").write_text("#993333", encoding="utf-8")
+
+    _compare(pytester).assert_outcomes(failed=1)
+
+    assert (pytester.path / "out" / sys.platform / "Snap__Swatch[Light].diff.png").is_file()
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("storybook_snapshot_tolerance", "256"), ("storybook_snapshot_tolerance", "-1"), ("storybook_snapshot_max_diff", "1.5")],
+)
+def test_a_malformed_snapshot_ini_value_is_a_usage_error(pytester: pytest.Pytester, stories: StoryRegistry, key: str, value: str) -> None:
+    _snapshot_project(pytester, ini=f'{key} = "{value}"')
+
+    result = _run(pytester, "--storybook", "--storybook-snapshots")
+
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    assert key in result.stderr.str()
+
+
+def test_snapshots_run_under_xdist_without_the_cache_provider(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _snapshot_project(pytester)
+    flags = ("--storybook", "--storybook-themes", "Light,Dark", "-k", "Swatch and snapshot", "-p", "no:cacheprovider", "-n", "2")
+
+    created = pytester.runpytest_subprocess(*flags, "--storybook-update-snapshots", timeout=180)
+    matched = pytester.runpytest_subprocess(*flags, "--storybook-snapshots", timeout=180)
+    (pytester.path / "colour.txt").write_text("#993333", encoding="utf-8")
+    failed = pytester.runpytest_subprocess(*flags, "--storybook-snapshots", timeout=180)
+
+    created.assert_outcomes(passed=2)
+    matched.assert_outcomes(passed=2)
+    failed.assert_outcomes(failed=2)
+    for theme in ("Light", "Dark"):
+        assert (_baseline(pytester, f"Snap__Swatch[{theme}]")).is_file()
+        assert (_failures(pytester) / f"Snap__Swatch[{theme}].diff.png").is_file()
+    assert "INTERNALERROR" not in failed.stdout.str()
+
+
+@pytest.mark.full
+def test_every_example_renders_to_identical_images_twice_in_light_and_dark(
+    pytester: pytest.Pytester, stories: StoryRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pytester.makepyprojecttoml("[tool.pytest.ini_options]\n")
+    args = ("--storybook", "--storybook-update-snapshots", "--storybook-stories", "pyside6_storybook.examples", *_TWO_THEMES)
+    folders = [pytester.path / "first", pytester.path / "second"]
+    for folder in folders:
+        _forget_the_examples(monkeypatch)
+        _run(pytester, *args, "-k", "snapshot", "-o", f"storybook_snapshot_dir={folder.name}").assert_outcomes(passed=40)
+
+    names = sorted(path.name for path in (folders[0] / sys.platform).glob("*.png"))
+    assert len(names) == 40
+    assert names == sorted(path.name for path in (folders[1] / sys.platform).glob("*.png"))
+    different = [name for name in names if (folders[0] / sys.platform / name).read_bytes() != (folders[1] / sys.platform / name).read_bytes()]
+    assert different == []

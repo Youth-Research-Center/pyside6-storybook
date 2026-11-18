@@ -138,6 +138,8 @@ in the same pull request as the bump.
     opaque host, and `StorybookFailure`), `storybook_options.py` (`StorybookOptions`, the options and ini keys), `storybook_collector.py`
     (`StorybookCollector`), `storybook_item.py` (`StorybookItem`, the base of every item), `story_item.py` (`StoryItem`),
     `a11y_item.py` (`A11yItem`, the `--storybook-a11y` items), `contrast_item.py` (`ContrastItem`, the `[<theme>-contrast]` items),
+    `snapshot_item.py` (`SnapshotItem`, the `[<theme>-snapshot]` items), `snapshots.py` (`capture`, `compare`, `SnapshotDiff` and the diff
+    image: comparison on `QImage` bytes, rows first, per-pixel work only on rows that differ),
     `load_error_item.py` (`StoryLoadErrorItem` and `ConfigurationItem`), `qt_messages.py` (`QtMessageCollector`), `exception_capture.py`
     (`ExceptionCapture`, which collects what PySide6 hands to `sys.excepthook` while a story renders) and `fixtures.py` (the
     implementation of `render_story`)

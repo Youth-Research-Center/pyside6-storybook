@@ -66,6 +66,18 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=False,
         help="also check the text of disabled widgets for contrast",
     )
+    group.addoption(
+        "--storybook-snapshots",
+        action="store_true",
+        default=False,
+        help="also compare a screenshot of every story and theme with its baseline (items <id>[<theme>-snapshot])",
+    )
+    group.addoption(
+        "--storybook-update-snapshots",
+        action="store_true",
+        default=False,
+        help="write or replace the baseline of every snapshot item instead of comparing; implies --storybook-snapshots",
+    )
     parser.addini("storybook", "turn the pyside6-storybook plugin on", type="bool", default=False)
     parser.addini("storybook_stories", "story targets, one per line", type="linelist", default=[])
     parser.addini("storybook_theme_provider", "the theme provider, as module:attribute", default="")
@@ -76,6 +88,15 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addini("storybook_contrast_normal", "the contrast ratio normal text needs", default="4.5")
     parser.addini("storybook_contrast_large", "the contrast ratio large text needs (18 pt, or 14 pt bold)", default="3")
     parser.addini("storybook_contrast_disabled", "also check the text of disabled widgets for contrast", type="bool", default=False)
+    parser.addini("storybook_snapshots", "also compare a screenshot of every story and theme with its baseline", type="bool", default=False)
+    parser.addini("storybook_snapshot_dir", "where the baselines are, relative to the rootdir (default: tests/storybook_snapshots)", default="")
+    parser.addini(
+        "storybook_snapshot_failures",
+        "where the actual and diff images of a failed snapshot are written, relative to the rootdir (default: storybook-snapshot-failures)",
+        default="",
+    )
+    parser.addini("storybook_snapshot_tolerance", "the largest difference of one colour channel (0 to 255) that counts as equal", default="0")
+    parser.addini("storybook_snapshot_max_diff", "the largest share of differing pixels (0 to 1) that still passes", default="0")
     parser.addini(
         "storybook_qt_warnings_ignore",
         "regular expressions of Qt warnings that never fail an item, one per line",

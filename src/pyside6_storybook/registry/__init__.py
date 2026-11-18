@@ -37,7 +37,7 @@ def story(
             ``default_layout``.
         decorators: Functions that wrap the story's widget, the first one outermost; see ``Decorator``.
         checks_ignore: Rules of the pytest plugin's checks the story opts out of, each with the reason: ``{"focus": "decorative"}``.
-            The rules are ``"name"``, ``"focus"`` and ``"contrast"``.
+            The rules are ``"name"``, ``"focus"``, ``"contrast"`` and ``"snapshot"``.
 
     Returns:
         A decorator returning the registered ``Story``.
