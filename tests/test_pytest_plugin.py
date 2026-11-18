@@ -119,6 +119,49 @@ def test_the_plugin_collects_nothing_without_the_flag(pytester: pytest.Pytester,
     assert "storybook::" not in result.stdout.str()
 
 
+@pytest.mark.parametrize(
+    "option",
+    [
+        ("--storybook-update-snapshots",),
+        ("--storybook-snapshots",),
+        ("--storybook-a11y",),
+        ("--storybook-no-contrast",),
+        ("--storybook-contrast-disabled",),
+        ("--storybook-themes", "Light"),
+        ("--storybook-qt-warnings", "ignore"),
+    ],
+    ids=lambda option: option[0],
+)
+def test_an_item_option_without_the_flag_is_a_usage_error(pytester: pytest.Pytester, stories: StoryRegistry, option: tuple[str, ...]) -> None:
+    # Without the plugin these options did nothing, so --storybook-update-snapshots alone wrote no baseline and said nothing (#94).
+    _project(pytester)
+
+    result = _run(pytester, *option)
+
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines([f"*{option[0]} needs --storybook (or storybook = true in the pytest ini options)*"])
+
+
+def test_two_item_options_without_the_flag_are_named_together(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(pytester)
+
+    result = _run(pytester, "--storybook-a11y", "--storybook-snapshots")
+
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*--storybook-a11y, --storybook-snapshots need --storybook (or storybook = true in the pytest ini options)*"])
+
+
+def test_the_options_of_the_fixture_and_the_ini_keys_do_not_need_the_flag(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    # render_story works without --storybook and reads the stories and the provider; a project may keep the item settings in its ini
+    # options and turn the plugin on with --storybook in CI only.
+    _project(pytester, ini="storybook_a11y = true\nstorybook_snapshots = true")
+    pytester.makepyfile(test_plain="def test_plain():\n    pass\n")
+
+    result = _run(pytester, "--storybook-stories", "stories", "--storybook-theme-provider", "pyside6_storybook:BuiltinThemeProvider")
+
+    result.assert_outcomes(passed=1)
+
+
 def test_the_ini_option_turns_the_plugin_on(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
     _project(pytester, ini="storybook = true")
 
