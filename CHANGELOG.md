@@ -5,6 +5,11 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Accessibility checks: `pyside6_storybook.checks` has `check_accessible_names(widget)` and `check_keyboard_focus(widget)`, which return
+  a `CheckIssue` (`rule`, `widget_class`, `object_name`, `path`, `message`) for each control without an accessible name or without Tab
+  focus. `pytest --storybook-a11y` (ini `storybook_a11y`) runs them on every story as `storybook::<id>[a11y-name]` and
+  `storybook::<id>[a11y-focus]`. `story()`, `StoryRegistry.story()`, `Story` and `Story.variant()` take `checks_ignore`, a mapping from
+  a rule (`"name"` or `"focus"`) to the reason the story opts out; the test is skipped with that reason, and a variant inherits it.
 - pytest plugin: install the `pytest` extra (`pyside6-storybook[pytest]`, which adds `pytest` and `pytest-qt`) and run `pytest --storybook`
   (or set `storybook = true`) to render every story in every theme as one test, `storybook::<story id>[<theme>]`, which fails when the
   story or a decorator raises (with the story's own traceback, also from a `paintEvent` or a slot, with or without pytest-qt), the
@@ -124,6 +129,8 @@ All notable changes to this project are documented in this file.
   `pyside6-storybook --examples`.
 
 ### Changed
+- The built-in examples set accessible names on the Line Edit, Spin Box, Double Spin Box, Combo Box, Slider and Table widgets, so they
+  pass the accessibility checks.
 - `--theme` no longer limits its value with argparse: an unknown name prints an error and exits with code 1 (was 2) after the theme
   provider has loaded, and the valid names are the provider's. `pythonpath`, `theme_provider` and `theme` in `pyproject.toml` are read
   also when the command line names targets, so an invalid `pyproject.toml` is an error then too (it was ignored).

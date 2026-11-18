@@ -22,6 +22,7 @@ from pyside6_storybook import (
     TextControl,
     load_stories,
 )
+from pyside6_storybook.checks import check_accessible_names, check_keyboard_focus
 from pyside6_storybook.cli import EXAMPLES_MODULE
 from pyside6_storybook.gui import ErrorPanel, GalleryWindow
 from pyside6_storybook.gui.sidebar import StorySidebar
@@ -98,6 +99,18 @@ def test_the_file_path_example_shows_a_path_with_markup_verbatim(qtbot, examples
     assert isinstance(widget, QLabel)
     assert widget.text() == "<b>notes.txt"
     assert widget.textFormat() == Qt.TextFormat.PlainText
+
+
+@pytest.mark.parametrize("story_id", EXPECTED_IDS)
+def test_every_example_passes_the_accessibility_checks(qtbot, examples: StoryRegistry, themes: BuiltinThemeProvider, story_id: str) -> None:
+    example = examples.get(story_id)
+    widget = render_story(example, StoryContext(args=example.default_args()), registry=examples).root
+    qtbot.addWidget(widget)
+    widget.show()
+    qtbot.waitUntil(widget.isVisible, timeout=5000)
+
+    assert [str(issue) for issue in check_accessible_names(widget)] == []
+    assert [str(issue) for issue in check_keyboard_focus(widget)] == []
 
 
 def test_every_example_has_a_docstring(examples: StoryRegistry) -> None:

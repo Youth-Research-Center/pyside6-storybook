@@ -503,6 +503,7 @@ the command line wins.
   `theme_provider` in `[tool.pyside6-storybook]`, else the built-in themes.
 - `--storybook-themes NAMES`, ini `storybook_themes`: comma-separated themes to render each story in. Default: every theme the
   provider lists (the built-in ones are Light, Dark and System).
+- `--storybook-a11y`, ini `storybook_a11y` (a bool): also check names and keyboard focus (see "Accessibility checks").
 - `--storybook-qt-warnings {fail,ignore}`, ini `storybook_qt_warnings`: whether a Qt warning logged during a render fails the test.
   Default `fail`.
 - ini `storybook_qt_warnings_ignore` (one regular expression per line, no command-line option): the warnings that never fail a test; a
@@ -524,6 +525,47 @@ storybook_qt_warnings_ignore = [
     "propagateSizeHints",
     "QFont::setPointSize: Point size <= 0",
 ]
+```
+
+### Accessibility checks
+
+`--storybook-a11y` adds two tests per story, `storybook::<story id>[a11y-name]` and `storybook::<story id>[a11y-focus]`. They do not
+depend on the theme, so each renders the story once, in the first selected theme. A failing test lists every issue with the rule, the
+widget's class and object name, its path (the class names from the story's outermost widget down, with the index among siblings of the
+same class: `QWidget/QGroupBox[0]/QToolButton[1]`) and what to do.
+
+- `name`: every visible, enabled control has an accessible name, the text a screen reader announces: the widget's text, a buddy label's
+  text, or `setAccessibleName`. A tooltip is not a name, and a combo box's current text does not count (it needs `setAccessibleName` or a
+  buddy label). Buttons, line and text edits, spin boxes, combo boxes, sliders, item views, tab bars and anything that takes focus with
+  Tab are controls; the tabs of a `QTabWidget` are checked through their texts.
+- `focus`: the same controls take focus with the Tab key (their focus policy includes `TabFocus`).
+
+The internals of composite widgets are not checked: the line edit of a spin box or an editable combo box, the headers, scroll bars and
+viewport of an item view, a tab widget's tab bar, the clear button of a line edit. A `QScrollArea` is a container, so its content is
+checked, not the area.
+
+A story opts out of a rule with `checks_ignore`, a mapping from the rule to the reason; the test is then skipped and `-rs` shows
+`name ignored: decorative icon`. A variant has its base's `checks_ignore` unless it passes its own.
+
+```python
+@story("Icons/Close", checks_ignore={"name": "decorative: the label next to it names the action"})
+def close_icon(ctx): ...
+```
+
+The checks are plain functions in `pyside6_storybook.checks`, so a test of your own can run them on any widget:
+`check_accessible_names(widget)` and `check_keyboard_focus(widget)` return a list of `CheckIssue` (`rule`, `widget_class`,
+`object_name`, `path`, `message`), empty when the widget passes.
+
+```python
+from pyside6_storybook.checks import check_accessible_names
+
+
+def test_the_toolbar_is_named(qtbot):
+    toolbar = build_toolbar()
+    qtbot.addWidget(toolbar)
+    toolbar.show()
+
+    assert [str(issue) for issue in check_accessible_names(toolbar)] == []
 ```
 
 ### Selecting tests

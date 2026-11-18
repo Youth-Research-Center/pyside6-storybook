@@ -24,6 +24,7 @@ _ORIENTATIONS = {"Horizontal": Qt.Orientation.Horizontal, "Vertical": Qt.Orienta
 def line_edit(ctx: StoryContext) -> QWidget:
     """A ``QLineEdit``. The placeholder shows only while the text is empty; ``Password`` echo mode hides what is typed."""
     edit = QLineEdit(ctx.args["text"])
+    edit.setAccessibleName("Text")
     edit.setPlaceholderText(ctx.args["placeholder"])
     edit.setReadOnly(ctx.args["read_only"])
     edit.setEchoMode(_ECHO_MODES[ctx.args["echo_mode"]])
@@ -41,6 +42,7 @@ line_edit.variant("Read-only", args={"text": "This text cannot be edited", "read
 def spin_box(ctx: StoryContext) -> QWidget:
     """A ``QSpinBox`` from 0 to ``maximum``. A ``value`` outside that range is clamped, which is how the widget behaves."""
     box = QSpinBox()
+    box.setAccessibleName("Item count")
     box.setRange(0, ctx.args["maximum"])
     box.setSuffix(ctx.args["suffix"])
     box.setValue(ctx.args["value"])
@@ -57,6 +59,7 @@ def spin_box(ctx: StoryContext) -> QWidget:
 def double_spin_box(ctx: StoryContext) -> QWidget:
     """A ``QDoubleSpinBox`` from 0 to 10. Fewer ``decimals`` round the shown value."""
     box = QDoubleSpinBox()
+    box.setAccessibleName("Value")
     box.setRange(0.0, 10.0)
     box.setDecimals(ctx.args["decimals"])
     box.setValue(ctx.args["value"])
@@ -67,6 +70,7 @@ def double_spin_box(ctx: StoryContext) -> QWidget:
 def combo_box(ctx: StoryContext) -> QWidget:
     """A ``QComboBox``. An editable combo box also accepts typed text that is not in the list."""
     box = QComboBox()
+    box.setAccessibleName("Fruit")
     box.addItems(_FRUITS)
     box.setCurrentText(ctx.args["selected"])
     box.setEditable(ctx.args["editable"])
@@ -77,6 +81,7 @@ def combo_box(ctx: StoryContext) -> QWidget:
 def slider(ctx: StoryContext) -> QWidget:
     """A ``QSlider`` from 0 to 100, lying down or standing up. Moving it logs ``valueChanged`` in the Actions tab."""
     widget = QSlider(_ORIENTATIONS[ctx.args["orientation"]])
+    widget.setAccessibleName("Value")
     widget.setRange(0, 100)
     widget.setValue(ctx.args["value"])
     ctx.log_signal(widget.valueChanged)

@@ -48,11 +48,18 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         choices=("fail", "ignore"),
         help="whether a Qt warning logged while a story renders fails its item (default: fail)",
     )
+    group.addoption(
+        "--storybook-a11y",
+        action="store_true",
+        default=False,
+        help="also check every story for controls without an accessible name or Tab focus (items <id>[a11y-name] and <id>[a11y-focus])",
+    )
     parser.addini("storybook", "turn the pyside6-storybook plugin on", type="bool", default=False)
     parser.addini("storybook_stories", "story targets, one per line", type="linelist", default=[])
     parser.addini("storybook_theme_provider", "the theme provider, as module:attribute", default="")
     parser.addini("storybook_themes", "comma-separated themes to render each story in", default="")
     parser.addini("storybook_qt_warnings", "fail or ignore: whether a Qt warning during a render fails the item", default="")
+    parser.addini("storybook_a11y", "also check accessible names and keyboard focus of every story", type="bool", default=False)
     parser.addini(
         "storybook_qt_warnings_ignore",
         "regular expressions of Qt warnings that never fail an item, one per line",

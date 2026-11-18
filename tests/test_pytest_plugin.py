@@ -1014,3 +1014,179 @@ def test_a_failing_story_and_a_load_error_under_xdist(pytester: pytest.Pytester,
 
     result.assert_outcomes(passed=4, failed=1)
     assert "INTERNALERROR" not in result.stdout.str()
+
+
+# --- accessible names and keyboard focus (--storybook-a11y) ---------------------------------------------------------------------
+
+
+_A11Y_STORIES = _story_module(
+    """
+    @story("Icons/Named")
+    def named(ctx):
+        button = QToolButton()
+        button.setAccessibleName("Close")
+        return button
+
+
+    @story("Icons/Unnamed")
+    def unnamed(ctx):
+        button = QToolButton()
+        button.setObjectName("close_button")
+        return button
+
+
+    @story("Icons/Skipped", checks_ignore={"name": "decorative icon", "focus": "not interactive"})
+    def skipped(ctx):
+        button = QToolButton()
+        button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        return button
+    """,
+    imports="from PySide6.QtCore import Qt\nfrom PySide6.QtWidgets import QToolButton",
+)
+
+
+def test_a11y_adds_two_items_per_story_after_its_theme_items(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(pytester)
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", *_TWO_THEMES, "--collect-only", "-q")
+
+    assert [line for line in result.outlines if line.startswith("storybook::")] == [
+        "storybook::Inputs/Button[Light]",
+        "storybook::Inputs/Button[Dark]",
+        "storybook::Inputs/Button[a11y-name]",
+        "storybook::Inputs/Button[a11y-focus]",
+        "storybook::Inputs/Label[Light]",
+        "storybook::Inputs/Label[Dark]",
+        "storybook::Inputs/Label[a11y-name]",
+        "storybook::Inputs/Label[a11y-focus]",
+    ]
+
+
+def test_without_the_a11y_option_there_are_no_a11y_items(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(pytester)
+
+    result = _run(pytester, "--storybook", *_TWO_THEMES, "--collect-only", "-q")
+
+    assert "a11y" not in result.stdout.str()
+
+
+def test_the_ini_key_turns_the_a11y_items_on(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(pytester, ini="storybook = true\nstorybook_a11y = true")
+
+    result = _run(pytester, "--storybook-themes", "Light")
+
+    result.assert_outcomes(passed=6)
+
+
+def test_an_unnamed_icon_button_fails_naming_the_widget(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(pytester, _A11Y_STORIES)
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Light", "-v", "-rs")
+
+    result.assert_outcomes(passed=6, failed=1, skipped=2)
+    result.stdout.fnmatch_lines(
+        [
+            "storybook::Icons/Named[[]a11y-name[]] PASSED*",
+            "storybook::Icons/Unnamed[[]a11y-name[]] FAILED*",
+            "storybook::Icons/Unnamed[[]a11y-focus[]] PASSED*",
+        ]
+    )
+    result.stdout.fnmatch_lines(
+        ["*1 accessibility issue(s) for the 'name' rule in Icons/Unnamed:*", "*QToolButton 'close_button' at QToolButton: has no accessible*"]
+    )
+
+
+def test_an_ignored_rule_is_skipped_with_its_reason(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(pytester, _A11Y_STORIES)
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Light", "-rs")
+
+    # The skip names the story's own file, not the plugin's.
+    result.stdout.fnmatch_lines(
+        [
+            "SKIPPED [[]1[]] stories/demo_stories.py: name ignored: decorative icon",
+            "SKIPPED [[]1[]] stories/demo_stories.py: focus ignored: not interactive",
+        ]
+    )
+
+
+def test_a_variant_is_skipped_through_the_inherited_ignore(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(
+        pytester,
+        _story_module(
+            """
+            @story("Icons/Button/Default", checks_ignore={"name": "decorative"})
+            def button(ctx):
+                return QToolButton()
+
+
+            button.variant("Other")
+            """,
+            imports="from PySide6.QtWidgets import QToolButton",
+        ),
+    )
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Light", "-rs")
+
+    result.assert_outcomes(passed=4, skipped=2)
+    result.stdout.fnmatch_lines(["*SKIPPED [[]2[]]*name ignored: decorative"])
+
+
+@pytest.mark.parametrize("extra", _WITH_AND_WITHOUT_PYTEST_QT)
+def test_an_a11y_item_fails_on_a_story_exception_like_a_story_item(pytester: pytest.Pytester, stories: StoryRegistry, extra: tuple[str, ...]) -> None:
+    _project(pytester, _PAINT_STORY)
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Light", *extra)
+
+    result.assert_outcomes(failed=3)
+    assert result.stdout.str().count("paint boom") >= 3
+
+
+@pytest.mark.parametrize("extra", _WITH_AND_WITHOUT_PYTEST_QT)
+def test_an_a11y_item_fails_when_the_story_raises(pytester: pytest.Pytester, stories: StoryRegistry, extra: tuple[str, ...]) -> None:
+    _project(pytester, _story_module(
+        """
+        @story("Broken/Raises")
+        def broken(ctx):
+            raise ValueError("story boom")
+        """
+    ))
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Light", *extra)
+
+    result.assert_outcomes(failed=3)
+    assert "story boom" in result.stdout.str()
+
+
+def test_the_a11y_items_render_in_the_first_selected_theme(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(
+        pytester,
+        _story_module(
+            """
+            @story("Theme/Probe")
+            def probe(ctx):
+                raise RuntimeError(f"rendered in {ctx.theme}")
+            """
+        ),
+    )
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Dark,Light", "-k", "a11y-focus")
+
+    result.assert_outcomes(failed=1)
+    assert "rendered in Dark" in result.stdout.str()
+
+
+def test_the_examples_pass_both_a11y_rules_in_light_and_dark(
+    pytester: pytest.Pytester, stories: StoryRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pytester.makepyprojecttoml("[tool.pytest.ini_options]\n")
+    _forget_the_examples(monkeypatch)
+    args = ("--storybook", "--storybook-a11y", "--storybook-stories", "pyside6_storybook.examples", *_TWO_THEMES)
+    listed = _run(pytester, *args, "--collect-only", "-q")
+    count = len([line for line in listed.outlines if line.startswith("storybook::")])
+    _forget_the_examples(monkeypatch)
+
+    result = _run(pytester, *args)
+
+    assert count == 20 * 4
+    result.assert_outcomes(passed=count)

@@ -87,6 +87,8 @@ in the same pull request as the bump.
     - `story_context.py`: `StoryContext` (with `args`, `theme`, `actions`, `tokens` and `color_scheme`), `StoryFunction`, `Decorator`;
     - `story_definition.py`: `Story`, `StoryOrigin`; `Story.variant` registers a variant through the registry link that
       `StoryRegistry.register` sets;
+    - `checks_ignore.py`: `coerce_checks_ignore`, which validates a story's `checks_ignore` against `checks.rules.CHECK_RULES` (each PR
+      that adds a check adds its rule there);
     - `layout.py`: `Layout`, how the preview places a story's widget;
     - `size_preset.py`: `SizePreset`, a named canvas size;
     - `story_registry.py`: `StoryRegistry`, with `default_layout`, `decorators` and `size_presets`;
@@ -135,9 +137,13 @@ in the same pull request as the bump.
     `storybook_session.py` (`StorybookSession`: the `QApplication`, the provider lifecycle, the story registry, rendering a story in an
     opaque host, and `StorybookFailure`), `storybook_options.py` (`StorybookOptions`, the options and ini keys), `storybook_collector.py`
     (`StorybookCollector`), `storybook_item.py` (`StorybookItem`, the base of every item), `story_item.py` (`StoryItem`),
+    `a11y_item.py` (`A11yItem`, the `--storybook-a11y` items),
     `load_error_item.py` (`StoryLoadErrorItem` and `ConfigurationItem`), `qt_messages.py` (`QtMessageCollector`), `exception_capture.py`
     (`ExceptionCapture`, which collects what PySide6 hands to `sys.excepthook` while a story renders) and `fixtures.py` (the
     implementation of `render_story`)
+  - `checks/` - public checks that run on any widget: `check_issue.py` (`CheckIssue`), `accessibility.py` (`check_accessible_names`,
+    `check_keyboard_focus`) and `rules.py` (the rule names `checks_ignore` accepts); `__init__.py` re-exports the first two and
+    `CheckIssue`, the package root does not
   - `contrast.py` - WCAG contrast helpers
   - `polishing.py` (internal) - `polish_all_widgets`, the workaround for a Qt crash when the application style sheet changes while a
     widget was never polished

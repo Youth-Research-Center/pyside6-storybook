@@ -22,6 +22,8 @@ from PySide6.QtWidgets import QApplication, QLayout, QVBoxLayout, QWidget
 
 import pyside6_storybook
 from pyside6_storybook import registry as registry_module
+from pyside6_storybook.checks import CheckIssue, check_accessible_names, check_keyboard_focus
+from pyside6_storybook.checks.rules import RULE_FOCUS, RULE_NAME
 from pyside6_storybook.discovery import LoadError, load_stories
 from pyside6_storybook.discovery.sources import StorySources, StorySourcesError, put_on_sys_path, resolve_story_sources
 from pyside6_storybook.polishing import polish_all_widgets
@@ -40,6 +42,9 @@ if TYPE_CHECKING:
     from pyside6_storybook.testing.storybook_collector import StorybookCollector
 
 NO_STORIES_CONFIGURED = "no stories configured: set `storybook_stories` or `stories` in `[tool.pyside6-storybook]`"
+
+A11Y_CHECKS: dict[str, Callable[[QWidget], list[CheckIssue]]] = {RULE_NAME: check_accessible_names, RULE_FOCUS: check_keyboard_focus}
+"""The accessibility rules a story is checked for with ``--storybook-a11y``, by name, in item order."""
 
 _logger = logging.getLogger(__name__)
 _T = TypeVar("_T")
@@ -213,8 +218,10 @@ class StorybookSession:
             collector: The parent of the items.
 
         Returns:
-            One item per story and theme, one per load error, or a single configuration item.
+            One item per story and theme (plus one per story and accessibility rule with ``--storybook-a11y``), one per load error,
+            or a single configuration item.
         """
+        from pyside6_storybook.testing.a11y_item import A11yItem
         from pyside6_storybook.testing.load_error_item import ConfigurationItem, StoryLoadErrorItem
         from pyside6_storybook.testing.story_item import StoryItem
 
@@ -223,7 +230,11 @@ class StorybookSession:
             return [ConfigurationItem.from_parent(collector, message=self.configuration_error)]
         registry = self.registry
         assert registry is not None
-        items: list[pytest.Item] = [StoryItem.from_parent(collector, story=story, theme=theme) for story in registry for theme in self.themes]
+        items: list[pytest.Item] = []
+        for story in registry:
+            items.extend(StoryItem.from_parent(collector, story=story, theme=theme) for theme in self.themes)
+            if self.options.a11y:
+                items.extend(A11yItem.from_parent(collector, story=story, rule=rule) for rule in A11Y_CHECKS)
         items.extend(StoryLoadErrorItem.from_parent(collector, error=error) for error in self.load_errors)
         if not items:
             targets = ", ".join(self.sources.targets)
@@ -348,12 +359,46 @@ class StorybookSession:
             StoryRenderError: If the story or a decorator fails.
             StorybookFailure: If the theme provider fails, Qt logged a warning or an exception reached ``sys.excepthook``.
         """
+        self._check_rendered(story, theme, lambda rendered: [])
+
+    def check_accessibility(self, story: Story, rule: str) -> None:
+        """Render a story in the first selected theme and run one accessibility rule on it, as an accessibility item does.
+
+        The rule does not depend on the theme. The render is checked as ``check_story`` checks it.
+
+        Args:
+            story: The story to check.
+            rule: One of ``A11Y_CHECKS``.
+
+        Raises:
+            StoryRenderError: If the story or a decorator fails.
+            StorybookFailure: If the rule finds an issue, the theme provider fails, Qt logged a warning or an exception reached
+                ``sys.excepthook``.
+        """
+        check = A11Y_CHECKS[rule]
+        theme = self.themes[0]
+
+        def inspect(rendered: RenderedHost) -> list[str]:
+            issues = check(rendered.root)
+            if not issues:
+                return []
+            return [f"{len(issues)} accessibility issue(s) for the {rule!r} rule in {story.id}:", *(f"  {issue}" for issue in issues)]
+
+        self._check_rendered(story, theme, inspect)
+
+    def _check_rendered(self, story: Story, theme: str, inspect: Callable[[RenderedHost], list[str]]) -> None:
+        """Render ``story`` in ``theme``, call ``inspect`` on it before it is disposed, and fail on its lines, Qt warnings and exceptions."""
         collector = QtMessageCollector()
         self._collector = collector
+        found: list[str] = []
         try:
             with collector, ExceptionCapture() as exceptions:
                 self.set_theme(theme)
-                self.render(story).dispose()
+                rendered = self.render(story)
+                try:
+                    found = inspect(rendered)
+                finally:
+                    rendered.dispose()
         finally:
             self._collector = None
         unexcused = collector.unexcused(self.options.qt_warnings_ignore) if self.options.qt_warnings_fail else []
@@ -364,6 +409,7 @@ class StorybookSession:
         if unexcused:
             listed = "\n".join(f"  {message}" for message in unexcused)
             parts.append(f"Qt logged {len(unexcused)} warning(s) while rendering {story.id} in {theme}:\n{listed}")
+        parts.extend(found)
         if parts:
             raise StorybookFailure("\n".join(parts))
 
@@ -440,4 +486,4 @@ def _ensure_application() -> QApplication:
     return _application
 
 
-__all__ = ["NO_STORIES_CONFIGURED", "RenderedHost", "StoryRenderError", "StorybookFailure", "StorybookSession"]
+__all__ = ["A11Y_CHECKS", "NO_STORIES_CONFIGURED", "RenderedHost", "StoryRenderError", "StorybookFailure", "StorybookSession"]

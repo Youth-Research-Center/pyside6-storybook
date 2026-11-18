@@ -20,6 +20,12 @@ def test_the_defaults_turn_the_plugin_off_and_fail_on_qt_warnings(pytester: pyte
     assert options.themes is None
     assert options.qt_warnings_fail is True
     assert [pattern.pattern for pattern in options.qt_warnings_ignore] == ["propagateSizeHints"]
+    assert options.a11y is False
+
+
+def test_the_a11y_option_and_ini_key_turn_the_accessibility_items_on(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    assert _options(pytester, "--storybook-a11y").a11y is True
+    assert _options(pytester, ini="storybook_a11y = true").a11y is True
 
 
 def test_every_ini_key_is_read(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
