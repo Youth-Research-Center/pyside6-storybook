@@ -105,17 +105,40 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
+ITEM_OPTIONS = (
+    "--storybook-themes",
+    "--storybook-qt-warnings",
+    "--storybook-a11y",
+    "--storybook-no-contrast",
+    "--storybook-contrast-disabled",
+    "--storybook-snapshots",
+    "--storybook-update-snapshots",
+)
+"""The command-line options that only shape the plugin's items, so they are a usage error while the plugin is off.
+
+``--storybook-stories`` and ``--storybook-theme-provider`` are not among them: the ``render_story`` fixture reads them without
+``--storybook``. The ini keys are not checked either, so a project can keep its settings in its configuration and turn the plugin on
+with ``--storybook`` only where it wants the story tests.
+"""
+
+
 def pytest_configure(config: pytest.Config) -> None:
     """Register the ``storybook`` marker and, when the plugin is on, check the options and the story sources.
 
     Raises:
-        pytest.UsageError: If an option or the ``[tool.pyside6-storybook]`` table is malformed, or no stories are configured.
+        pytest.UsageError: If an option or the ``[tool.pyside6-storybook]`` table is malformed, or no stories are configured; or, while
+            the plugin is off, an option of ``ITEM_OPTIONS`` is given.
     """
     config.addinivalue_line("markers", "storybook: a story rendered in a theme by the pyside6-storybook pytest plugin")
     if config.getoption("storybook") or config.getini("storybook"):
         from pyside6_storybook.testing.storybook_session import StorybookSession
 
         config.stash[SESSION_KEY] = StorybookSession.from_config(config)
+        return
+    given = [flag for flag in ITEM_OPTIONS if config.getoption(flag.lstrip("-").replace("-", "_")) not in (None, False)]
+    if given:
+        verb = "needs" if len(given) == 1 else "need"
+        raise pytest.UsageError(f"{', '.join(given)} {verb} --storybook (or storybook = true in the pytest ini options)")
 
 
 @pytest.hookimpl(wrapper=True, tryfirst=True)

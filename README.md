@@ -494,7 +494,10 @@ cleared after it is shown, so a line edit does not keep a blinking caret. The of
 ### Options
 
 Every setting has a command-line option and an ini option (`pytest.ini`, `pyproject.toml` under `[tool.pytest.ini_options]`, ...), and
-the command line wins.
+the command line wins. While the plugin is off, a command-line option that only shapes the story tests (`--storybook-themes`,
+`--storybook-qt-warnings`, `--storybook-a11y`, the contrast and snapshot options) is a usage error that asks for `--storybook`, so
+`pytest --storybook-update-snapshots` alone does not silently update nothing. `--storybook-stories`, `--storybook-theme-provider` and
+the ini options are accepted, for the `render_story` fixture and for a project that turns the plugin on with `--storybook` only in CI.
 
 - `--storybook`, ini `storybook` (a bool): turn the plugin on.
 - `--storybook-stories TARGET` (repeatable), ini `storybook_stories` (one target per line): the folders, files and dotted module names

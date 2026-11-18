@@ -34,7 +34,8 @@ All notable changes to this project are documented in this file.
   `storybook::configuration` test, and a project without configured stories is a usage error instead of testing the built-in examples.
   Options and ini keys: `--storybook-stories`, `--storybook-theme-provider`, `--storybook-themes`. The tests carry the `storybook`
   marker and work with `-k`, `--deselect`, `--lf` and pytest-xdist. The new `render_story(story_id, *, args=None, theme=None)` fixture
-  renders a story by id in a test you write yourself. The plugin imports neither Qt nor the library unless it is enabled.
+  renders a story by id in a test you write yourself. The plugin imports neither Qt nor the library unless it is enabled, and an option
+  that only shapes the story tests is a usage error while it is off (#94).
   `StorySources` has the keyword-only `fallback`, true for the built-in examples fallback. See "Testing stories" in the README.
 - Theming guide, `docs/theming.md`, with two screenshots (rendered by `scripts/docs/render_theming_images.py`), and the worked example
   `examples/themed_app`: an application with two themes, a pill button, a token-painted gauge and a `ThemeProvider` for them. Run it from
