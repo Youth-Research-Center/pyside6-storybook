@@ -74,6 +74,12 @@ uv run ruff check --fix .                                  # auto-fix, including
 uv run ruff check --select W291,W292,W293 <files you changed>
 uv run ty check
 uvx --from actionlint-py==1.7.12.25 actionlint             # lints every workflow; CI runs the same pinned version
+```
+
+`actionlint` checks the shell in `run:` blocks only when `shellcheck` is on `PATH`, as it is on CI's runners. Install it once
+(`uv tool install shellcheck-py`), or a clean local run can still fail in CI.
+
+```bash
 uv run python scripts/icons/build_icon_bundle.py --check   # fails when the icon bundle, licence or notices are out of date
 ```
 
