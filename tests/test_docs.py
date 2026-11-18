@@ -77,6 +77,19 @@ def test_no_page_in_the_nav_links_outside_docs_relatively() -> None:
     assert not problems
 
 
+def test_every_image_a_page_shows_exists_under_docs() -> None:
+    missing: list[str] = []
+    for page in sorted(_DOCS.glob("*.md")):
+        for target in _LINK.findall(page.read_text(encoding="utf-8")):
+            if target.startswith(("http://", "https://", "mailto:", "#")) or not target.lower().endswith((".png", ".jpg", ".svg", ".gif")):
+                continue
+            path = (page.parent / target).resolve()
+            if not path.is_file() or not path.is_relative_to(_DOCS.resolve()):
+                missing.append(f"{page.name}: {target}")
+
+    assert not missing
+
+
 # Reading the pages
 
 
