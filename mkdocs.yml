@@ -29,6 +29,7 @@ nav:
   - Themes: themes.md
   - Testing stories: testing.md
   - Troubleshooting: troubleshooting.md
+  - Versions and compatibility: versions.md
   - API reference: reference.md
   - Changelog: changelog.md
   - Roadmap: roadmap.md

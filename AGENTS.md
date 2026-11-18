@@ -210,7 +210,8 @@ in the same pull request as the bump.
 - `tests/` - pytest suite (`pytest-qt`), one test module per source module; `conftest.py` holds the shared fixtures,
   `fake_providers.py` the test theme providers and `story_files.py` the helpers that write story modules for discovery and CLI tests
 - `docs/` - the documentation site's pages: `index.md`, `writing-stories.md`, `controls.md`, `finding-stories.md`, `command-line.md`,
-  `gallery.md`, `themes.md`, `testing.md`, `troubleshooting.md`, `reference.md`, `changelog.md` and `roadmap.md`, and `images/` with the
+  `gallery.md`, `themes.md`, `testing.md`, `troubleshooting.md`, `versions.md` (the version policy and the definition of the public API),
+  `reference.md`, `changelog.md` and `roadmap.md`, and `images/` with the
   screenshots. `theming.md` is a pointer to `themes.md`, kept out of the nav so old links work
 - `examples/themed_app/` - the guide's worked example (a theme manager, widgets, stories and a `ThemeProvider`), not in the wheel; nothing in
   `src/` imports it, and `tests/test_themed_app.py` reaches it through `cli.main` and `load_stories`. It has no `[project]` table, so never run
@@ -229,6 +230,9 @@ in the same pull request as the bump.
   that cannot run alone is preceded by `<!-- docs-test: skip — <reason> -->`, and the test lists every skip, so a new one is a visible
   change. A docs page links another page relatively and a file outside `docs/` by its absolute GitHub URL; `tests/test_docs.py` checks
   it and `mkdocs build --strict` enforces both.
+- `RELEASING.md` - the maintainer's guide to a release (one-time setup, release candidate, release, patch release, a broken release, a failed
+  run); `tests/test_releasing.py` checks the files and environment names it gives against `release.yml` and `scripts/release/`.
+  **Releasing: see `RELEASING.md`; every version change is followed by `uv lock`** (CI's `uv sync --locked` fails otherwise)
 - `.github/` - CI workflows and Dependabot configuration; `tests/test_workflows.py` checks that every workflow parses, never puts
   `${{ github.event.* }}` or `${{ inputs.* }}` into shell source, bounds every job with `timeout-minutes` (a job with `uses:` has none) and
   runs every `run:` step with bash
@@ -259,7 +263,9 @@ in the same pull request as the bump.
 - Gallery chrome takes its colours from `QPalette` roles (`setBackgroundRole`, `setForegroundRole`, `palette(...)` in a style sheet), never from
   fixed colours, so it follows the active theme.
 - The public API is exactly what `src/pyside6_storybook/__init__.py` exports in `__all__`. Everything else is internal and may change. A change
-  to the public API adds an entry to `CHANGELOG.md`, under `## [Unreleased]` and the matching `### Added`/`### Changed`/`### Fixed` heading.
+  to the public API adds an entry to `CHANGELOG.md`, under `## [Unreleased]` and the matching `### Breaking`/`### Added`/`### Changed`/`### Fixed`
+  heading (`### Breaking` comes first, and is for a minor release before 1.0 that breaks the public API; the header of `CHANGELOG.md` has the
+  rule, and `tests/test_changelog.py` checks the structure). What the public API is: `docs/versions.md`.
 - Story discovery and the process-wide `default_registry` are for story authors. Library code takes a `StoryRegistry` as an argument instead of
   reading the global.
 - A story is rebuilt from scratch on every control or theme change, so stories stay stateless.
