@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 import pytest
 from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QImage, QPalette
+from PySide6.QtGui import QFont, QFontDatabase, QFontMetrics, QImage, QPalette
 from PySide6.QtWidgets import QApplication, QLayout, QVBoxLayout, QWidget
 
 import pyside6_storybook
@@ -174,7 +174,7 @@ class StorybookSession:
         return self._active
 
     def prepare(self) -> None:
-        """Create the ``QApplication``, then load the theme provider and the stories; does nothing after the first call.
+        """Create the ``QApplication`` and load its fonts, then load the theme provider and the stories; does nothing after the first call.
 
         ``QT_QPA_PLATFORM`` defaults to ``offscreen``. A provider that cannot be loaded, or a theme that it does not list, is not
         raised: it is kept in ``configuration_error`` and no stories are loaded.
@@ -184,6 +184,7 @@ class StorybookSession:
         self._prepared = True
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         self._app = _ensure_application()
+        _load_fonts()
         put_on_sys_path(self.sources.pythonpath, cwd=self._rootpath)
         spec = self.options.theme_provider or self.sources.theme_provider
         try:
@@ -601,6 +602,18 @@ def _imported_too_early(
             )
             errors.append(LoadError(name, message))
     return tuple(errors)
+
+
+def _load_fonts() -> None:
+    """Load the font database and the application font's engine, before any item collects Qt warnings.
+
+    The first use of fonts in a process can log a warning about the system, not about a story: on Windows the offscreen platform
+    reports "Cannot find font directory", on macOS "Populating font family aliases took N ms". Loading the fonts here keeps it out of
+    the first story's item, which in a fresh process (a pytest-xdist worker) would otherwise fail on it.
+    """
+    QFontDatabase.families()
+    for font in (QApplication.font(), QFont()):
+        QFontMetrics(font).horizontalAdvance("Ag")
 
 
 def _ensure_application() -> QApplication:
