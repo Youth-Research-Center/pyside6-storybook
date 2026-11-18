@@ -111,12 +111,13 @@ For version `X.Y.Z`, the first candidate is `X.Y.Zrc1`.
    ```
 
    In the gallery, switch the theme and edit a control.
-5. If all is well, tag the same commit that the workflow ran on and push the tag:
+5. If all is well, tag the commit the TestPyPI run built (the run's page shows it, as does the release pull request's merge commit), not
+   whatever `main` has moved on to since, and push the tag:
 
    ```bash
-   git switch main
-   git pull --ff-only
-   git tag -a vX.Y.Zrc1 -m "X.Y.Zrc1"
+   git fetch origin
+   git log --oneline -1 <commit>          # check that it is the release pull request's merge commit
+   git tag -a vX.Y.Zrc1 -m "X.Y.Zrc1" <commit>
    git push origin vX.Y.Zrc1
    ```
 
@@ -139,12 +140,12 @@ For version `X.Y.Z`, the first candidate is `X.Y.Zrc1`.
    ```
 
    Merge it.
-2. Tag the merge commit and push the tag:
+2. Tag that pull request's merge commit (shown on the pull request), not whatever `main` has moved on to since, and push the tag:
 
    ```bash
-   git switch main
-   git pull --ff-only
-   git tag -a vX.Y.Z -m "X.Y.Z"
+   git fetch origin
+   git log --oneline -1 <merge commit>    # check that it is the release pull request's merge commit
+   git tag -a vX.Y.Z -m "X.Y.Z" <merge commit>
    git push origin vX.Y.Z
    ```
 

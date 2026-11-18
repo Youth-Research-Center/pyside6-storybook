@@ -72,3 +72,18 @@ def test_the_guide_gives_the_trusted_publisher_values_of_the_project() -> None:
     assert "Actions → Release → Run workflow" in text
     assert 'name = "pyside6-storybook"' in pyproject
     assert "`Youth-Research-Center`" in text
+
+
+def test_every_tag_of_main_names_the_commit_it_tags() -> None:
+    # `git pull` then `git tag` tags whatever main has moved on to, not the commit the release pull request merged and the workflow
+    # tested. Only a patch release tags the tip of its own release/X.Y.x branch, where nothing else lands.
+    blocks = re.findall(r"```bash\n(.*?)```", _text(), flags=re.DOTALL)
+    tag_lines = [
+        (block, line.strip()) for block in blocks for line in block.splitlines() if line.strip().startswith("git tag -a")
+    ]
+    assert tag_lines
+    for block, line in tag_lines:
+        if "git switch release/" in block:
+            continue
+        assert re.search(r" <[^>]+>$", line), line
+        assert "git switch main" not in block, block
