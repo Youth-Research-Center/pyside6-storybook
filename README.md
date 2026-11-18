@@ -71,7 +71,7 @@ pyside6-storybook stories
   story's name.
 - The gallery calls the function with a `StoryContext`: `ctx.args` holds the current value of each control, by name, and
   `ctx.theme` the name of the active theme. The story is built again from scratch whenever a control or the theme changes.
-  `ctx.tokens` holds the theme provider's design tokens (see Themes).
+  `ctx.tokens` holds the theme provider's design tokens (see [Themes][themes]).
 - The function returns the widget to show. If it raises, or returns something that is not a widget, the gallery shows the error
   and its traceback in place of the widget, and the other stories keep working.
 - Discovery picks up every file named `*_story.py` or `*_stories.py` below a folder. Story files can import your application, and
