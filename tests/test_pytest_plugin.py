@@ -1055,10 +1055,14 @@ def test_a11y_adds_two_items_per_story_after_its_theme_items(pytester: pytest.Py
         "storybook::Inputs/Button[Dark]",
         "storybook::Inputs/Button[a11y-name]",
         "storybook::Inputs/Button[a11y-focus]",
+        "storybook::Inputs/Button[Light-contrast]",
+        "storybook::Inputs/Button[Dark-contrast]",
         "storybook::Inputs/Label[Light]",
         "storybook::Inputs/Label[Dark]",
         "storybook::Inputs/Label[a11y-name]",
         "storybook::Inputs/Label[a11y-focus]",
+        "storybook::Inputs/Label[Light-contrast]",
+        "storybook::Inputs/Label[Dark-contrast]",
     ]
 
 
@@ -1075,7 +1079,7 @@ def test_the_ini_key_turns_the_a11y_items_on(pytester: pytest.Pytester, stories:
 
     result = _run(pytester, "--storybook-themes", "Light")
 
-    result.assert_outcomes(passed=6)
+    result.assert_outcomes(passed=8)
 
 
 def test_an_unnamed_icon_button_fails_naming_the_widget(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
@@ -1083,7 +1087,7 @@ def test_an_unnamed_icon_button_fails_naming_the_widget(pytester: pytest.Pyteste
 
     result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Light", "-v", "-rs")
 
-    result.assert_outcomes(passed=6, failed=1, skipped=2)
+    result.assert_outcomes(passed=9, failed=1, skipped=2)
     result.stdout.fnmatch_lines(
         [
             "storybook::Icons/Named[[]a11y-name[]] PASSED*",
@@ -1128,7 +1132,7 @@ def test_a_variant_is_skipped_through_the_inherited_ignore(pytester: pytest.Pyte
 
     result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Light", "-rs")
 
-    result.assert_outcomes(passed=4, skipped=2)
+    result.assert_outcomes(passed=6, skipped=2)
     result.stdout.fnmatch_lines(["*SKIPPED [[]2[]]*name ignored: decorative"])
 
 
@@ -1138,8 +1142,8 @@ def test_an_a11y_item_fails_on_a_story_exception_like_a_story_item(pytester: pyt
 
     result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Light", *extra)
 
-    result.assert_outcomes(failed=3)
-    assert result.stdout.str().count("paint boom") >= 3
+    result.assert_outcomes(failed=4)
+    assert result.stdout.str().count("paint boom") >= 4
 
 
 @pytest.mark.parametrize("extra", _WITH_AND_WITHOUT_PYTEST_QT)
@@ -1154,7 +1158,7 @@ def test_an_a11y_item_fails_when_the_story_raises(pytester: pytest.Pytester, sto
 
     result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Light", *extra)
 
-    result.assert_outcomes(failed=3)
+    result.assert_outcomes(failed=4)
     assert "story boom" in result.stdout.str()
 
 
@@ -1176,7 +1180,207 @@ def test_the_a11y_items_render_in_the_first_selected_theme(pytester: pytest.Pyte
     assert "rendered in Dark" in result.stdout.str()
 
 
-def test_the_examples_pass_both_a11y_rules_in_light_and_dark(
+# --- text contrast (--storybook-a11y) -------------------------------------------------------------------------------------------
+
+
+_CONTRAST_STORIES = _story_module(
+    """
+    @story("Text/Readable")
+    def readable(ctx):
+        label = QLabel("Readable")
+        label.setStyleSheet("background-color: #ffffff; color: #000000;")
+        return label
+
+
+    @story("Text/Faint")
+    def faint(ctx):
+        label = QLabel("Faint")
+        label.setObjectName("faint_label")
+        label.setStyleSheet("background-color: #888888; color: #777777;")
+        return label
+
+
+    @story("Text/Excused", checks_ignore={"contrast": "decorative watermark"})
+    def excused(ctx):
+        label = QLabel("Watermark")
+        label.setStyleSheet("background-color: #888888; color: #777777;")
+        return label
+
+
+    @story("Text/Disabled")
+    def disabled(ctx):
+        label = QLabel("Disabled")
+        label.setStyleSheet("background-color: #888888; color: #777777;")
+        label.setEnabled(False)
+        return label
+
+
+    @story("Text/Middling")
+    def middling(ctx):
+        label = QLabel("Middling")
+        label.setStyleSheet("background-color: #ffffff; color: #909090;")
+        return label
+    """
+)
+
+
+def test_a_faint_text_fails_its_theme_item_naming_the_widget_and_the_colours(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(pytester, _CONTRAST_STORIES)
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", *_TWO_THEMES, "-k", "contrast and Faint", "-v")
+
+    result.assert_outcomes(failed=2)
+    result.stdout.fnmatch_lines(
+        [
+            "*1 text contrast issue(s) in Text/Faint in Light:*",
+            "*QLabel 'faint_label' at QLabel: text 'Faint' is #777777 on #888888, a contrast of 1.26:1; normal text needs 4.5:1*",
+        ]
+    )
+    assert "storybook::Text/Faint[Dark-contrast] FAILED" in result.stdout.str()
+
+
+def test_the_readable_and_the_disabled_text_pass(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(pytester, _CONTRAST_STORIES)
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Light", "-k", "contrast and (Readable or Disabled)")
+
+    result.assert_outcomes(passed=2)
+
+
+def test_a_story_that_ignores_the_contrast_rule_is_skipped_by_a_marker_with_its_reason(
+    pytester: pytest.Pytester, stories: StoryRegistry
+) -> None:
+    _project(pytester, _CONTRAST_STORIES)
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", *_TWO_THEMES, "-k", "contrast and Excused", "-rs")
+
+    result.assert_outcomes(skipped=2)
+    result.stdout.fnmatch_lines(["SKIPPED [[]2[]] stories/demo_stories.py: contrast ignored: decorative watermark"])
+
+
+def test_an_ignored_contrast_rule_does_not_render_the_story(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(
+        pytester,
+        _story_module(
+            """
+            @story("Text/Raises", checks_ignore={"contrast": "not text"})
+            def raises(ctx):
+                raise ValueError("rendered anyway")
+            """
+        ),
+    )
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Light", "-k", "contrast")
+
+    result.assert_outcomes(skipped=1)
+    assert "rendered anyway" not in result.stdout.str()
+
+
+@pytest.mark.parametrize("option", [pytest.param(("--storybook-no-contrast",), id="option"), pytest.param((), id="ini")])
+def test_the_contrast_items_can_be_turned_off(pytester: pytest.Pytester, stories: StoryRegistry, option: tuple[str, ...]) -> None:
+    _project(pytester, ini="" if option else "storybook_contrast = false")
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", *_TWO_THEMES, *option, "--collect-only", "-q")
+
+    assert "contrast" not in result.stdout.str()
+    assert "[a11y-name]" in result.stdout.str()
+
+
+def test_without_the_a11y_option_there_are_no_contrast_items(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(pytester)
+
+    result = _run(pytester, "--storybook", *_TWO_THEMES, "--collect-only", "-q")
+
+    assert "contrast" not in result.stdout.str()
+
+
+def test_the_thresholds_come_from_the_ini_keys(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(pytester, _CONTRAST_STORIES, ini="storybook_contrast_normal = 3\nstorybook_contrast_large = 2")
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Light", "-k", "contrast and Middling")
+
+    result.assert_outcomes(passed=1)  # 3.19:1 needs only 3
+
+
+def test_the_default_thresholds_fail_a_middling_text(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(pytester, _CONTRAST_STORIES)
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Light", "-k", "contrast and Middling")
+
+    result.assert_outcomes(failed=1)
+    result.stdout.fnmatch_lines(["*a contrast of 3.19:1; normal text needs 4.5:1*"])
+
+
+def test_the_disabled_option_checks_disabled_widgets(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(pytester, _CONTRAST_STORIES)
+
+    args = ("--storybook", "--storybook-a11y", "--storybook-contrast-disabled", "--storybook-themes", "Light")
+    result = _run(pytester, *args, "-k", "contrast and Disabled")
+
+    result.assert_outcomes(failed=1)
+
+
+@pytest.mark.parametrize("extra", _WITH_AND_WITHOUT_PYTEST_QT)
+def test_a_contrast_item_fails_on_a_story_exception_like_a_story_item(
+    pytester: pytest.Pytester, stories: StoryRegistry, extra: tuple[str, ...]
+) -> None:
+    _project(pytester, _PAINT_STORY)
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Light", "-k", "contrast", *extra)
+
+    result.assert_outcomes(failed=1)
+    assert "paint boom" in result.stdout.str()
+
+
+@pytest.mark.parametrize("extra", _WITH_AND_WITHOUT_PYTEST_QT)
+def test_a_contrast_item_fails_when_the_story_raises_and_on_a_qt_warning(
+    pytester: pytest.Pytester, stories: StoryRegistry, extra: tuple[str, ...]
+) -> None:
+    _project(
+        pytester,
+        _story_module(
+            """
+            @story("Broken/Raises")
+            def broken(ctx):
+                raise ValueError("story boom")
+
+
+            @story("Broken/Warns")
+            def warns(ctx):
+                from PySide6.QtCore import qWarning
+                qWarning("contrast probe warning")
+                return QLabel("x")
+            """
+        ),
+    )
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Light", "-k", "contrast", *extra)
+
+    result.assert_outcomes(failed=2)
+    output = result.stdout.str()
+    assert "story boom" in output
+    assert "contrast probe warning" in output
+
+
+def test_the_contrast_items_render_in_their_own_theme(pytester: pytest.Pytester, stories: StoryRegistry) -> None:
+    _project(
+        pytester,
+        _story_module(
+            """
+            @story("Theme/Probe")
+            def probe(ctx):
+                raise RuntimeError(f"rendered in {ctx.theme}")
+            """
+        ),
+    )
+
+    result = _run(pytester, "--storybook", "--storybook-a11y", "--storybook-themes", "Dark,Light", "-k", "Light-contrast")
+
+    result.assert_outcomes(failed=1)
+    assert "rendered in Light" in result.stdout.str()
+
+
+def test_the_examples_pass_the_a11y_and_contrast_rules_in_light_and_dark(
     pytester: pytest.Pytester, stories: StoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     pytester.makepyprojecttoml("[tool.pytest.ini_options]\n")
@@ -1188,5 +1392,6 @@ def test_the_examples_pass_both_a11y_rules_in_light_and_dark(
 
     result = _run(pytester, *args)
 
-    assert count == 20 * 4
+    # Light and Dark, not System: Qt's own palette (offscreen) is white on #308cc6 in the Palette story, 3.69:1.
+    assert count == 20 * (2 + 2 + 2)
     result.assert_outcomes(passed=count)

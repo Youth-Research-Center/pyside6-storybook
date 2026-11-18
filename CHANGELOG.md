@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Text contrast check: `pyside6_storybook.checks.check_text_contrast(widget, *, normal=4.5, large=3.0, include_disabled=False)`
+  renders a shown widget and returns a `CheckIssue` for each text (labels, buttons, line edits, spin boxes, combo boxes and items of
+  item views) whose contrast against its background, measured on the pixels, is below 4.5:1 (3:1 for large text). `pytest
+  --storybook-a11y` runs it as `storybook::<id>[<theme>-contrast]` for every story and theme; `--storybook-no-contrast` (ini
+  `storybook_contrast = false`) turns it off, `storybook_contrast_normal` and `storybook_contrast_large` set the ratios, and
+  `--storybook-contrast-disabled` (ini `storybook_contrast_disabled`) includes disabled widgets. `checks_ignore` accepts `"contrast"`.
+  See "Text contrast" in the README.
 - Accessibility checks: `pyside6_storybook.checks` has `check_accessible_names(widget)` and `check_keyboard_focus(widget)`, which return
   a `CheckIssue` (`rule`, `widget_class`, `object_name`, `path`, `message`) for each control without an accessible name or without Tab
   focus. `pytest --storybook-a11y` (ini `storybook_a11y`) runs them on every story as `storybook::<id>[a11y-name]` and
@@ -129,6 +136,8 @@ All notable changes to this project are documented in this file.
   `pyside6-storybook --examples`.
 
 ### Changed
+- The Color Swatch example chooses black or white text against the swatch colour blended over the window colour, so its text reaches
+  4.5:1 for opaque and translucent colours in Light and Dark (the default colour measured 4.24:1 in Dark).
 - The built-in examples set accessible names on the Line Edit, Spin Box, Double Spin Box, Combo Box, Slider and Table widgets, so they
   pass the accessibility checks.
 - `--theme` no longer limits its value with argparse: an unknown name prints an error and exits with code 1 (was 2) after the theme

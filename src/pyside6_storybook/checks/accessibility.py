@@ -9,7 +9,6 @@ from PySide6.QtGui import QAccessible
 from PySide6.QtWidgets import (
     QAbstractButton,
     QAbstractItemView,
-    QAbstractScrollArea,
     QAbstractSlider,
     QAbstractSpinBox,
     QComboBox,
@@ -24,6 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from pyside6_storybook.checks._tree import is_internal, make_issue
 from pyside6_storybook.checks.check_issue import CheckIssue
 from pyside6_storybook.checks.rules import RULE_FOCUS, RULE_NAME
 
@@ -39,9 +39,6 @@ _CONTROL_TYPES = (
     QTabBar,
 )
 """The widgets that are controls whatever their focus policy."""
-
-_INTERNAL_PARENTS = (QAbstractSpinBox, QComboBox, QLineEdit, QTabBar)
-"""Widgets whose children are their own internals, which they name and focus for themselves."""
 
 
 def check_accessible_names(widget: QWidget) -> list[CheckIssue]:
@@ -63,12 +60,12 @@ def check_accessible_names(widget: QWidget) -> list[CheckIssue]:
     for control in _controls(widget):
         if not _accessible_name(control):
             hint = "give it a buddy label or call setAccessibleName()" if isinstance(control, QComboBox) else "call setAccessibleName()"
-            issues.append(_issue(RULE_NAME, widget, control, f"has no accessible name; {hint}"))
+            issues.append(make_issue(RULE_NAME, widget, control, f"has no accessible name; {hint}"))
     for tabs in _tab_widgets(widget):
         bar = tabs.tabBar()
         for index in range(tabs.count()):
             if bar.isTabVisible(index) and bar.isTabEnabled(index) and not (bar.accessibleTabName(index) or _plain(tabs.tabText(index))):
-                issues.append(_issue(RULE_NAME, widget, tabs, f"tab {index} has no text; call setTabText()"))
+                issues.append(make_issue(RULE_NAME, widget, tabs, f"tab {index} has no text; call setTabText()"))
     return issues
 
 
@@ -84,7 +81,7 @@ def check_keyboard_focus(widget: QWidget) -> list[CheckIssue]:
         The issues, in the order the widgets are found; empty when every control takes focus with Tab.
     """
     return [
-        _issue(RULE_FOCUS, widget, control, "cannot be reached with the Tab key; its focus policy lacks TabFocus (use StrongFocus or TabFocus)")
+        make_issue(RULE_FOCUS, widget, control, "cannot be reached with the Tab key; its focus policy lacks TabFocus (use StrongFocus or TabFocus)")
         for control in _controls(widget)
         if not control.focusPolicy() & Qt.FocusPolicy.TabFocus
     ]
@@ -110,31 +107,7 @@ def _is_checked(root: QWidget, widget: QWidget) -> bool:
         return False
     if isinstance(widget, (QScrollBar, QTabWidget, QScrollArea)):
         return False
-    return not _is_internal(widget)
-
-
-def _is_internal(widget: QWidget) -> bool:
-    """Whether ``widget`` is an internal of a composite that handles it itself, wherever the composite is in the tree."""
-    parent = widget.parentWidget()
-    if isinstance(widget, QTabBar) and isinstance(parent, QTabWidget) and parent.tabBar() is widget:
-        return True
-    while parent is not None:
-        if isinstance(parent, _INTERNAL_PARENTS):
-            return True
-        if isinstance(parent, QAbstractScrollArea) and not _in_viewport(parent, widget):
-            return True
-        proxy = parent.focusProxy()
-        while proxy is not None and proxy is not parent:
-            if proxy is widget:
-                return True
-            proxy = proxy.focusProxy()
-        parent = parent.parentWidget()
-    return False
-
-
-def _in_viewport(area: QAbstractScrollArea, widget: QWidget) -> bool:
-    """Whether ``widget`` is something shown in the viewport (an index widget or an editor); the viewport itself is not."""
-    return area.viewport().isAncestorOf(widget)
+    return not is_internal(widget)
 
 
 def _accessible_name(widget: QWidget) -> str:
@@ -157,31 +130,6 @@ def _buddy_label(widget: QWidget) -> str:
 def _plain(text: str) -> str:
     """Return ``text`` without mnemonics: ``&Save`` is ``Save``, ``&&`` is a literal ``&``."""
     return text.replace("&&", "\0").replace("&", "").replace("\0", "&").strip()
-
-
-def _issue(rule: str, root: QWidget, widget: QWidget, message: str) -> CheckIssue:
-    return CheckIssue(
-        rule=rule,
-        widget_class=type(widget).__name__,
-        object_name=widget.objectName(),
-        path=_path(root, widget),
-        message=message,
-    )
-
-
-def _path(root: QWidget, widget: QWidget) -> str:
-    """Return the class names from ``root`` to ``widget``, each below the root with its index among the siblings of the same class."""
-    parts: list[str] = []
-    current = widget
-    while current is not root:
-        parent = current.parentWidget()
-        if parent is None:
-            break
-        siblings = [child for child in parent.children() if isinstance(child, QWidget) and type(child).__name__ == type(current).__name__]
-        parts.append(f"{type(current).__name__}[{siblings.index(current)}]")
-        current = parent
-    parts.append(type(root).__name__)
-    return "/".join(reversed(parts))
 
 
 __all__ = ["check_accessible_names", "check_keyboard_focus"]

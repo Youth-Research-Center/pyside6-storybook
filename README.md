@@ -504,6 +504,10 @@ the command line wins.
 - `--storybook-themes NAMES`, ini `storybook_themes`: comma-separated themes to render each story in. Default: every theme the
   provider lists (the built-in ones are Light, Dark and System).
 - `--storybook-a11y`, ini `storybook_a11y` (a bool): also check names and keyboard focus (see "Accessibility checks").
+- `--storybook-no-contrast`, ini `storybook_contrast` (a bool, default true): with `--storybook-a11y`, leave out the text-contrast tests.
+- ini `storybook_contrast_normal` (default `4.5`) and `storybook_contrast_large` (default `3`): the contrast ratios, from 1 to 21,
+  that normal and large text need.
+- `--storybook-contrast-disabled`, ini `storybook_contrast_disabled` (a bool): also check the text of disabled widgets.
 - `--storybook-qt-warnings {fail,ignore}`, ini `storybook_qt_warnings`: whether a Qt warning logged during a render fails the test.
   Default `fail`.
 - ini `storybook_qt_warnings_ignore` (one regular expression per line, no command-line option): the warnings that never fail a test; a
@@ -544,6 +548,8 @@ The internals of composite widgets are not checked: the line edit of a spin box 
 viewport of an item view, a tab widget's tab bar, the clear button of a line edit. A `QScrollArea` is a container, so its content is
 checked, not the area.
 
+- `contrast`: the text is readable against what is drawn behind it (see "Text contrast" below).
+
 A story opts out of a rule with `checks_ignore`, a mapping from the rule to the reason; the test is then skipped and `-rs` shows
 `name ignored: decorative icon`. A variant has its base's `checks_ignore` unless it passes its own.
 
@@ -567,6 +573,46 @@ def test_the_toolbar_is_named(qtbot):
 
     assert [str(issue) for issue in check_accessible_names(toolbar)] == []
 ```
+
+### Text contrast
+
+`--storybook-a11y` also adds `storybook::<story id>[<theme>-contrast]` for every story and theme, which renders the story and checks
+that its text has enough contrast against its background (WCAG AA: 4.5:1, or 3:1 for large text, which is at least 18 pt, or at least
+14 pt and bold). Light and Dark are checked by their own tests, so a failure names the theme. Turn the tests off with
+`--storybook-no-contrast`, change the ratios with `storybook_contrast_normal` and `storybook_contrast_large`, and opt a story out with
+`checks_ignore={"contrast": "reason"}`. System is Qt's own palette, so list the themes you want with `--storybook-themes Light,Dark`
+when the application's own palette is not the one you ship.
+
+The check measures pixels, not palette roles, because the palette is wrong for widgets that a style sheet colours and for custom
+painting. The story is shown and rendered once into an image. For each visible, enabled widget with text, the check takes the box of
+the text itself inside the widget's text area: the most frequent colour in it is the background, and among the colours that cover at
+least 3 pixels, the one with the highest contrast against it is the text. A box that holds a single colour fails, because the text is
+drawn in the background colour or not at all. A failure names the widget, the two colours as `#rrggbb`, the measured ratio, the
+threshold and whether the text is large. Disabled widgets are skipped (their text is faint by design) unless you pass
+`--storybook-contrast-disabled`.
+
+It checks labels without a pixmap, buttons, line edits, spin boxes, combo boxes and up to 50 visible items of each list, table and
+tree. It does not check progress-bar text, group box titles, header text, placeholder text or text that a widget paints itself (a
+custom `paintEvent`), and text that is cut off by a scroll area is skipped. Text on a gradient or an image, and thin anti-aliased text
+(small sizes), give an estimate, so treat a result near the threshold as a hint.
+
+`check_text_contrast(widget, *, normal=4.5, large=3.0, include_disabled=False)` runs it on any shown widget and returns a list of
+`CheckIssue`, empty when the text passes:
+
+```python
+from pyside6_storybook.checks import check_text_contrast
+
+
+def test_the_banner_is_readable(qtbot):
+    banner = build_banner()
+    qtbot.addWidget(banner)
+    banner.show()
+    qtbot.waitUntil(banner.isVisible, timeout=5000)
+
+    assert [str(issue) for issue in check_text_contrast(banner)] == []
+```
+
+The widget's window is rendered, so show it first, and clear the focus if a focus ring would cover text.
 
 ### Selecting tests
 

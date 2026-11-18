@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 
@@ -26,6 +27,10 @@ class StorybookOptions:
         qt_warnings_fail: Whether a Qt warning logged during a render fails the item.
         qt_warnings_ignore: Patterns (searched in the message) of the warnings that never fail.
         a11y: Whether each story also gets the accessible-name and keyboard-focus items (``--storybook-a11y``).
+        contrast: Whether ``a11y`` also adds a text-contrast item per story and theme; off with ``--storybook-no-contrast``.
+        contrast_normal: The contrast ratio normal text needs (``storybook_contrast_normal``).
+        contrast_large: The contrast ratio large text needs (``storybook_contrast_large``).
+        contrast_disabled: Whether the contrast check includes disabled widgets (``--storybook-contrast-disabled``).
     """
 
     enabled: bool
@@ -35,6 +40,10 @@ class StorybookOptions:
     qt_warnings_fail: bool
     qt_warnings_ignore: tuple[re.Pattern[str], ...]
     a11y: bool = field(default=False, kw_only=True)
+    contrast: bool = field(default=True, kw_only=True)
+    contrast_normal: float = field(default=4.5, kw_only=True)
+    contrast_large: float = field(default=3.0, kw_only=True)
+    contrast_disabled: bool = field(default=False, kw_only=True)
 
     @classmethod
     def from_config(cls, config: pytest.Config) -> StorybookOptions:
@@ -66,7 +75,22 @@ class StorybookOptions:
             qt_warnings_fail=warnings == "fail",
             qt_warnings_ignore=_patterns(config.getini("storybook_qt_warnings_ignore")),
             a11y=bool(config.getoption("storybook_a11y") or config.getini("storybook_a11y")),
+            contrast=not config.getoption("storybook_no_contrast") and bool(config.getini("storybook_contrast")),
+            contrast_normal=_ratio(config, "storybook_contrast_normal"),
+            contrast_large=_ratio(config, "storybook_contrast_large"),
+            contrast_disabled=bool(config.getoption("storybook_contrast_disabled") or config.getini("storybook_contrast_disabled")),
         )
+
+
+def _ratio(config: pytest.Config, key: str) -> float:
+    text = str(config.getini(key)).strip()
+    try:
+        value = float(text)
+    except ValueError:
+        value = math.nan
+    if not 1.0 <= value <= 21.0:
+        raise pytest.UsageError(f"{key}: {text!r} is not a contrast ratio, a number from 1 to 21")
+    return value
 
 
 def _themes(value: str | None, source: str) -> tuple[str, ...] | None:

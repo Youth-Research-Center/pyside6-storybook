@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QLabel, QWidget
+from PySide6.QtGui import QColor, QPalette
+from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
 import pyside6_storybook.examples
 from pyside6_storybook import (
@@ -22,7 +23,7 @@ from pyside6_storybook import (
     TextControl,
     load_stories,
 )
-from pyside6_storybook.checks import check_accessible_names, check_keyboard_focus
+from pyside6_storybook.checks import check_accessible_names, check_keyboard_focus, check_text_contrast
 from pyside6_storybook.cli import EXAMPLES_MODULE
 from pyside6_storybook.gui import ErrorPanel, GalleryWindow
 from pyside6_storybook.gui.sidebar import StorySidebar
@@ -111,6 +112,55 @@ def test_every_example_passes_the_accessibility_checks(qtbot, examples: StoryReg
 
     assert [str(issue) for issue in check_accessible_names(widget)] == []
     assert [str(issue) for issue in check_keyboard_focus(widget)] == []
+
+
+def _shown_in_theme(
+    qtbot, examples: StoryRegistry, themes: BuiltinThemeProvider, story_id: str, theme: str, **args: object
+) -> tuple[QWidget, QWidget]:
+    """Render an example in a theme inside an opaque shown host; return the host (keep it alive) and the example's root."""
+    themes.set_theme(theme)
+    example = examples.get(story_id)
+    context = StoryContext(args={**example.default_args(), **args}, theme=theme)
+    widget = render_story(example, context, registry=examples).root
+    # An opaque host like the pytest plugin's, so that a translucent story is drawn over the window colour and not over nothing.
+    host = QWidget()
+    host.setAutoFillBackground(True)
+    host.setBackgroundRole(QPalette.ColorRole.Window)
+    layout = QVBoxLayout(host)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.addWidget(widget)
+    qtbot.addWidget(host)
+    host.show()
+    qtbot.waitUntil(widget.isVisible, timeout=5000)
+    focus = QApplication.focusWidget()
+    if focus is not None:
+        focus.clearFocus()
+    qtbot.wait(10)
+    return host, widget
+
+
+# System is Qt's own palette, which is white on #308cc6 (3.69:1) in the Palette story offscreen, so only Light and Dark are checked.
+@pytest.mark.parametrize("theme", ["Light", "Dark"])
+@pytest.mark.parametrize("story_id", EXPECTED_IDS)
+def test_every_example_passes_the_contrast_check(qtbot, examples: StoryRegistry, themes: BuiltinThemeProvider, story_id: str, theme: str) -> None:
+    _host, widget = _shown_in_theme(qtbot, examples, themes, story_id, theme)
+
+    assert [str(issue) for issue in check_text_contrast(widget)] == []
+
+
+@pytest.mark.parametrize("theme", ["Light", "Dark"])
+@pytest.mark.parametrize("alpha", [0, 64, 255])
+@pytest.mark.parametrize("rgb", ["#3a7bd5", "#000000", "#ffffff", "#808080", "#ff0000", "#00c000", "#ffe000"])
+def test_the_color_swatch_text_reaches_four_and_a_half_to_one_for_opaque_and_translucent_colors(
+    qtbot, examples: StoryRegistry, themes: BuiltinThemeProvider, rgb: str, alpha: int, theme: str
+) -> None:
+    color = QColor(rgb)
+    color.setAlpha(alpha)
+    _host, widget = _shown_in_theme(qtbot, examples, themes, "Display/Color Swatch", theme, color=color)
+
+    issues = check_text_contrast(widget, normal=4.5)
+
+    assert [str(issue) for issue in issues] == [], f"{rgb} at alpha {alpha} in {theme}"
 
 
 def test_every_example_has_a_docstring(examples: StoryRegistry) -> None:

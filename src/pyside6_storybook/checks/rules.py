@@ -8,7 +8,10 @@ RULE_NAME = "name"
 RULE_FOCUS = "focus"
 """A control needs to be reachable with the Tab key."""
 
-CHECK_RULES = (RULE_NAME, RULE_FOCUS)
+RULE_CONTRAST = "contrast"
+"""Text needs enough contrast against its background."""
+
+CHECK_RULES = (RULE_NAME, RULE_FOCUS, RULE_CONTRAST)
 """Every rule ``checks_ignore`` accepts."""
 
-__all__ = ["CHECK_RULES", "RULE_FOCUS", "RULE_NAME"]
+__all__ = ["CHECK_RULES", "RULE_CONTRAST", "RULE_FOCUS", "RULE_NAME"]
