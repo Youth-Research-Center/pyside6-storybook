@@ -1,23 +1,19 @@
-"""Keep the README's code honest: the first story loads and renders, and the controls table matches the library."""
+"""Keep the README's code honest: the first story loads and renders, and PyPI can show the page (absolute links, no alerts)."""
 
 import re
 import textwrap
-import typing
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QSize
-from PySide6.QtWidgets import QFrame, QGroupBox, QPlainTextEdit, QPushButton, QWidget
+import yaml
+from PySide6.QtWidgets import QPushButton
 from story_files import write
 
-import pyside6_storybook
-from pyside6_storybook import Control, Layout, SizePreset, StoryContext, StoryRegistry, load_stories
-from pyside6_storybook.decorators import padding
-from pyside6_storybook.discovery import sources
-from pyside6_storybook.discovery.sources import resolve_story_sources
-from pyside6_storybook.registry.rendering import render_story
+from pyside6_storybook import StoryContext, StoryRegistry, load_stories
 
-_README = Path(__file__).resolve().parents[1] / "README.md"
+_ROOT = Path(__file__).resolve().parents[1]
+_README = _ROOT / "README.md"
+_SITE = "https://youth-research-center.github.io/pyside6-storybook/"
 
 
 def _section(heading: str) -> str:
@@ -27,12 +23,6 @@ def _section(heading: str) -> str:
     start = match.start()
     end = text.find("\n## ", start + 1)
     return text[start : end if end != -1 else len(text)]
-
-
-def _left_margin(widget: QWidget) -> int:
-    layout = widget.layout()
-    assert layout is not None
-    return layout.contentsMargins().left()
 
 
 def _code_blocks(section: str, language: str) -> list[str]:
@@ -52,130 +42,6 @@ def test_the_first_story_loads_and_renders(qtbot, tmp_path: Path, stories: Story
     assert isinstance(widget, QPushButton)
     assert widget.text() == "Hello!"
     assert widget.isEnabled()
-
-
-def test_the_controls_table_lists_every_control_type() -> None:
-    documented = set(re.findall(r"^\| `(\w+Control)\(", _section("Controls"), flags=re.MULTILINE))
-    assert documented == {control.__name__ for control in typing.get_args(Control)}
-
-
-def test_the_pyproject_example_is_a_valid_configuration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    pyproject_example = _code_blocks(_section("Where your stories come from"), "toml")[0]
-    write(tmp_path, "pyproject.toml", pyproject_example)
-    (tmp_path / "src").mkdir()
-    monkeypatch.setattr(sources, "entry_points", lambda group: [])
-
-    resolved = resolve_story_sources([], examples=False, cwd=tmp_path)
-
-    assert resolved.targets == ("stories",)
-    assert resolved.pythonpath == ((tmp_path / "src").resolve(),)
-
-
-def test_the_variants_example_registers_its_variants(qtbot, tmp_path: Path, stories: StoryRegistry) -> None:
-    (source,) = _code_blocks(_section("Variants"), "python")
-    write(tmp_path, "stories/button_stories.py", source)
-
-    result = load_stories(["stories"], cwd=tmp_path)
-
-    assert result.errors == ()
-    assert stories.ids() == ["Inputs/Push Button/Default", "Inputs/Push Button/Disabled", "Inputs/Push Button/Long label"]
-    disabled = stories.get("Inputs/Push Button/Disabled")
-    assert dict(disabled.args) == {"enabled": False}
-    assert disabled.default_args() == {"text": "Click me", "enabled": False}
-    long_label = stories.get("Inputs/Push Button/Long label")
-    assert long_label.variant_of is stories.get("Inputs/Push Button/Default")
-    widget = disabled(StoryContext(args=disabled.default_args()))
-    qtbot.addWidget(widget)
-    assert isinstance(widget, QPushButton)
-    assert not widget.isEnabled()
-
-
-def test_the_layout_example_registers_stories_with_their_layouts(qtbot, tmp_path: Path, stories: StoryRegistry) -> None:
-    source = _code_blocks(_section("Layout and decorators"), "python")[0]
-    write(tmp_path, "stories/layout_stories.py", source)
-
-    result = load_stories(["stories"], cwd=tmp_path)
-
-    assert result.errors == ()
-    assert stories.ids() == ["Buttons/Centered/Default", "Buttons/Centered/Padded", "Editors/Notes"]
-    assert stories.get("Buttons/Centered/Default").layout is Layout.CENTERED
-    assert stories.get("Buttons/Centered/Padded").layout is Layout.PADDED
-    assert stories.get("Editors/Notes").layout is Layout.FILL
-    for story_id, widget_type in (("Buttons/Centered/Padded", QPushButton), ("Editors/Notes", QPlainTextEdit)):
-        example = stories.get(story_id)
-        widget = example(StoryContext(args=example.default_args()))
-        qtbot.addWidget(widget)
-        assert isinstance(widget, widget_type)
-
-
-def test_the_decorators_example_registers_and_renders_with_the_documented_order(qtbot, tmp_path: Path, stories: StoryRegistry) -> None:
-    source = _code_blocks(_section("Layout and decorators"), "python")[1]
-    write(tmp_path, "stories/card_stories.py", source)
-
-    result = load_stories(["stories"], cwd=tmp_path)
-
-    assert result.errors == ()
-    assert stories.ids() == ["Cards/Card/Default", "Cards/Card/Framed"]
-    card = stories.get("Cards/Card/Default")
-    framed = stories.get("Cards/Card/Framed")
-    assert [repr(decorator) for decorator in card.decorators] == ["padding(24)", "fixed_size(320, 200)"]
-    assert [type(decorator).__name__ for decorator in framed.decorators] == ["_Frame", "function"]
-
-    stories.decorators.append(padding(8))
-    rendered = render_story(card, StoryContext(args={}), registry=stories)
-    qtbot.addWidget(rendered.root)
-    assert rendered.widget.size() == QSize(320, 200)
-    inner_wrapper = rendered.widget.parentWidget()
-    assert inner_wrapper is not None
-    assert _left_margin(rendered.root) == 8
-    assert _left_margin(inner_wrapper) == 24
-
-    rendered_framed = render_story(framed, StoryContext(args={}, theme="Dark"), registry=stories)
-    qtbot.addWidget(rendered_framed.root)
-    group_box = rendered_framed.widget.parentWidget()
-    assert isinstance(group_box, QGroupBox)
-    assert isinstance(group_box.parentWidget(), QFrame)
-    assert group_box.title() == "Dark"
-
-
-def test_the_size_preset_example_adds_presets_to_the_registry(monkeypatch: pytest.MonkeyPatch) -> None:
-    (source,) = _code_blocks(_section("The gallery window"), "python")
-    isolated = StoryRegistry()
-    monkeypatch.setattr(pyside6_storybook, "default_registry", isolated)
-
-    exec(compile(source, "README.md", "exec"), {"__name__": "readme_example"})  # noqa: S102 - runs the repository's own README
-
-    assert isolated.size_presets == [SizePreset("Tablet", 768, 1024), SizePreset("Small laptop", 1280, 720)]
-
-
-def test_the_logging_example_logs_actions_and_does_nothing_without_a_sink(qtbot, tmp_path: Path, stories: StoryRegistry) -> None:
-    (source,) = _code_blocks(_section("Logging actions"), "python")
-    write(tmp_path, "stories/counter_stories.py", source)
-
-    result = load_stories(["stories"], cwd=tmp_path)
-
-    assert result.errors == ()
-    counter = stories.get("Buttons/Counter")
-    plain = render_story(counter, StoryContext(args={}), registry=stories)
-    qtbot.addWidget(plain.root)
-    assert isinstance(plain.widget, QPushButton)
-    plain.widget.click()
-
-    recorded = _RecordingSink()
-    logged = render_story(counter, StoryContext(args={}, actions=recorded), registry=stories)
-    qtbot.addWidget(logged.root)
-    assert isinstance(logged.widget, QPushButton)
-    logged.widget.setCheckable(True)
-    logged.widget.click()
-    assert recorded.entries == [("toggle", (True,)), ("clicked", ()), ("custom", ("any", 1))]
-
-
-class _RecordingSink:
-    def __init__(self) -> None:
-        self.entries: list[tuple[str, tuple[object, ...]]] = []
-
-    def record(self, name: str, args: tuple[object, ...]) -> None:
-        self.entries.append((name, args))
 
 
 def _prose() -> str:
@@ -199,3 +65,26 @@ def test_the_readme_has_no_relative_links_or_images_because_pypi_shows_it_away_f
 
 def test_the_readme_uses_no_github_alert_syntax_because_pypi_does_not_render_it() -> None:
     assert not re.search(r"^\s*>\s*\[![A-Za-z]+\]", _prose(), flags=re.MULTILINE)
+
+
+def _flatten(nav: list) -> list[str]:
+    pages: list[str] = []
+    for entry in nav:
+        if isinstance(entry, str):
+            pages.append(entry)
+        elif isinstance(entry, dict):
+            for value in entry.values():
+                pages.extend(_flatten(value) if isinstance(value, list) else [value])
+    return pages
+
+
+@pytest.mark.skipif(not (_ROOT / "mkdocs.yml").is_file(), reason="mkdocs.yml is not part of this source tree")
+def test_every_link_to_the_docs_site_points_to_a_page_in_the_nav() -> None:
+    text = _README.read_text(encoding="utf-8")
+    nav = _flatten(yaml.safe_load((_ROOT / "mkdocs.yml").read_text(encoding="utf-8"))["nav"])
+    paths = re.findall(rf"{re.escape(_SITE)}([^\s)#>\"']*)", text)
+
+    assert paths
+    for path in paths:
+        page = (path.rstrip("/") or "index") + ".md"
+        assert page in nav, f"{_SITE}{path} is not a page in the nav"

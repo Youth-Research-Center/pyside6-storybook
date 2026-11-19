@@ -16,9 +16,19 @@ validation:
     absolute_links: warn
     unrecognized_links: warn
 
+not_in_nav: |
+  theming.md
+
 nav:
   - Home: index.md
-  - Theming: theming.md
+  - Writing stories: writing-stories.md
+  - Controls: controls.md
+  - Finding stories: finding-stories.md
+  - Command line: command-line.md
+  - The gallery: gallery.md
+  - Themes: themes.md
+  - Testing stories: testing.md
+  - Troubleshooting: troubleshooting.md
   - API reference: reference.md
   - Changelog: changelog.md
   - Roadmap: roadmap.md

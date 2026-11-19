@@ -5,8 +5,10 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
-- Documentation site (MkDocs with Material and mkdocstrings) at https://youth-research-center.github.io/pyside6-storybook/: a home page, the
-  theming guide, the API reference generated from the docstrings, the changelog and the roadmap. The `docs` dependency group installs it;
+- Documentation site (MkDocs with Material and mkdocstrings) at https://youth-research-center.github.io/pyside6-storybook/: a home page, a page
+  for each part of the guide (writing stories, controls, finding stories, the command line, the gallery, themes, testing stories and
+  troubleshooting), the API reference generated from the docstrings, the changelog and the roadmap. The README is now a short front page that
+  links to them. The `docs` dependency group installs the generator;
   `docs.yml` builds it with `mkdocs build --strict` and deploys it to GitHub Pages from `main`.
 - PyPI metadata: the licence files (`LICENSE`, `THIRD_PARTY_NOTICES.md`), authors, keywords, classifiers (Python 3.11 to 3.14, Pytest,
   Typed) and the project URLs (homepage, documentation, repository, issues, changelog). The sdist has an explicit include list: the package,
@@ -17,14 +19,14 @@ All notable changes to this project are documented in this file.
   missing baseline fails and is never created silently. A mismatch (another size, or more differing pixels than `storybook_snapshot_max_diff`,
   where a pixel differs when a channel differs by more than `storybook_snapshot_tolerance`) writes the actual and diff images to
   `storybook-snapshot-failures/<platform>/` and names them. `storybook_snapshot_dir` and `storybook_snapshot_failures` move the folders.
-  `checks_ignore` accepts `"snapshot"`. See "Screenshot snapshots" in the README.
+  `checks_ignore` accepts `"snapshot"`. See Screenshot snapshots in the Testing stories page of the documentation.
 - Text contrast check: `pyside6_storybook.checks.check_text_contrast(widget, *, normal=4.5, large=3.0, include_disabled=False)`
   renders a shown widget and returns a `CheckIssue` for each text (labels, buttons, line edits, spin boxes, combo boxes and items of
   item views) whose contrast against its background, measured on the pixels, is below 4.5:1 (3:1 for large text). `pytest
   --storybook-a11y` runs it as `storybook::<id>[<theme>-contrast]` for every story and theme; `--storybook-no-contrast` (ini
   `storybook_contrast = false`) turns it off, `storybook_contrast_normal` and `storybook_contrast_large` set the ratios, and
   `--storybook-contrast-disabled` (ini `storybook_contrast_disabled`) includes disabled widgets. `checks_ignore` accepts `"contrast"`.
-  See "Text contrast" in the README.
+  See Text contrast in the Testing stories page of the documentation.
 - Accessibility checks: `pyside6_storybook.checks` has `check_accessible_names(widget)` and `check_keyboard_focus(widget)`, which return
   a `CheckIssue` (`rule`, `widget_class`, `object_name`, `path`, `message`) for each control without an accessible name or without Tab
   focus. `pytest --storybook-a11y` (ini `storybook_a11y`) runs them on every story as `storybook::<id>[a11y-name]` and
@@ -42,9 +44,10 @@ All notable changes to this project are documented in this file.
   marker and work with `-k`, `--deselect`, `--lf` and pytest-xdist. The new `render_story(story_id, *, args=None, theme=None)` fixture
   renders a story by id in a test you write yourself. The plugin imports neither Qt nor the library unless it is enabled, and an option
   that only shapes the story tests is a usage error while it is off (#94).
-  `StorySources` has the keyword-only `fallback`, true for the built-in examples fallback. See "Testing stories" in the README.
-- Theming guide, `docs/theming.md`, with two screenshots (rendered by `scripts/docs/render_theming_images.py`), and the worked example
-  `examples/themed_app`: an application with two themes, a pill button, a token-painted gauge and a `ThemeProvider` for them. Run it from
+  `StorySources` has the keyword-only `fallback`, true for the built-in examples fallback. See Testing stories in the documentation.
+- Theming guide (now the Themes page of the documentation, `docs/themes.md`), with two screenshots (rendered by
+  `scripts/docs/render_theming_images.py`), and the worked example `examples/themed_app`: an application with two themes, a pill
+  button, a token-painted gauge and a `ThemeProvider` for them. Run it from
   its folder with `uv run --project ../.. pyside6-storybook`.
 - Choosing a theme provider: `--theme-provider module:attribute` on the command line, or `theme_provider = "module:attribute"` in
   `[tool.pyside6-storybook]`, loads an application's own `ThemeProvider` (an instance, a class or a no-argument function; the attribute
@@ -173,8 +176,9 @@ All notable changes to this project are documented in this file.
   default passed through the control's `coerce`, so a `FloatControl` default given as `1` starts as `1.0`.
 - `FloatControl` rejects a default or bound that needs more than 10 decimals, which the editor used to show rounded.
 - The gallery's widgets are styleable from an application style sheet. Their object names now have the prefix `sbk` in camel case
-  (`storySidebar` is `sbkStorySidebar`, `previewSurface` is `sbkPreviewSurface`, and so on; the README lists all 53), so a style sheet
-  or a test that looked a widget up by its old name must use the new one. The widgets that an application might style, and none that
+  (`storySidebar` is `sbkStorySidebar`, `previewSurface` is `sbkPreviewSurface`, and so on; the Themes page of the
+  documentation lists all 53), so a style
+  sheet or a test that looked a widget up by its old name must use the new one. The widgets that an application might style, and none that
   contain a story's widget, carry the property `sbkChrome`, so `*[sbkChrome="true"] QPushButton` reaches the gallery's buttons and not
   a story's. The selected story's text stays readable when a style sheet colours the selected row.
 

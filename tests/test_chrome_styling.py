@@ -381,12 +381,12 @@ def test_the_ancestors_of_the_preview_surface_have_names_but_not_the_chrome_prop
     assert window in ancestors
 
 
-# The names in the README
+# The names in the documentation
 
 
-def _readme_names() -> set[str]:
-    text = (_ROOT / "README.md").read_text(encoding="utf-8")
-    section = re.search(r"^## Styling the gallery\n(.*?)(?=^## )", text, flags=re.MULTILINE | re.DOTALL)
+def _documented_names() -> set[str]:
+    text = (_ROOT / "docs" / "themes.md").read_text(encoding="utf-8")
+    section = re.search(r"^## Styling the gallery\n(.*?)(?=^## |\Z)", text, flags=re.MULTILINE | re.DOTALL)
     assert section is not None
     _, _, listing = section.group(1).partition("The object names:\n")
     names = re.findall(r"`(sbk[A-Z]\w*)`", listing)
@@ -404,16 +404,16 @@ def _source_names() -> set[str]:
     return names - {CHROME_PROPERTY}  # the property's own name, not an object name
 
 
-def test_the_readme_lists_exactly_the_object_names_the_source_gives(qtbot, themes: BuiltinThemeProvider) -> None:
-    readme = _readme_names()
+def test_the_themes_page_lists_exactly_the_object_names_the_source_gives(qtbot, themes: BuiltinThemeProvider) -> None:
+    documented = _documented_names()
     source = _source_names()
 
-    assert readme - source == set(), "listed in the README but not in the source"
-    assert source - readme == set(), "in the source but not listed in the README"
+    assert documented - source == set(), "listed in docs/themes.md but not in the source"
+    assert source - documented == set(), "in the source but not listed in docs/themes.md"
     assert len(source) == 53
 
 
-def test_every_object_name_on_a_shown_window_is_listed_in_the_readme(qtbot, themes: BuiltinThemeProvider) -> None:
+def test_every_object_name_on_a_shown_window_is_listed_on_the_themes_page(qtbot, themes: BuiltinThemeProvider) -> None:
     window = _window(qtbot, themes)
     show_active(qtbot, window)
     for story_id in ("Inputs/Button", "Broken/Story"):
@@ -422,5 +422,5 @@ def test_every_object_name_on_a_shown_window_is_listed_in_the_readme(qtbot, them
     found = {widget.objectName() for widget in QApplication.allWidgets() if widget.objectName().startswith("sbk")}
 
     assert found
-    assert found <= _readme_names()
+    assert found <= _documented_names()
     assert {"sbkStorySidebar", "sbkStoryTree", "sbkPreviewError", "sbkShortcutsDialog"} <= found

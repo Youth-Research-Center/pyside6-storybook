@@ -1,4 +1,4 @@
-"""Render the two screenshots of docs/theming.md into docs/images/ (development only; not part of the wheel).
+"""Render the two screenshots of docs/themes.md into docs/images/ (development only; not part of the wheel).
 
     uv run python scripts/docs/render_theming_images.py
 
