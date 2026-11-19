@@ -6,8 +6,8 @@ dark themes, and see an error in place of a story that breaks instead of a crash
 
 ![The gallery showing the sign-in form example: a story list on the left, the rendered widget in the middle, and the theme switch and the story's controls on the right](https://raw.githubusercontent.com/Youth-Research-Center/pyside6-storybook/main/docs/images/gallery.png)
 
-> **Status:** early development, not yet released. The first release, 0.1.0, will be published on PyPI; until then, install it
-> from GitHub as shown below.
+> **Status:** early release. Before 1.0, a minor release may change the API, and the changelog says so; see
+> [Versions and compatibility](https://youth-research-center.github.io/pyside6-storybook/versions/).
 > [`docs/roadmap.md`](https://github.com/Youth-Research-Center/pyside6-storybook/blob/main/docs/roadmap.md) describes what is planned next.
 
 ## Install
@@ -16,14 +16,18 @@ pyside6-storybook needs Python 3.11 or newer and PySide6 6.8 or newer. Its only 
 project that already depends on the full `PySide6` package satisfies.
 
 ```bash
-pip install git+https://github.com/Youth-Research-Center/pyside6-storybook
+pip install pyside6-storybook
 ```
 
 or, as a development dependency of a project managed with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv add --dev git+https://github.com/Youth-Research-Center/pyside6-storybook
+uv add --dev pyside6-storybook
 ```
+
+Until 0.1.0 is out, only a release candidate is on PyPI, and pip and uv skip pre-releases unless asked: use
+`pip install --pre pyside6-storybook` or `uv add --dev --prerelease allow pyside6-storybook`. The development version installs from
+GitHub with `pip install git+https://github.com/Youth-Research-Center/pyside6-storybook`.
 
 uv installs it into the project's `.venv` without activating that environment, so with uv, put `uv run` in front of the
 `pyside6-storybook` commands in this README (or activate `.venv` first).

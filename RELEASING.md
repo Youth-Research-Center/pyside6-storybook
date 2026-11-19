@@ -1,10 +1,12 @@
 # Releasing pyside6-storybook
 
-This guide is for a maintainer who has never released the project. A release is made by two GitHub Actions workflows:
+This guide is for a maintainer who has never released the project. A release is made by three GitHub Actions workflows:
 
+- `.github/workflows/tests.yml` runs the lint job and the core tests on the released commit;
 - `.github/workflows/package.yml` builds the wheel and the sdist and smoke tests them;
-- `.github/workflows/release.yml` publishes them with a PyPI trusted publisher (no token), installs the published files on Linux,
-  Windows and macOS, runs `scripts/smoke/smoke_check.py` on them, and for a tag creates the GitHub release.
+- `.github/workflows/release.yml` calls both, and only when both pass publishes the distributions with a PyPI trusted publisher (no
+  token), installs the published files on Linux, Windows and macOS, runs `scripts/smoke/smoke_check.py` on them, and for a tag creates
+  the GitHub release.
 
 What a version number promises is on the page
 [Versions and compatibility](https://youth-research-center.github.io/pyside6-storybook/versions/).
@@ -52,7 +54,7 @@ The first upload from the workflow creates the project and turns the pending pub
 Repository settings → Environments → New environment. The names are the ones `release_target.py` writes in `INDEXES`.
 
 - **`testpypi`:**
-  - no required reviewers;
+  - Required reviewers: the owner (so a TestPyPI upload also waits for approval);
   - Deployment branches and tags: **Selected branches and tags**, with two rules: branch `main` and branch `release/*`.
 - **`pypi`:**
   - Required reviewers: the owner;
@@ -88,8 +90,9 @@ For version `X.Y.Z`, the first candidate is `X.Y.Zrc1`.
 
    The changelog stays `## [Unreleased]`: a candidate has no section of its own, and the release notes of a pre-release are taken from
    `[Unreleased]`. Merge the pull request.
-2. Actions → Release → Run workflow, on branch `main`. It builds, smoke tests, publishes to TestPyPI and installs the published wheel on
-   three systems.
+2. Actions → Release → Run workflow, on branch `main`. It runs the lint job and the core tests, builds and smoke tests the
+   distributions, then waits for the `testpypi` environment: the Release run → Review deployments → approve. It then publishes to
+   TestPyPI and installs the published wheel on three systems.
 3. Check the TestPyPI page `https://test.pypi.org/project/pyside6-storybook/X.Y.Zrc1/`: the README, the screenshot, the licence, the
    links and the classifiers.
 4. On Windows, macOS and Linux, install from TestPyPI in a fresh virtual environment. Only the project's own file comes from TestPyPI;
@@ -211,14 +214,15 @@ PyPI never accepts a version number twice, even after a file was deleted. So a p
 
 ## A failed run
 
-Open the run in Actions and see which job failed. The jobs run in this order: `target`, `package`, `publish`, `verify`,
-`github-release`.
+Open the run in Actions and see which job failed. The jobs run in this order: `target`, then `checks` (lint and core
+tests) and `package` side by side, then `publish`, `verify` and `github-release`.
 
-- **Before `publish`** (`target`, `package`): nothing was uploaded.
+- **Before `publish`** (`target`, `checks`, `package`): nothing was uploaded.
   - A tag that does not match the version, or a commit that is on no `main` or `release/*` branch, fails `target`. Delete the tag
     locally and on the remote (`git tag -d vX.Y.Z` and `git push origin :refs/tags/vX.Y.Z`), fix the version or the branch, and tag
     again. Or, when the candidate's version has to change, push a new candidate tag.
   - A failing smoke job in `package` is a real problem in the package: fix it on `main` and release the next candidate.
+  - A failing `checks` job is the same lint or test failure CI would show on `main`: fix it on `main` and release the next candidate.
   - Re-run the workflow (Re-run all jobs, or Run workflow again for TestPyPI) once it is fixed.
 - **During `publish`:** use Re-run failed jobs. It uploads the same `dist` artifact, and PyPI accepts a file that it already has with
   the same name and content. If PyPI refuses anyway, release the next number.
