@@ -38,8 +38,9 @@ defaults:
   run:
     shell: bash
 
+# A called workflow runs under the caller's name, so the literal keeps this group apart from tests.yml's in a release.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-package-${{ github.ref }}
   cancel-in-progress: true
 
 env:
