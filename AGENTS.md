@@ -54,7 +54,7 @@ CI runs in two workflows:
 - **Full test suite** (`.github/workflows/full-tests.yml`), started by hand (Actions > Full test suite > Run workflow, on any
   branch): every test on Windows, macOS and Linux with Python 3.11 and 3.14, plus the lowest allowed dependency versions. Run it
   before a release, after a dependency or Python bump, and for changes to platform-dependent code (paths, themes, the command line).
-- **Package** (`.github/workflows/package.yml`), on every push to `main` and every pull request that touches `src/`, `pyproject.toml`,
+- **Package** (`.github/workflows/package.yml`), on every pull request (not on pushes to `main`) that touches `src/`, `pyproject.toml`,
   `uv.lock`, the README, the licence files, `scripts/smoke/` or the workflow itself, and callable from other workflows: builds the wheel
   and the sdist, runs `twine check --strict`, checks that `dist/` holds one of each named with the version from `pyproject.toml`, then
   installs the wheel with pip on Linux, Windows and macOS (Python 3.11 and 3.14) and the sdist on Linux, and runs
