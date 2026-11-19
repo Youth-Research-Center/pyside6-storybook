@@ -1,0 +1,174 @@
+name: Package
+
+# Build the distributions, check their metadata and prove that the wheel and the sdist install and work on Linux, Windows and macOS.
+# release.yml calls this workflow, so a release runs the same jobs.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "README.md"
+      - "LICENSE"
+      - "THIRD_PARTY_NOTICES.md"
+      - "scripts/smoke/**"
+      - ".github/workflows/package.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "README.md"
+      - "LICENSE"
+      - "THIRD_PARTY_NOTICES.md"
+      - "scripts/smoke/**"
+      - ".github/workflows/package.yml"
+  workflow_call:
+    outputs:
+      version:
+        description: The version in pyproject.toml, which both distributions carry.
+        value: ${{ jobs.build.outputs.version }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  QT_QPA_PLATFORM: offscreen
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.11"
+      - run: uv build
+      - name: Check the metadata
+        run: uvx twine@7 check --strict dist/*
+      - name: Check the distributions are one wheel and one sdist, named with the version
+        id: version
+        run: |
+          version="$(uv run --no-project python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          sdists=(dist/*.tar.gz)
+          everything=(dist/*)
+          if [ "${#wheels[@]}" -ne 1 ] || [ "${#sdists[@]}" -ne 1 ] || [ "${#everything[@]}" -ne 2 ]; then
+            echo "::error::dist/ must hold exactly one wheel and one sdist, found: ${everything[*]}"
+            exit 1
+          fi
+          if [ "${wheels[0]}" != "dist/pyside6_storybook-${version}-py3-none-any.whl" ]; then
+            echo "::error::the wheel ${wheels[0]} is not named with version ${version}"
+            exit 1
+          fi
+          if [ "${sdists[0]}" != "dist/pyside6_storybook-${version}.tar.gz" ]; then
+            echo "::error::the sdist ${sdists[0]} is not named with version ${version}"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  smoke:
+    name: smoke test (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.11", "3.14"]
+    steps:
+      - name: Install Qt system libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      # Only the smoke script: a checkout into the workspace root would delete dist/.
+      - uses: actions/checkout@v7
+        with:
+          path: checkout
+          sparse-checkout: scripts/smoke
+          sparse-checkout-cone-mode: false
+      - name: Create a virtual environment
+        id: venv
+        run: |
+          python -m venv venv
+          if [ -x venv/Scripts/python.exe ]; then
+            echo "python=$PWD/venv/Scripts/python.exe" >> "$GITHUB_OUTPUT"
+          else
+            echo "python=$PWD/venv/bin/python" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install the wheel with the pytest extra
+        env:
+          PY: ${{ steps.venv.outputs.python }}
+        run: |
+          wheel="$(ls dist/*.whl)"
+          "$PY" -m pip install --no-cache-dir "${wheel}[pytest]"
+      - name: Smoke test the wheel
+        timeout-minutes: 15
+        env:
+          PY: ${{ steps.venv.outputs.python }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          mkdir empty
+          cd empty
+          "$PY" -I ../checkout/scripts/smoke/smoke_check.py "$VERSION"
+
+  sdist:
+    name: smoke test (sdist, ubuntu-latest, Python 3.11)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Install Qt system libraries
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: actions/checkout@v7
+        with:
+          path: checkout
+          sparse-checkout: scripts/smoke
+          sparse-checkout-cone-mode: false
+      - name: Create a virtual environment
+        run: python -m venv venv
+      - name: Build and install the sdist with the pytest extra
+        run: |
+          sdist="$(ls dist/*.tar.gz)"
+          venv/bin/python -m pip install --no-cache-dir "${sdist}[pytest]"
+      - name: Smoke test the sdist
+        timeout-minutes: 15
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          mkdir empty
+          cd empty
+          ../venv/bin/python -I ../checkout/scripts/smoke/smoke_check.py "$VERSION"
