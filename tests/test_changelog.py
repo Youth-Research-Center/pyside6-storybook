@@ -81,9 +81,10 @@ def test_every_version_heading_has_a_link_reference_and_unreleased_links_to_main
         assert "[Unreleased]: https://github.com/Youth-Research-Center/pyside6-storybook/commits/main" in text
 
 
-def test_the_notes_of_a_pre_release_are_the_unreleased_section() -> None:
-    notes = changelog_section.extract_section(_text(), "0.1.0rc1")
+def test_the_release_workflow_can_extract_the_notes_of_every_release() -> None:
+    versions = [match.group(1) for line in _text().splitlines() if (match := _RELEASE_HEADING.match(line))]
 
-    assert notes
-    assert notes == changelog_section.extract_section(_text(), "Unreleased")
-    assert "### Added" in notes
+    assert versions
+    for version in versions:
+        notes = changelog_section.extract_section(_text(), version)
+        assert notes.startswith("### "), (version, notes[:40])

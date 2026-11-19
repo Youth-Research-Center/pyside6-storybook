@@ -11,6 +11,8 @@ of their own.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-19
+
 ### Added
 - Version policy: the documentation page Versions and compatibility says what the public API is, what a minor and a patch release before
   1.0 may change, and which Python and PySide6 versions are supported. `RELEASING.md` describes how a release is made. The changelog header
@@ -209,4 +211,5 @@ of their own.
   surface now uses the window background, where a stock widget sits in an application, and the Dark palette separates `Window`,
   `Base` and `AlternateBase` further; the Light theme's alternate rows are a little stronger too.
 
-[Unreleased]: https://github.com/Youth-Research-Center/pyside6-storybook/commits/main
+[Unreleased]: https://github.com/Youth-Research-Center/pyside6-storybook/compare/v0.1.0...main
+[0.1.0]: https://github.com/Youth-Research-Center/pyside6-storybook/releases/tag/v0.1.0
