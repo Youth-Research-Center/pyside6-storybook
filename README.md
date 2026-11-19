@@ -90,6 +90,7 @@ Everything below is documented on the [documentation site][site].
 - [Testing stories][testing]: a pytest plugin that renders every story in every theme, accessibility and contrast checks,
   screenshot snapshots and the `render_story` fixture.
 - [Troubleshooting][troubleshooting]: load errors, duplicate ids, headless runs and fonts in CI.
+- [Versions and compatibility][versions]: the version policy, the public API and the supported Python and PySide6 versions.
 - [API reference][reference] and [Changelog][changelog].
 
 [site]: https://youth-research-center.github.io/pyside6-storybook/
@@ -101,6 +102,7 @@ Everything below is documented on the [documentation site][site].
 [themes]: https://youth-research-center.github.io/pyside6-storybook/themes/
 [testing]: https://youth-research-center.github.io/pyside6-storybook/testing/
 [troubleshooting]: https://youth-research-center.github.io/pyside6-storybook/troubleshooting/
+[versions]: https://youth-research-center.github.io/pyside6-storybook/versions/
 [reference]: https://youth-research-center.github.io/pyside6-storybook/reference/
 [changelog]: https://youth-research-center.github.io/pyside6-storybook/changelog/
 

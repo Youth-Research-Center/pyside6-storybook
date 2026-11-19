@@ -2,8 +2,8 @@ name: Release
 
 # A tag v* publishes to PyPI and a manual run publishes the current ref to TestPyPI. Both build and smoke test the distributions with
 # package.yml, publish them with a trusted publisher (no token), install the published files on three systems and run the smoke script.
-# A tag push then creates the GitHub release. One-time setup (PyPI projects, trusted publishers, GitHub environments): see section 3.4 of
-# the release design in docs/specs/ (RELEASING.md describes it once it exists).
+# A tag push then creates the GitHub release. One-time setup (PyPI projects, trusted publishers, GitHub environments) and every release
+# step: see RELEASING.md.
 
 on:
   push:
