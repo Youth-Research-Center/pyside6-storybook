@@ -191,7 +191,11 @@ in the same pull request as the bump.
   fixture, and imports `pyside6_storybook.testing` inside the hooks. `SESSION_KEY`, the `config.stash` key of the `StorybookSession`,
   lives here for the same reason. A test checks that importing it imports no `PySide6` or `pyside6_storybook.*` module
   - `py.typed` - marks the package as typed
-- `scripts/docs/` - development only: `render_theming_images.py` renders the two screenshots of `docs/themes.md`
+- `scripts/docs/` - development only: `render_docs_images.py` renders `docs/images/gallery.png` (the gallery on the sign-in form) and
+  `docs/images/controls/<type>.png`, one per control type (`--output DIR` writes elsewhere), offscreen in the Light theme at 2x;
+  `render_theming_images.py` renders the two screenshots of `docs/themes.md`. Refresh the images with
+  `uv run python scripts/docs/render_docs_images.py` (and the other script) and commit them, whenever the gallery's look or an
+  example story changes; `tests/test_docs_images.py` runs the script into a temporary folder
 - `scripts/smoke/` - development only, not in the wheel: `smoke_check.py`, the installed-package checks `package.yml` runs (installed location,
   version, package data, the command lines, the gallery over every example in both themes, the pytest plugin). A plain script that imports
   nothing from the repository and runs with `python -I`; each step is a function that `tests/test_smoke_check.py` calls with a copy of the

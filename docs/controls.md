@@ -13,6 +13,33 @@ Each control is an argument of the story and an editor in the gallery's controls
 | `EnumControl(name, default)` | combo box of the member names | the enum member |
 | `FileControl(name, default="", *, filter="")` | path field and a "Browse…" button | `pathlib.Path`, or `None` while empty |
 
+How each editor looks in the gallery's controls pane:
+
+- `text` (TextControl):
+
+  ![The text editor: a line edit labelled Title that holds Sign in](images/controls/text.png)
+- `bool` (BoolControl):
+
+  ![The bool editor: a check box labelled Show Remember, checked](images/controls/bool.png)
+- `choice` (ChoiceControl):
+
+  ![The choice editor: a combo box labelled Size that shows Medium](images/controls/choice.png)
+- `int` (IntControl):
+
+  ![The int editor: a spin box labelled Columns with a slider beside it, at 3](images/controls/int.png)
+- `float` (FloatControl):
+
+  ![The float editor: a spin box labelled Opacity with a slider beside it, at 0.50](images/controls/float.png)
+- `color` (ColorControl):
+
+  ![The colour editor: a swatch button and a hex field labelled Accent, at #3584e4](images/controls/color.png)
+- `enum` (EnumControl):
+
+  ![The enum editor: a combo box labelled Elide that shows ElideRight](images/controls/enum.png)
+- `file` (FileControl):
+
+  ![The file editor: a path field and a Browse button labelled Source, holding data/report.csv](images/controls/file.png)
+
 Every control also takes two keyword-only fields:
 
 - `label`: the text of the form label. Without it the label is derived from `name`: `tile_type` becomes "Tile Type".
