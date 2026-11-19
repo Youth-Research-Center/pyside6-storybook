@@ -137,6 +137,13 @@ class TestReleaseWorkflow:
                 triggers = _triggers(_load(_WORKFLOWS / Path(job["uses"]).name))
                 assert "workflow_call" in triggers, job["uses"]
 
+    def test_the_package_smoke_tests_run_on_pull_requests_and_releases_not_on_pushes_to_main(self) -> None:
+        # The pull request already ran them, and a release runs them again on the commit it publishes, so a run on every merge
+        # would repeat the macOS and Windows jobs for nothing.
+        triggers = _triggers(_load(_WORKFLOWS / "package.yml"))
+
+        assert set(triggers) == {"pull_request", "workflow_call"}
+
     def test_the_github_release_runs_for_tag_pushes_only(self) -> None:
         assert _load(_RELEASE)["jobs"]["github-release"]["if"] == "github.ref_type == 'tag'"
 
