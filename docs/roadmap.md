@@ -1,5 +1,7 @@
 # pyside6-storybook: plan and roadmap
 
+Progress by release is on the [milestones page](https://github.com/Youth-Research-Center/pyside6-storybook/milestones).
+
 Status: plan for the first release. The issue tracker is the source of truth for
 scope and progress; this document records the design decisions the issues rely on.
 

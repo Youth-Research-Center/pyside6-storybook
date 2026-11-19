@@ -64,6 +64,20 @@ CI runs in two workflows:
   checks the tag, `package.yml` builds and smoke tests, `publish` uploads with a trusted publisher (the only job with `id-token: write`),
   `verify` installs the published files on three systems and runs the smoke script, and `github-release` (tag pushes only, the only job with
   `contents: write`) creates the release from the changelog.
+- **Docs** (`.github/workflows/docs.yml`), on every push to `main` and every pull request that touches `docs/`, `mkdocs.yml`, `src/`, the
+  README, the changelog, `pyproject.toml`, `uv.lock` or the workflow itself: `build` runs `mkdocs build --strict`, and on `main` `deploy`
+  (the only job with `pages: write` and `id-token: write`) publishes the site to GitHub Pages.
+
+## Docs site
+The site is built from `mkdocs.yml` and `docs/`. Its dependencies are in the `docs` group, which is not part of `dev`:
+
+```bash
+uv sync --group docs                  # install the docs group
+uv run mkdocs serve                   # preview at http://127.0.0.1:8000
+uv run mkdocs build --strict          # what CI runs; any warning fails the build
+uv sync                               # afterwards, so the environment matches the tests' (without the docs group)
+```
+Set `NO_MKDOCS_2_WARNING=1` to silence Material's MkDocs 2 banner. The site's own pages are listed under "Project structure".
 
 ## Code quality
 Three gates run in CI: `ruff check` (ruff's default rules `E4`, `E7`, `E9` and `F`, plus `E501` for 150-character lines, `B`, `Q`, `I` and
@@ -200,6 +214,10 @@ in the same pull request as the bump.
   `pyproject.toml` example, so keep the code in it runnable and update the test when the README's structure changes. PyPI renders it away
   from the repository, so every link and image is an absolute URL (`https://github.com/Youth-Research-Center/pyside6-storybook/blob/main/...`
   for a file, `/tree/main/...` for a folder) and GitHub-only syntax (alerts such as `> [!NOTE]`, Mermaid) is not used; a test checks both
+- `mkdocs.yml` and `docs/*.md` - the documentation site (MkDocs with Material and mkdocstrings). `docs/reference.md` holds one
+  `::: pyside6_storybook.<name>` line for every name in `pyside6_storybook.__all__` and `pyside6_storybook.checks.__all__`, so **a new name in
+  `__all__` needs a `:::` line in `docs/reference.md`** (`tests/test_docs.py` compares them). A docs page links another page relatively and
+  a file outside `docs/` by its absolute GitHub URL; `tests/test_docs.py` checks it and `mkdocs build --strict` enforces both.
 - `.github/` - CI workflows and Dependabot configuration; `tests/test_workflows.py` checks that every workflow parses, never puts
   `${{ github.event.* }}` or `${{ inputs.* }}` into shell source, bounds every job with `timeout-minutes` (a job with `uses:` has none) and
   runs every `run:` step with bash
