@@ -7,7 +7,8 @@ dark themes, and see an error in place of a story that breaks instead of a crash
 ![The gallery showing the sign-in form example: a story list on the left, the rendered widget in the middle, and the theme switch and the story's controls on the right](https://raw.githubusercontent.com/Youth-Research-Center/pyside6-storybook/main/docs/images/gallery.png)
 
 > **Status:** early development, not yet released. The first release, 0.1.0, will be published on PyPI; until then, install it
-> from GitHub as shown below. [`docs/roadmap.md`](docs/roadmap.md) describes what is planned next.
+> from GitHub as shown below.
+> [`docs/roadmap.md`](https://github.com/Youth-Research-Center/pyside6-storybook/blob/main/docs/roadmap.md) describes what is planned next.
 
 ## Install
 
@@ -245,8 +246,9 @@ In the gallery, a spin box, slider or combo box reacts to the mouse wheel only w
 pane never changes a value by accident. Click a control or press Tab to focus it. The controls pane scrolls when a story has more
 controls than fit.
 
-A story without controls is fine; the controls pane then says so. The [example stories](src/pyside6_storybook/examples) use every
-control type and option.
+A story without controls is fine; the controls pane then says so. The
+[example stories](https://github.com/Youth-Research-Center/pyside6-storybook/tree/main/src/pyside6_storybook/examples) use every control type
+and option.
 
 ## Where your stories come from
 
@@ -696,7 +698,7 @@ with `-k` or `--deselect`.
   story renders fails its test with the story's traceback, with or without pytest-qt. The `render_story` fixture needs pytest-qt.
 - **The theme provider is activated lazily** before the first story test and deactivated when the next test is not a story test and at
   the end of the run, so the application's look is back before any other test runs. A provider can be activated again after
-  `deactivate`; see [docs/theming.md](docs/theming.md).
+  `deactivate`; see [docs/theming.md](https://github.com/Youth-Research-Center/pyside6-storybook/blob/main/docs/theming.md).
 - **pytest-xdist.** The story tests are collected in the same order in every worker. With `-n`, the default `load` distribution spreads
   them over the workers; `--dist loadfile` and `--dist loadscope` put all of them on one worker.
 - **Stories imported earlier.** The plugin loads the stories into a new registry when it collects. A story module that something else
@@ -740,8 +742,9 @@ a context is built by hand). A provider can supply it with an optional `color_sc
 `Dark` when the application palette's `Window` colour has a lightness below 128 and `Light` otherwise. Like `tokens()`, the method
 is read after `activate` and after every change notification, and it is not part of the six-method protocol.
 
-The [theming guide](docs/theming.md) covers themes and providers in depth, and [`examples/themed_app`](examples/themed_app) is a
-worked example, run from its folder with `uv run --project ../.. pyside6-storybook`.
+The [theming guide](https://github.com/Youth-Research-Center/pyside6-storybook/blob/main/docs/theming.md) covers themes and providers in depth, and
+[`examples/themed_app`](https://github.com/Youth-Research-Center/pyside6-storybook/tree/main/examples/themed_app) is a worked example,
+run from its folder with `uv run --project ../.. pyside6-storybook`.
 
 An application that has its own theme manager plugs it in with a theme provider, an object that implements the `ThemeProvider`
 protocol. `BuiltinThemeProvider` is the default one and a model for your own:
@@ -869,10 +872,10 @@ The object names:
 
 ## Licence
 
-MIT. See [LICENSE](LICENSE). PySide6, which pyside6-storybook depends on, is available under the LGPLv3, the GPLv3 or a
-commercial Qt licence.
+MIT. See [LICENSE](https://github.com/Youth-Research-Center/pyside6-storybook/blob/main/LICENSE).
+PySide6, which pyside6-storybook depends on, is available under the LGPLv3, the GPLv3 or a commercial Qt licence.
 
 The gallery's icons are [Phosphor Icons](https://phosphoricons.com) (MIT), bundled in the package. See
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[THIRD_PARTY_NOTICES.md](https://github.com/Youth-Research-Center/pyside6-storybook/blob/main/THIRD_PARTY_NOTICES.md).
 
 pyside6-storybook is an independent project. It is not affiliated with or endorsed by The Qt Company or the Storybook project.

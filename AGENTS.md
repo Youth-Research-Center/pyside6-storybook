@@ -56,16 +56,18 @@ CI runs in two workflows:
   before a release, after a dependency or Python bump, and for changes to platform-dependent code (paths, themes, the command line).
 
 ## Code quality
-Two gates run in CI: `ruff check` (ruff's default rules `E4`, `E7`, `E9` and `F`, plus `E501` for 150-character lines, `B`, `Q`, `I` and
-`FBT`; there is no `ruff format` step) and the
-[`ty`](https://github.com/astral-sh/ty) type checker, which must report no diagnostics in `src/` or `tests/`. Run both and the tests for
-the code you touched before every push. `W` rules are not selected, so check whitespace on the files you changed:
+Three gates run in CI: `ruff check` (ruff's default rules `E4`, `E7`, `E9` and `F`, plus `E501` for 150-character lines, `B`, `Q`, `I` and
+`FBT`; there is no `ruff format` step), the
+[`ty`](https://github.com/astral-sh/ty) type checker, which must report no diagnostics in `src/` or `tests/`, and `actionlint` on the
+workflows. Run them and the tests for the code you touched before every push. `W` rules are not selected, so check whitespace on the
+files you changed:
 
 ```bash
 uv run ruff check .
 uv run ruff check --fix .                                  # auto-fix, including import order
 uv run ruff check --select W291,W292,W293 <files you changed>
 uv run ty check
+uvx --from actionlint-py==1.7.12.25 actionlint             # lints every workflow; CI runs the same pinned version
 uv run python scripts/icons/build_icon_bundle.py --check   # fails when the icon bundle, licence or notices are out of date
 ```
 
@@ -170,9 +172,13 @@ in the same pull request as the bump.
   `src/` imports it, and `tests/test_themed_app.py` reaches it through `cli.main` and `load_stories`. It has no `[project]` table, so never run
   `uv` there without `--project ../..` (that would create a second environment and an untracked `uv.lock`): run from the repository root, or from the
   folder with `uv run --project ../.. pyside6-storybook`
-- `README.md` - user documentation; `tests/test_readme.py` loads its first story and checks its controls table and `pyproject.toml`
-  example, so keep the code in it runnable and update the test when the README's structure changes
-- `.github/` - CI workflow and Dependabot configuration
+- `README.md` - user documentation, and the page PyPI shows; `tests/test_readme.py` loads its first story and checks its controls table and
+  `pyproject.toml` example, so keep the code in it runnable and update the test when the README's structure changes. PyPI renders it away
+  from the repository, so every link and image is an absolute URL (`https://github.com/Youth-Research-Center/pyside6-storybook/blob/main/...`
+  for a file, `/tree/main/...` for a folder) and GitHub-only syntax (alerts such as `> [!NOTE]`, Mermaid) is not used; a test checks both
+- `.github/` - CI workflows and Dependabot configuration; `tests/test_workflows.py` checks that every workflow parses, never puts
+  `${{ github.event.* }}` or `${{ inputs.* }}` into shell source, bounds every job with `timeout-minutes` (a job with `uses:` has none) and
+  runs every `run:` step with bash
 
 ## Code conventions
 - **Python:** 3.11+ syntax only; the code must run on the oldest supported version.

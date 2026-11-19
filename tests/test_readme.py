@@ -176,3 +176,26 @@ class _RecordingSink:
 
     def record(self, name: str, args: tuple[object, ...]) -> None:
         self.entries.append((name, args))
+
+
+def _prose() -> str:
+    """The README without fenced code blocks and inline code, which may contain text that only looks like a link."""
+    text = re.sub(r"^```.*?^```", "", _README.read_text(encoding="utf-8"), flags=re.DOTALL | re.MULTILINE)
+    return re.sub(r"`[^`\n]*`", "", text)
+
+
+def test_the_readme_has_no_relative_links_or_images_because_pypi_shows_it_away_from_the_repository() -> None:
+    prose = _prose()
+
+    inline = re.findall(r"\]\(\s*<?([^)\s>]*)", prose)
+    references = re.findall(r"^\s*\[[^\]]+\]:\s*(\S+)", prose, flags=re.MULTILINE)
+    html = re.findall(r"""\b(?:href|src)=["']([^"']*)["']""", prose)
+    targets = inline + references + html
+
+    assert targets
+    relative = [target for target in targets if not target.startswith(("https://", "http://", "#", "mailto:"))]
+    assert not relative
+
+
+def test_the_readme_uses_no_github_alert_syntax_because_pypi_does_not_render_it() -> None:
+    assert not re.search(r"^\s*>\s*\[![A-Za-z]+\]", _prose(), flags=re.MULTILINE)
