@@ -1,6 +1,6 @@
 [project]
 name = "pyside6-storybook"
-version = "0.1.0.dev0"
+version = "0.1.0rc1"
 description = "Storybook-style component explorer for PySide6: browse widgets in isolation, edit their properties live and switch themes."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -78,7 +78,7 @@ packages = ["src/pyside6_storybook", "src/pyside6_storybook_pytest.py"]
 [tool.hatch.build.targets.sdist]
 include = [
     "src/", "tests/", "docs/", "examples/", "scripts/",
-    "README.md", "CHANGELOG.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "pyproject.toml", "uv.lock", "mkdocs.yml",
+    "README.md", "RELEASING.md", "CHANGELOG.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "pyproject.toml", "uv.lock", "mkdocs.yml",
     ".github/workflows/",
 ]
 exclude = ["docs/specs/", "**/__pycache__"]

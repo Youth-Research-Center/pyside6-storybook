@@ -1,20 +1,10 @@
 name: Package
 
 # Build the distributions, check their metadata and prove that the wheel and the sdist install and work on Linux, Windows and macOS.
-# release.yml calls this workflow, so a release runs the same jobs.
+# It runs on pull requests and when release.yml calls it, so a release runs the same jobs on the commit it publishes. It does not run
+# on pushes to main: the pull request already ran it, and a release runs it again before uploading.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "src/**"
-      - "pyproject.toml"
-      - "uv.lock"
-      - "README.md"
-      - "LICENSE"
-      - "THIRD_PARTY_NOTICES.md"
-      - "scripts/smoke/**"
-      - ".github/workflows/package.yml"
   pull_request:
     paths:
       - "src/**"
@@ -38,8 +28,9 @@ defaults:
   run:
     shell: bash
 
+# A called workflow runs under the caller's name, so the literal keeps this group apart from tests.yml's in a release.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-package-${{ github.ref }}
   cancel-in-progress: true
 
 env:

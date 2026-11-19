@@ -1,10 +1,20 @@
 # Changelog
 
-All notable changes to this project are documented in this file.
+All notable changes to this project are documented in this file. The format follows
+[Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/). The
+[Versions and compatibility](https://youth-research-center.github.io/pyside6-storybook/versions/) page says what counts as the public API.
+
+Every user-facing pull request adds one entry under `[Unreleased]`, below the matching heading: `### Breaking`, `### Added`,
+`### Changed`, `### Fixed`, `### Removed`, `### Deprecated` or `### Security`. `### Breaking` comes first, and a minor release before 1.0
+that breaks the public API lists the break there. A release section is named `## [X.Y.Z] - YYYY-MM-DD`; release candidates get no section
+of their own.
 
 ## [Unreleased]
 
 ### Added
+- Version policy: the documentation page Versions and compatibility says what the public API is, what a minor and a patch release before
+  1.0 may change, and which Python and PySide6 versions are supported. `RELEASING.md` describes how a release is made. The changelog header
+  states the format, and `### Breaking` is the first heading of a release that breaks the public API.
 - Documentation site (MkDocs with Material and mkdocstrings) at https://youth-research-center.github.io/pyside6-storybook/: a home page, a page
   for each part of the guide (writing stories, controls, finding stories, the command line, the gallery, themes, testing stories and
   troubleshooting), the API reference generated from the docstrings, the changelog and the roadmap. The README is now a short front page that
@@ -198,3 +208,5 @@ All notable changes to this project are documented in this file.
 - The Dark theme's input fields, unchecked check boxes and alternate table rows were almost invisible in the preview. The preview
   surface now uses the window background, where a stock widget sits in an application, and the Dark palette separates `Window`,
   `Base` and `AlternateBase` further; the Light theme's alternate rows are a little stronger too.
+
+[Unreleased]: https://github.com/Youth-Research-Center/pyside6-storybook/commits/main

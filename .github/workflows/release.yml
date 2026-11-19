@@ -1,9 +1,10 @@
 name: Release
 
-# A tag v* publishes to PyPI and a manual run publishes the current ref to TestPyPI. Both build and smoke test the distributions with
-# package.yml, publish them with a trusted publisher (no token), install the published files on three systems and run the smoke script.
-# A tag push then creates the GitHub release. One-time setup (PyPI projects, trusted publishers, GitHub environments): see section 3.4 of
-# the release design in docs/specs/ (RELEASING.md describes it once it exists).
+# A tag v* publishes to PyPI and a manual run publishes the current ref to TestPyPI. Both run lint and the core tests with tests.yml and
+# build and smoke test the distributions with package.yml. Only when both pass do they publish with a trusted publisher (no token),
+# install the published files on three systems and run the smoke script.
+# A tag push then creates the GitHub release. One-time setup (PyPI projects, trusted publishers, GitHub environments) and every release
+# step: see RELEASING.md.
 
 on:
   push:
@@ -44,13 +45,18 @@ jobs:
         # The runner already sets GITHUB_EVENT_NAME, GITHUB_REF_TYPE, GITHUB_REF_NAME, GITHUB_SHA and GITHUB_OUTPUT.
         run: python scripts/release/release_target.py
 
+  checks:
+    name: lint and core tests
+    needs: target
+    uses: ./.github/workflows/tests.yml
+
   package:
     needs: target
     uses: ./.github/workflows/package.yml
 
   publish:
     name: publish to ${{ needs.target.outputs.repository }}
-    needs: [target, package]
+    needs: [target, checks, package]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:

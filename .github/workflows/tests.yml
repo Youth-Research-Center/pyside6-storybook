@@ -1,12 +1,14 @@
 name: Tests
 
-# Every push to main and every pull request: lint, type check and the core tests on Linux.
+# Every push to main and every pull request: lint, type check and the core tests on Linux. release.yml calls it too, so nothing is
+# published unless these pass on the released commit.
 # The slower tests marked `full`, and the Windows, macOS and lowest-version runs, are in full-tests.yml (run it from the Actions tab).
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -15,8 +17,9 @@ defaults:
   run:
     shell: bash
 
+# A called workflow runs under the caller's name, so the literal keeps this group apart from package.yml's in a release.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-tests-${{ github.ref }}
   cancel-in-progress: true
 
 env:

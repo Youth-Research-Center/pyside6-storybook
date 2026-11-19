@@ -19,6 +19,12 @@ def _load(path: Path) -> dict:
     return workflow
 
 
+def _triggers(workflow: dict) -> dict:
+    # PyYAML reads the bare key `on` as the boolean True.
+    triggers = workflow.get(True, workflow.get("on"))
+    return triggers if isinstance(triggers, dict) else {name: None for name in triggers}
+
+
 def _run_steps(workflow: dict) -> list[tuple[str, dict]]:
     return [(job_id, step) for job_id, job in workflow["jobs"].items() for step in job.get("steps", []) if "run" in step]
 
@@ -104,6 +110,39 @@ class TestReleaseWorkflow:
 
         assert environment["name"] == "${{ needs.target.outputs.repository }}"
         assert set(release_target.INDEXES) == {"pypi", "testpypi"}
+
+    def test_publish_waits_for_lint_the_core_tests_and_the_package_smoke_tests(self) -> None:
+        jobs = _load(_RELEASE)["jobs"]
+        callers = {job.get("uses"): job_id for job_id, job in jobs.items() if "uses" in job}
+
+        assert set(callers) >= {"./.github/workflows/tests.yml", "./.github/workflows/package.yml"}
+        assert {callers["./.github/workflows/tests.yml"], callers["./.github/workflows/package.yml"]} <= set(jobs["publish"]["needs"])
+
+    def test_the_workflows_a_release_calls_run_in_concurrency_groups_of_their_own(self) -> None:
+        # A called workflow runs under the caller's name, so a group made of the workflow name and the ref is the same for every
+        # workflow a release calls; with cancel-in-progress, one would cancel the other in the middle of the release.
+        jobs = _load(_RELEASE)["jobs"]
+        called = [_WORKFLOWS / Path(job["uses"]).name for job in jobs.values() if "uses" in job]
+        caller_group = _load(_RELEASE)["concurrency"]["group"]
+        groups = [_load(path).get("concurrency", {}).get("group", "") for path in called]
+        resolved = [group.replace("${{ github.workflow }}", "Release").replace("${{ github.ref }}", "refs/tags/v1.0.0") for group in groups]
+
+        assert len(called) >= 2
+        assert len(set(resolved)) == len(resolved), dict(zip(called, resolved, strict=True))
+        assert caller_group not in resolved
+
+    def test_the_workflows_a_release_calls_can_be_called(self) -> None:
+        for job in _load(_RELEASE)["jobs"].values():
+            if "uses" in job:
+                triggers = _triggers(_load(_WORKFLOWS / Path(job["uses"]).name))
+                assert "workflow_call" in triggers, job["uses"]
+
+    def test_the_package_smoke_tests_run_on_pull_requests_and_releases_not_on_pushes_to_main(self) -> None:
+        # The pull request already ran them, and a release runs them again on the commit it publishes, so a run on every merge
+        # would repeat the macOS and Windows jobs for nothing.
+        triggers = _triggers(_load(_WORKFLOWS / "package.yml"))
+
+        assert set(triggers) == {"pull_request", "workflow_call"}
 
     def test_the_github_release_runs_for_tag_pushes_only(self) -> None:
         assert _load(_RELEASE)["jobs"]["github-release"]["if"] == "github.ref_type == 'tag'"
