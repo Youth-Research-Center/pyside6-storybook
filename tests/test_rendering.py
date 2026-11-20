@@ -208,7 +208,7 @@ def test_a_decorator_raising_gives_a_title_with_its_repr_and_chains_the_error() 
 def test_a_decorator_returning_a_non_widget_gives_a_title_with_both_reprs() -> None:
     class Wrong:
         def __call__(self, widget: QWidget, ctx: StoryContext) -> QWidget:
-            return 42  # ty: ignore[invalid-return-type]
+            return 42  # ty: ignore[invalid-explicit-return]
 
         def __repr__(self) -> str:
             return "wrong()"
