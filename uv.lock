@@ -657,7 +657,7 @@ wheels = [
 
 [[package]]
 name = "pyside6-storybook"
-version = "0.1.0rc1"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "pyside6-essentials", version = "6.11.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
