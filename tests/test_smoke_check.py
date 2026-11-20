@@ -62,6 +62,13 @@ def test_the_examples_check_fails_for_other_ids() -> None:
         smoke_check.check_examples(smoke_check.EXPECTED_STORY_IDS - {"Display/Label"}, package_dir)
 
 
+def test_the_debug_info_check_fails_for_another_version() -> None:
+    package_dir = smoke_check.package_directory()
+
+    with pytest.raises(smoke_check.SmokeFailure, match=r"--debug-info"):
+        smoke_check.check_debug_info("0.0.0", package_dir)
+
+
 def test_the_installed_check_rejects_a_package_outside_the_site_packages(tmp_path: Path) -> None:
     with pytest.raises(smoke_check.SmokeFailure, match="not from"):
         smoke_check.check_installed(smoke_check.package_directory(), tmp_path)
@@ -88,6 +95,7 @@ def test_the_script_passes_against_the_development_install(tmp_path: Path) -> No
     assert completed.returncode == 0, completed.stdout + completed.stderr
     for line in (
         f"ok: __version__ is {version}",
+        f"ok: `pyside6-storybook --debug-info` reports {version}",
         "ok: py.typed is present",
         "ok: the Phosphor licence is present",
         "ok: the 20 example ids are the expected ones",

@@ -2,9 +2,13 @@ import os
 import shutil
 import subprocess
 import sys
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as real_version
 from pathlib import Path
 
+import PySide6
 import pytest
+from PySide6.QtCore import qVersion
 from story_files import story_source, write
 
 from pyside6_storybook import LoadError, StoryRegistry, __version__, cli
@@ -61,6 +65,86 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
         cli.main(["--version"])
     assert exit_info.value.code == 0
     assert capsys.readouterr().out.strip() == f"pyside6-storybook {__version__}"
+
+
+_DEBUG_INFO_KEYS = [
+    "pyside6-storybook",
+    "PySide6",
+    "Qt",
+    "Qt for Python distributions",
+    "Python",
+    "Platform",
+    "pytest",
+    "pytest-qt",
+    "QT_QPA_PLATFORM",
+]
+
+
+def _debug_info_lines(capsys: pytest.CaptureFixture[str], argv: list[str]) -> dict[str, str]:
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(argv)
+    assert exit_info.value.code == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert [line.split(": ", 1)[0] for line in lines] == _DEBUG_INFO_KEYS
+    return dict(line.split(": ", 1) for line in lines)
+
+
+def test_debug_info_prints_the_versions_in_order(capsys: pytest.CaptureFixture[str]) -> None:
+    values = _debug_info_lines(capsys, ["--debug-info"])
+    assert values["pyside6-storybook"] == __version__
+    assert values["PySide6"] == PySide6.__version__
+    assert values["Qt"] == qVersion()
+
+
+@pytest.mark.parametrize("argv", [["--bogus", "--debug-info"], ["--debug-info", "missing/target"]])
+def test_debug_info_wins_over_other_arguments(capsys: pytest.CaptureFixture[str], argv: list[str]) -> None:
+    _debug_info_lines(capsys, argv)
+
+
+def test_debug_info_after_an_option_missing_its_value_is_a_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["--theme", "--debug-info"])
+    assert exit_info.value.code == 2
+    assert capsys.readouterr().out == ""
+
+
+def test_debug_info_loads_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pyproject.toml").write_text("[tool.pyside6-storybook\nstories = 3\n", encoding="utf-8")
+
+    def fail(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("--debug-info must not load anything")
+
+    for name in ("_ensure_application", "resolve_story_sources", "load_stories", "load_theme_provider"):
+        monkeypatch.setattr(cli, name, fail)
+
+    _debug_info_lines(capsys, ["--debug-info"])
+
+
+def test_debug_info_reports_missing_values(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.delenv("QT_QPA_PLATFORM", raising=False)
+
+    def fake_version(name: str) -> str:
+        if name in ("pytest-qt", "shiboken6"):
+            raise PackageNotFoundError(name)
+        return real_version(name)
+
+    monkeypatch.setattr(cli, "version", fake_version, raising=False)
+
+    values = _debug_info_lines(capsys, ["--debug-info"])
+
+    assert values["pytest-qt"] == "not installed"
+    assert values["QT_QPA_PLATFORM"] == "not set"
+    assert "shiboken6" not in values["Qt for Python distributions"]
+    assert "PySide6-Essentials" in values["Qt for Python distributions"]
+
+
+def test_debug_info_prints_no_paths(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        cli.main(["--debug-info"])
+    output = capsys.readouterr().out
+    assert str(Path.home()) not in output
+    assert sys.executable not in output
 
 
 def test_help_describes_targets_and_options(capsys: pytest.CaptureFixture[str]) -> None:
@@ -510,6 +594,21 @@ def test_python_dash_m_runs_the_same_command(tmp_path: Path) -> None:
     assert completed.returncode == 0, completed.stderr
     assert completed.stdout.splitlines() == ["Module/A"]
 
+
+@pytest.mark.full
+def test_python_dash_m_prints_the_debug_info(tmp_path: Path) -> None:
+    completed = subprocess.run(
+        [sys.executable, "-m", "pyside6_storybook", "--debug-info"],
+        cwd=tmp_path,
+        env=_without_platform_override(),
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.splitlines()[0] == f"pyside6-storybook: {__version__}"
 
 def test_examples_are_the_bundled_ones_even_next_to_a_folder_of_the_same_name(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stories: StoryRegistry, gallery: _RecordingRun, capsys: pytest.CaptureFixture[str]

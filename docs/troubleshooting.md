@@ -60,3 +60,25 @@ or set `storybook_themes = "Light,Dark"` in the pytest ini options (see [Options
 ## The theme switch does nothing, or the gallery is unreadable
 
 See [Common problems](themes.md#common-problems) in Themes.
+
+## Reporting a bug
+
+Run this and paste its output into the bug report:
+
+```bash
+pyside6-storybook --debug-info
+```
+
+If the command itself fails, for example with an `ImportError` about a Qt library, paste that error instead, together with the Python
+version, your operating system and the output of this command (use `uv pip list` in an environment made by uv, which has no pip):
+
+```bash
+python -m pip list
+```
+
+Look for the lines that start with `PySide6`, `shiboken6` and `pytest`.
+
+Include a minimal story that reproduces the problem, built from stock Qt widgets where possible.
+
+To report a vulnerability, do not open an issue. Follow
+[SECURITY.md](https://github.com/Youth-Research-Center/pyside6-storybook/blob/main/SECURITY.md) and report it privately.

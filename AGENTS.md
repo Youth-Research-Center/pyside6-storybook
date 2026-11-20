@@ -198,7 +198,7 @@ in the same pull request as the bump.
   `uv run python scripts/docs/render_docs_images.py` (and the other script) and commit them, whenever the gallery's look or an
   example story changes; `tests/test_docs_images.py` runs the script into a temporary folder
 - `scripts/smoke/` - development only, not in the wheel: `smoke_check.py`, the installed-package checks `package.yml` runs (installed location,
-  version, package data, the command lines, the gallery over every example in both themes, the pytest plugin). A plain script that imports
+  version, the debug information, package data, the command lines, the gallery over every example in both themes, the pytest plugin). A plain script that imports
   nothing from the repository and runs with `python -I`; each step is a function that `tests/test_smoke_check.py` calls with a copy of the
   package. Update `EXPECTED_STORY_IDS` when an example is added or removed (a test compares it with the examples)
 - `scripts/release/` - development only, not in the wheel: `release_target.py` (which index a run publishes to, and the tag
