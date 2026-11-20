@@ -12,6 +12,7 @@ of their own.
 ## [Unreleased]
 
 ### Added
+- `pyside6-storybook --debug-info` prints the versions of pyside6-storybook, PySide6, Qt, Python and the platform for a bug report.
 - Version policy: the documentation page Versions and compatibility says what the public API is, what a minor and a patch release before
   1.0 may change, and which Python and PySide6 versions are supported. `RELEASING.md` describes how a release is made. The changelog header
   states the format, and `### Breaking` is the first heading of a release that breaks the public API.

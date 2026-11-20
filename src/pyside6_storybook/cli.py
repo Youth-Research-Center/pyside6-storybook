@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import argparse
 import os
+import platform
 import sys
 import textwrap
 from collections.abc import Sequence
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from typing import Any
 
+import PySide6
+from PySide6.QtCore import qVersion
 from PySide6.QtWidgets import QApplication
 
 from pyside6_storybook import __version__
@@ -22,6 +27,7 @@ from pyside6_storybook.themes.provider import ThemeProvider
 from pyside6_storybook.themes.provider_loader import ThemeProviderError, load_theme_provider
 
 PROGRAM_NAME = "pyside6-storybook"
+_QT_FOR_PYTHON_DISTRIBUTIONS = ("PySide6", "PySide6-Essentials", "PySide6-Addons", "shiboken6")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -42,7 +48,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     reload keeps it. A provider that cannot be loaded, or an unknown theme, is an error: the built-in themes are never used instead.
     With ``--list`` standard error also names the provider and its themes; the provider is not activated.
 
-    ``--help``, ``--version`` and usage errors exit through ``SystemExit`` (code 0, 0 and 2), as ``argparse`` does.
+    ``--help``, ``--version``, ``--debug-info`` and usage errors exit through ``SystemExit`` (code 0, 0, 0 and 2), as ``argparse`` does.
+    ``--debug-info`` prints the versions a bug report needs and loads nothing.
 
     Args:
         argv: The arguments after the program name. Defaults to ``sys.argv[1:]``.
@@ -131,7 +138,58 @@ def _parser() -> argparse.ArgumentParser:
         f"default: the theme key of pyproject.toml, else the provider's current theme)",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument(
+        "--debug-info",
+        action=_DebugInfoAction,
+        help="print the versions of pyside6-storybook, PySide6, Qt, Python and the platform for a bug report, and exit",
+    )
     return parser
+
+
+def _installed_version(name: str) -> str | None:
+    try:
+        return version(name)
+    except PackageNotFoundError:
+        return None
+
+
+def _debug_info() -> str:
+    distributions = [f"{name} {found}" for name in _QT_FOR_PYTHON_DISTRIBUTIONS if (found := _installed_version(name)) is not None]
+    lines = {
+        "pyside6-storybook": __version__,
+        "PySide6": PySide6.__version__,
+        "Qt": qVersion(),
+        "Qt for Python distributions": ", ".join(distributions) or "none found",
+        "Python": f"{platform.python_version()} ({platform.python_implementation()})",
+        "Platform": platform.platform(),
+        "pytest": _installed_version("pytest") or "not installed",
+        "pytest-qt": _installed_version("pytest-qt") or "not installed",
+        "QT_QPA_PLATFORM": os.environ.get("QT_QPA_PLATFORM") or "not set",  # Qt treats an empty value as unset
+    }
+    return "\n".join(f"{key}: {value}" for key, value in lines.items())
+
+
+class _DebugInfoAction(argparse.Action):
+    """Prints ``_debug_info()`` and exits while the arguments are parsed, as ``--version`` does."""
+
+    def __init__(
+        self,
+        option_strings: Sequence[str],
+        dest: str = argparse.SUPPRESS,
+        default: str = argparse.SUPPRESS,
+        help: str | None = None,  # argparse passes the help text by this keyword
+    ) -> None:
+        super().__init__(option_strings=option_strings, dest=dest, default=default, nargs=0, help=help)
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: str | Sequence[Any] | None,
+        option_string: str | None = None,
+    ) -> None:
+        print(_debug_info())
+        parser.exit()
 
 
 def _ensure_application(*, offscreen: bool) -> QApplication:
