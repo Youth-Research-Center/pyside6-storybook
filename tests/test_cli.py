@@ -121,15 +121,19 @@ def test_debug_info_loads_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     _debug_info_lines(capsys, ["--debug-info"])
 
 
-def test_debug_info_reports_missing_values(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    monkeypatch.delenv("QT_QPA_PLATFORM", raising=False)
+@pytest.mark.parametrize("platform_value", [None, ""], ids=["unset", "empty"])
+def test_debug_info_reports_missing_values(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], platform_value: str | None) -> None:
+    if platform_value is None:
+        monkeypatch.delenv("QT_QPA_PLATFORM", raising=False)
+    else:
+        monkeypatch.setenv("QT_QPA_PLATFORM", platform_value)
 
     def fake_version(name: str) -> str:
         if name in ("pytest-qt", "shiboken6"):
             raise PackageNotFoundError(name)
         return real_version(name)
 
-    monkeypatch.setattr(cli, "version", fake_version, raising=False)
+    monkeypatch.setattr(cli, "version", fake_version)
 
     values = _debug_info_lines(capsys, ["--debug-info"])
 

@@ -65,7 +65,7 @@ def test_the_examples_check_fails_for_other_ids() -> None:
 def test_the_debug_info_check_fails_for_another_version() -> None:
     package_dir = smoke_check.package_directory()
 
-    with pytest.raises(smoke_check.SmokeFailure, match=r"--debug-info"):
+    with pytest.raises(smoke_check.SmokeFailure, match=r"expected 'pyside6-storybook: 0\.0\.0' first"):
         smoke_check.check_debug_info("0.0.0", package_dir)
 
 

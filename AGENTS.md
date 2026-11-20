@@ -198,9 +198,9 @@ in the same pull request as the bump.
   `uv run python scripts/docs/render_docs_images.py` (and the other script) and commit them, whenever the gallery's look or an
   example story changes; `tests/test_docs_images.py` runs the script into a temporary folder
 - `scripts/smoke/` - development only, not in the wheel: `smoke_check.py`, the installed-package checks `package.yml` runs (installed location,
-  version, the debug information, package data, the command lines, the gallery over every example in both themes, the pytest plugin). A plain script that imports
-  nothing from the repository and runs with `python -I`; each step is a function that `tests/test_smoke_check.py` calls with a copy of the
-  package. Update `EXPECTED_STORY_IDS` when an example is added or removed (a test compares it with the examples)
+  version, the debug information, package data, the command lines, the gallery over every example in both themes, the pytest plugin). A
+  plain script that imports nothing from the repository and runs with `python -I`; each step is a function that `tests/test_smoke_check.py`
+  calls with a copy of the package. Update `EXPECTED_STORY_IDS` when an example is added or removed (a test compares it with the examples)
 - `scripts/release/` - development only, not in the wheel: `release_target.py` (which index a run publishes to, and the tag
   checks: the tag is `v` plus the version, the commit is on `main` or `release/*`; it writes the
   `target` job's outputs) and `changelog_section.py` (the notes of one version
@@ -235,9 +235,10 @@ in the same pull request as the bump.
   run); `tests/test_releasing.py` checks the files and environment names it gives against `release.yml` and `scripts/release/`.
   **Releasing: see `RELEASING.md`; every version change is followed by `uv lock`** (CI's `uv sync --locked` fails otherwise)
 - `.github/` - CI workflows and Dependabot configuration (weekly, with a cooldown of at least 7 days for every ecosystem, so a release is
-  proposed only after it has been out for a week; `tests/test_dependabot.py` checks it). A workflow that another one calls (`workflow_call`) runs under the caller's name,
-  so its concurrency group adds a literal (`${{ github.workflow }}-tests-${{ github.ref }}`), or two called workflows of one release would
-  share a group and cancel each other; `tests/test_workflows.py` checks that every workflow parses, never puts
+  proposed only after it has been out for a week; `tests/test_dependabot.py` checks it). A workflow that another one calls
+  (`workflow_call`) runs under the caller's name, so its concurrency group adds a literal
+  (`${{ github.workflow }}-tests-${{ github.ref }}`), or two called workflows of one release would share a group and cancel each other;
+  `tests/test_workflows.py` checks that every workflow parses, never puts
   `${{ github.event.* }}` or `${{ inputs.* }}` into shell source, bounds every job with `timeout-minutes` (a job with `uses:` has none) and
   runs every `run:` step with bash
 

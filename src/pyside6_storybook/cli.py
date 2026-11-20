@@ -164,7 +164,7 @@ def _debug_info() -> str:
         "Platform": platform.platform(),
         "pytest": _installed_version("pytest") or "not installed",
         "pytest-qt": _installed_version("pytest-qt") or "not installed",
-        "QT_QPA_PLATFORM": os.environ.get("QT_QPA_PLATFORM", "not set"),
+        "QT_QPA_PLATFORM": os.environ.get("QT_QPA_PLATFORM") or "not set",  # Qt treats an empty value as unset
     }
     return "\n".join(f"{key}: {value}" for key, value in lines.items())
 
