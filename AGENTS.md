@@ -234,7 +234,8 @@ in the same pull request as the bump.
 - `RELEASING.md` - the maintainer's guide to a release (one-time setup, release candidate, release, patch release, a broken release, a failed
   run); `tests/test_releasing.py` checks the files and environment names it gives against `release.yml` and `scripts/release/`.
   **Releasing: see `RELEASING.md`; every version change is followed by `uv lock`** (CI's `uv sync --locked` fails otherwise)
-- `.github/` - CI workflows and Dependabot configuration. A workflow that another one calls (`workflow_call`) runs under the caller's name,
+- `.github/` - CI workflows and Dependabot configuration (weekly, with a cooldown of at least 7 days for every ecosystem, so a release is
+  proposed only after it has been out for a week; `tests/test_dependabot.py` checks it). A workflow that another one calls (`workflow_call`) runs under the caller's name,
   so its concurrency group adds a literal (`${{ github.workflow }}-tests-${{ github.ref }}`), or two called workflows of one release would
   share a group and cancel each other; `tests/test_workflows.py` checks that every workflow parses, never puts
   `${{ github.event.* }}` or `${{ inputs.* }}` into shell source, bounds every job with `timeout-minutes` (a job with `uses:` has none) and

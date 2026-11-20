@@ -1,13 +1,19 @@
 version: 2
 updates:
+  # A cooldown waits a week after a release before proposing it, so a broken or compromised release has time to be found and
+  # yanked first. It does not delay security updates.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
   - package-ecosystem: uv
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     ignore:
       - dependency-name: "mkdocs"
         versions: [">=2"]
