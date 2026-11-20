@@ -46,7 +46,8 @@ uv run pyside6-storybook --examples
 
 ## Run the checks
 
-There is no display in CI, so the tests run with `QT_QPA_PLATFORM=offscreen`. Run these in the order CI runs them:
+There is no display in CI, so the tests run with `QT_QPA_PLATFORM=offscreen`. CI runs the first three on every pull request; run all four
+before you open one:
 
 ```bash
 uv run ruff check .
@@ -57,7 +58,7 @@ QT_QPA_PLATFORM=offscreen uv run pytest -q
 
 - `ruff check` lints the code: errors, import order, line length (150 characters) and keyword-only boolean parameters.
 - `ty check` is the type checker. It must report no diagnostics in `src/` or `tests/`.
-- The `-m "not full"` run is the core tests, which CI runs on every push. Run the full suite before you open a pull request.
+- The `-m "not full"` run is the core tests. The last line runs the full suite, slower end-to-end tests included.
 
 On Windows PowerShell, set the variable first:
 
