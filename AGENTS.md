@@ -231,6 +231,12 @@ in the same pull request as the bump.
   that cannot run alone is preceded by `<!-- docs-test: skip — <reason> -->`, and the test lists every skip, so a new one is a visible
   change. A docs page links another page relatively and a file outside `docs/` by its absolute GitHub URL; `tests/test_docs.py` checks
   it and `mkdocs build --strict` enforces both.
+- `CONTRIBUTING.md` - the guide for contributors: set up, the checks, the code layout, and checklists for adding a control type and a
+  built-in decorator. `SECURITY.md` is the security policy (private reporting, and that running project code is the design) and
+  `CODE_OF_CONDUCT.md` the Contributor Covenant 2.1, copied verbatim apart from the contact address. None of the three is in the sdist.
+  `tests/test_community_files.py` checks them with the files below
+- `.github/ISSUE_TEMPLATE/` - the issue forms (`bug_report.yml`, `feature_request.yml`) and `config.yml`, which turns blank issues off and
+  links Discussions and the docs; `.github/pull_request_template.md` is the pull request template
 - `RELEASING.md` - the maintainer's guide to a release (one-time setup, release candidate, release, patch release, a broken release, a failed
   run); `tests/test_releasing.py` checks the files and environment names it gives against `release.yml` and `scripts/release/`.
   **Releasing: see `RELEASING.md`; every version change is followed by `uv lock`** (CI's `uv sync --locked` fails otherwise)
@@ -261,6 +267,8 @@ in the same pull request as the bump.
 - No commented-out code, no `TODO` comments that express uncertainty (link an issue instead), no bare `except`; do not swallow an exception
   without logging it. Keep imports sorted (stdlib, third party, local) and free of duplicates.
 - Keep changes small and focused; do not add abstractions a task does not need.
+- `CONTRIBUTING.md`'s two checklists (a control type, a built-in decorator) change with the code they list: when you rename or add a place
+  that lists every control or decorator, update them. `tests/test_community_files.py` checks their paths and names.
 
 ## Library rules
 - The library is generic: it must not import, name or depend on any application. Applications keep their stories in their own repository.
@@ -369,7 +377,8 @@ Icons are bundled Phosphor SVGs, never downloaded at runtime, and the gallery im
 - Restore global state: `monkeypatch` or `caplog.set_level`, never set a shared logger's level directly.
 
 ## Pull requests
-- Keep a pull request to one concern and make its description match what it does; update it when scope changes.
+- Keep a pull request to one concern and make its description match what it does; update it when scope changes. The checklist of
+  `.github/pull_request_template.md` is the one to fill in.
 - Use `Closes #N` only when the pull request fully satisfies the issue; use `Refs #N` for a partial step.
 - File each known gap or follow-up as an issue and link it.
 - Before pushing: `uv run ruff check .`, `uv run ty check` and `QT_QPA_PLATFORM=offscreen uv run pytest`.

@@ -1,0 +1,94 @@
+name: Bug report
+description: Something in pyside6-storybook does not work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search the [existing issues](https://github.com/Youth-Research-Center/pyside6-storybook/issues) first.
+        Questions go to [Discussions](https://github.com/Youth-Research-Center/pyside6-storybook/discussions/categories/q-a).
+        Report a vulnerability privately, not in an issue, as the
+        [security policy](https://github.com/Youth-Research-Center/pyside6-storybook/security/policy) describes.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does it happen?
+      options:
+        - The gallery window
+        - The command line
+        - The pytest plugin
+        - The checks API
+        - Writing stories (the Python API)
+        - Installation or packaging
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: story
+    attributes:
+      label: A minimal story that reproduces it
+      description: Remove everything the bug does not need. Use stock Qt widgets where the bug still shows.
+      placeholder: |
+        from PySide6.QtWidgets import QPushButton, QWidget
+
+        from pyside6_storybook import StoryContext, story
+
+
+        @story("Bug/Reproduction")
+        def reproduction(ctx: StoryContext) -> QWidget:
+            """The smallest story that shows the bug."""
+            return QPushButton("Click me")
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The command you ran, and what you clicked or typed.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: The traceback, the error panel's text, or a screenshot.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Versions
+      description: >-
+        Paste the output of `pyside6-storybook --debug-info`. If that command fails, paste its error and the versions of Python, PySide6
+        and your operating system.
+      placeholder: |
+        pyside6-storybook: 0.1.0
+        PySide6: 6.11.3
+        Qt: 6.11.3
+        Qt for Python distributions: PySide6-Essentials 6.11.3, shiboken6 6.11.3
+        Python: 3.11.9 (CPython)
+        Platform: Linux-6.8.0-1017-azure-x86_64-with-glibc2.39
+        pytest: 9.0.1
+        pytest-qt: 4.5.0
+        QT_QPA_PLATFORM: offscreen
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: theme
+    attributes:
+      label: Theme provider and application style
+      description: The built-in themes or your application's `ThemeProvider`, and any application-wide style sheet.

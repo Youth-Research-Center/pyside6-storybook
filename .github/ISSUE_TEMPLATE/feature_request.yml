@@ -1,0 +1,34 @@
+name: Feature request
+description: Propose a new feature or a change
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A bigger or open-ended idea can start in
+        [Discussions](https://github.com/Youth-Research-Center/pyside6-storybook/discussions/categories/ideas) (Ideas).
+        Search the existing issues first, in case someone has asked for this already.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What should pyside6-storybook do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: The problem it solves, and for whom.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Proposed scope
+      description: What is in. A list is ideal.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other ways to solve the problem, including what you do today.

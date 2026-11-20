@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or help
+    url: https://github.com/Youth-Research-Center/pyside6-storybook/discussions/categories/q-a
+    about: Ask in Discussions (Q&A) how to do something with pyside6-storybook.
+  - name: Idea or design discussion
+    url: https://github.com/Youth-Research-Center/pyside6-storybook/discussions/categories/ideas
+    about: Discuss a bigger change before opening a feature request.
+  - name: Documentation
+    url: https://youth-research-center.github.io/pyside6-storybook/
+    about: The guide, the command line and the API reference.

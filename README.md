@@ -110,6 +110,13 @@ Everything below is documented on the [documentation site][site].
 [reference]: https://youth-research-center.github.io/pyside6-storybook/reference/
 [changelog]: https://youth-research-center.github.io/pyside6-storybook/changelog/
 
+## Contributing
+
+Contributions are welcome. [CONTRIBUTING.md](https://github.com/Youth-Research-Center/pyside6-storybook/blob/main/CONTRIBUTING.md) shows how
+to set up, run the checks and open an issue or a pull request, and everyone takes part under the
+[code of conduct](https://github.com/Youth-Research-Center/pyside6-storybook/blob/main/CODE_OF_CONDUCT.md).
+Questions and ideas go to [Discussions](https://github.com/Youth-Research-Center/pyside6-storybook/discussions).
+
 ## Licence
 
 MIT. See [LICENSE](https://github.com/Youth-Research-Center/pyside6-storybook/blob/main/LICENSE).
