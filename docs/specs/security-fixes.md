@@ -1,6 +1,6 @@
 # Security review fixes before 0.1.0: design and plan
 
-Status: draft. Four pull requests, from the security review of 23 November 2026 (main at 122565f, plus #121). Every finding below was
+Status: reviewed (findings applied in the last section). Four pull requests, from the security review of 23 November 2026 (main at 122565f, plus #121). Every finding below was
 verified against the code; the reviewers' reproductions are under `/tmp/claude-0/secreview/<area>/`. None needs an advisory: each needs
 control of story code, project config or a dependency. Section numbers (§1) are used by the reviews.
 
@@ -205,3 +205,80 @@ forever. Discovery is called on every watcher event.
 **Tests** are the `tests/test_workflows.py` additions above, `actionlint` with shellcheck, and `tests/test_releasing.py` and
 `tests/test_community_files.py`. The first Release run after merging (a TestPyPI dispatch on `main`) is the end-to-end check of the
 digest step. The PR asks the owner to run it.
+
+## Corrections from the spec review (these override the text above)
+
+**Cross-cutting**
+1. **Changelog.** The S1, S2 and S3 fixes go under `### Security` in `[Unreleased]`, which the changelog header allows, not under
+   `### Fixed`. S3 amends the existing `[Unreleased]` `### Added` entry about snapshots instead of adding a `### Changed` entry: its
+   `<id with / as __>` formula is updated. The `### Security` entry for S3 adds "since 0.1.0rc1, baselines of stories whose ids contain
+   `_`, `%` or other special characters get new names; regenerate them with `--storybook-update-snapshots`".
+2. **Existing tests.** The lists of existing tests to change are not complete. An implementer changes any other test that asserts the
+   old behaviour, and lists each one in the report with the reason, instead of stopping.
+
+**S1**
+3. **The id payload.** An id cannot contain `file:///` (empty `/` segments are rejected), so the window test puts the `<img>` payload in
+   the docstring, the control label and the description. The id carries `<b>x</b>`, or an `<img>` with a relative `src` that has no
+   empty segment.
+4. **The tooltip helper** is
+   `plain_tooltip(text: str) -> str: return Qt.convertFromPlainText(text, Qt.WhiteSpaceMode.WhiteSpaceNormal) if text else ""`, using
+   `Qt` from `PySide6.QtGui`, which exists in 6.8 and 6.12. It turns newlines into `<br>` and keeps wrapping. It lives in a new module,
+   `gui/plain_text.py`, with a module docstring, not in `chrome.py`, and AGENTS.md's gui list names it. Known tests that change:
+   `tests/test_controls_panel.py:286-287` and `tests/test_sidebar.py:157`, which assert exact tooltip text.
+5. **Accessible descriptions.** A widget without an accessible description gets its tooltip read as one. `controls_panel.py` therefore
+   sets `label.setAccessibleDescription(control.description)` on the caption label, plain, and checks that the editor already gets it
+   through `set_accessible_texts`. A test asserts both are the plain description, not markup.
+6. **`format_arguments`.** reprlib already catches a raising `__repr__`, so the guard is for the `ValueError` on huge ints on Python 3.11
+   and 3.12. The test with a raising `__repr__` stays, but asserts reprlib's existing `<… instance at …>` form, not `<ClassName>`.
+
+**S2**
+7. **Bytecode deletion is not limited to `self._roots`.** That would bring back stale bytecode for targets outside the working directory.
+   Instead `_delete_bytecode` skips files under the sysconfig paths (stdlib, platstdlib, purelib, platlib) and files with an
+   `EXCLUDED_FOLDER_NAMES` part. Everything `_is_project_module` returns is then fair game. A test with the story target outside the
+   working directory checks that a same-size edit in the same second still runs the new code.
+8. **No new `PermissionError` handling.** `reload.py` already catches `OSError` and logs a warning; keep that as is. The `try` move is
+   tested with `importlib.invalidate_caches` raising, and with `module_file` raising for one module, each restoring `sys.modules` and both
+   registry bindings.
+9. **The entry-point check** reads `entry_point.value`, not `.module`, because reading `.module` raises for a malformed value on 3.11 and
+   3.14. It cuts the value at `:` and at `[`, strips it, and requires every dotted part to be an identifier. A bad entry point is skipped
+   with a warning (module logger, naming the distribution if `entry_point.dist` is not `None`), so one bad installed package does not
+   block the gallery. Test: `"a b"`, `"../x"` and `"/abs"` are skipped with a warning, and a good one is still loaded.
+10. **The symlink fix.** The visited set starts with the resolved start folder, because the loop `a/loop -> ..` points back at the
+    package root. The test asserts the exact yielded `(path, dotted name)` pairs.
+11. **`EXCLUDED_FOLDER_NAMES`** is `{"site-packages", "dist-packages", "node_modules", ".venv", "venv"}`. Discovery keeps its
+    `pyvenv.cfg` and hidden-folder rules. A folder named `venv` that is not a virtual environment is skipped too; the docs
+    (`docs/finding-stories.md`) say which folders are skipped.
+12. **Shadowed standard-library names.** The `sys.stdlib_module_names` check means a project module that shadows a standard-library
+    top-level name (`email`, `code`, `types`, `calendar`) is not reloaded. The check stays, because Windows keeps `DLLs\*.pyd` outside
+    the sysconfig paths. The docs' hot-reload section says so, and a test covers it.
+
+**S3**
+13. **The default ignore pattern** that applies is the ini default in `src/pyside6_storybook_pytest.py:104`, not
+    `DEFAULT_QT_WARNINGS_IGNORE`, which is never read. Change both to the anchored pattern, add a test that they are equal, and update
+    `docs/testing.md` (lines 63 and 78) and the existing changelog entry that names the default.
+14. **Case-insensitive file systems.** On macOS and Windows, two names that differ only in case share a file. At collection, the
+    session gives one `ConfigurationItem` error naming both stories when two snapshot names are equal after `casefold()`. The docs say
+    so, and a test covers it on every platform.
+15. **Lone surrogates** in an id are encoded with `errors="surrogatepass"`, so encoding never raises. Add a test case.
+16. **Docs.** `docs/testing.md:183-184` gives the new name formula with an example. "Relative to the rootdir unless absolute" is added
+    where the folders are described; the plugin help text already says "relative to the rootdir".
+
+**S4**
+17. **uv pin.** No `required-version` (or only `>=0.11.32`). Every `astral-sh/setup-uv` step gets `version: "0.11.32"`. RELEASING.md's
+    checklist says to bump that version on purpose, and a workflow test checks that every setup-uv step pins the same version.
+18. **Build constraints.** `build-constraint-dependencies` pins the whole build environment `uv build` resolves today: `hatchling==1.33.0`,
+    `packaging==26.3`, `pathspec==1.1.1`, `pluggy==1.7.0`, `tomlkit==0.15.2`, `trove-classifiers==2026.9.21.13`. The implementer
+    confirms these with `uv build -v`.
+19. **Digests.**
+    - The sums file is written outside `dist/` (`$RUNNER_TEMP/dist.sha256`), so neither the publish action nor `gh release create
+      dist/*` sees it.
+    - The output is passed to a step through `env:`, never interpolated into `run:`.
+    - `github-release` checks the sums on its downloaded `dist`.
+    - `verify` downloads the published wheel from the index (`pip download --no-deps --only-binary :all:` for both indexes; it already
+      does this for TestPyPI) and checks its sha256 against the sums before installing it. `verify` and `github-release` add `package`
+      to `needs`.
+    - The exact-equality assertion in `test_the_github_release_runs_for_tag_pushes_only` (`tests/test_workflows.py:147`) is replaced.
+      The SHA-pin test reads the raw workflow text, because `yaml.safe_load` drops comments.
+20. **`AGENTS.md`'s Package bullet** says `twine check` runs in the `metadata` job, as well as the digest, SHA-pin and uv-pin notes.
+21. **SECURITY.md wording:** "put first on `sys.path` unless it is already there". `persist-credentials: false` is safe:
+    `release_target.py` runs local git only after a `fetch-depth: 0` checkout, and `gh` uses `GH_TOKEN`.
