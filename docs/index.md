@@ -25,9 +25,7 @@ or, as a development dependency of a project managed with [uv](https://docs.astr
 uv add --dev pyside6-storybook
 ```
 
-Until 0.1.0 is out, only a release candidate is on PyPI, and pip and uv skip pre-releases unless asked: use
-`pip install --pre pyside6-storybook` or `uv add --dev --prerelease allow pyside6-storybook`. The development version installs from
-GitHub with `pip install git+https://github.com/Youth-Research-Center/pyside6-storybook`.
+The development version installs from GitHub with `pip install git+https://github.com/Youth-Research-Center/pyside6-storybook`.
 
 uv installs it into the project's `.venv` without activating that environment, so with uv, put `uv run` in front of the
 `pyside6-storybook` commands in this documentation (or activate `.venv` first).

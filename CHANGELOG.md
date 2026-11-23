@@ -11,6 +11,8 @@ of their own.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-19
+
 ### Added
 - `pyside6-storybook --debug-info` prints the versions of pyside6-storybook, PySide6, Qt, Python and the platform for a bug report.
 - Version policy: the documentation page Versions and compatibility says what the public API is, what a minor and a patch release before
@@ -210,4 +212,5 @@ of their own.
   surface now uses the window background, where a stock widget sits in an application, and the Dark palette separates `Window`,
   `Base` and `AlternateBase` further; the Light theme's alternate rows are a little stronger too.
 
-[Unreleased]: https://github.com/Youth-Research-Center/pyside6-storybook/commits/main
+[Unreleased]: https://github.com/Youth-Research-Center/pyside6-storybook/compare/v0.1.0...main
+[0.1.0]: https://github.com/Youth-Research-Center/pyside6-storybook/releases/tag/v0.1.0

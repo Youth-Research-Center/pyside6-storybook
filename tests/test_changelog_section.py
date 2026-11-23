@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import changelog_section
@@ -83,13 +84,16 @@ def test_main_exits_1_with_a_message_for_a_missing_version(tmp_path: Path, capsy
     assert "9.9.9" in captured.err
 
 
-def test_the_real_changelog_gives_the_unreleased_body_for_a_pre_release(capsys: pytest.CaptureFixture[str]) -> None:
+def test_the_real_changelog_gives_the_notes_of_its_newest_release(capsys: pytest.CaptureFixture[str]) -> None:
     real = Path(changelog_section.__file__).resolve().parents[2] / "CHANGELOG.md"
     if not real.is_file():
         pytest.skip("CHANGELOG.md is not part of this source tree")
-    unreleased = changelog_section.extract_section(real.read_text(encoding="utf-8"), "Unreleased")
+    text = real.read_text(encoding="utf-8")
+    newest = re.search(r"^## \[(\d+\.\d+\.\d+)\] - \d{4}-\d{2}-\d{2}$", text, flags=re.MULTILINE)
+    assert newest, "CHANGELOG.md has no dated release section"
 
-    assert changelog_section.main(["99.0.0rc1"]) == 0
+    assert changelog_section.main([newest.group(1)]) == 0
 
-    assert capsys.readouterr().out.strip() == unreleased
-    assert unreleased.startswith("### ")
+    notes = capsys.readouterr().out.strip()
+    assert notes == changelog_section.extract_section(text, newest.group(1))
+    assert notes.startswith("### ")
