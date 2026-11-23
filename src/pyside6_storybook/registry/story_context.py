@@ -192,7 +192,7 @@ class StoryContext:
         excluded = set(exclude)
         methods = _signal_methods(obj)
         class_name = type(obj).__name__
-        unknown = sorted(excluded - methods.keys())
+        unknown = sorted(excluded - methods.keys() - _NOISY_SIGNALS)
         if unknown:
             _logger.warning("log_signals: %s has no signal named %s; its signals are %s", class_name, ", ".join(unknown), ", ".join(methods))
         modules = [*_ENUM_OWNER_MODULES, *(sys.modules[cls.__module__] for cls in type(obj).__mro__ if cls.__module__ in sys.modules)]

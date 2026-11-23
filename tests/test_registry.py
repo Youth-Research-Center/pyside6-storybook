@@ -755,6 +755,16 @@ def test_log_signals_leaves_out_update_request_of_a_text_edit_and_keeps_text_cha
     assert ("textChanged", ()) in sink.entries
 
 
+def test_log_signals_does_not_warn_when_excluding_a_signal_it_leaves_out_anyway(qtbot, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.WARNING, logger=_STORY_CONTEXT_LOGGER)
+    edit = QPlainTextEdit()
+    qtbot.addWidget(edit)
+
+    StoryContext(args={}, actions=_Sink()).log_signals(edit, exclude=("updateRequest",))
+
+    assert caplog.records == []
+
+
 def test_log_signals_exclude_removes_the_named_signals(qtbot) -> None:
     button = QPushButton()
     qtbot.addWidget(button)
