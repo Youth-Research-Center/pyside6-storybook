@@ -120,7 +120,8 @@ in the same pull request as the bump.
     the functions every control uses (label derivation, `label`/`description` validation, the float step and decimals rules). Controls
     share no base class: each has `label`, `description`, `display_label` and `coerce`
   - `registry/` - the story model, one module per type:
-    - `story_context.py`: `StoryContext` (with `args`, `theme`, `actions`, `tokens` and `color_scheme`), `StoryFunction`, `Decorator`;
+    - `story_context.py`: `StoryContext` (with `args`, `theme`, `actions`, `tokens` and `color_scheme`; its `log`, `log_signal` and
+      `log_signals` send actions to the sink), `StoryFunction`, `Decorator`;
     - `story_definition.py`: `Story`, `StoryOrigin`; `Story.variant` registers a variant through the registry link that
       `StoryRegistry.register` sets;
     - `checks_ignore.py`: `coerce_checks_ignore`, which validates a story's `checks_ignore` against `checks.rules.CHECK_RULES` (each PR
@@ -146,7 +147,7 @@ in the same pull request as the bump.
     and the tree of stories, with its filter model), `controls_panel.py` (`ControlsPanel`, the
     labelled form over the editors of a story's controls), `docs_panel.py` (`DocsPanel`, the Docs tab, and `controls_rows`, the pure
     function behind its controls table), `actions_panel.py` (`ActionsPanel`, the Actions tab: the log a story fills through
-    `StoryContext.log` and `log_signal`, and the per-render sink that drops entries from an older render) and
+    `StoryContext.log`, `log_signal` and `log_signals`, and the per-render sink that drops entries from an older render) and
     `error_panel.py` (`ErrorPanel`, which the window shows in the preview for a story that fails and for the load errors),
     `reload_watcher.py` (`ReloadWatcher`, a `QFileSystemWatcher` with a 300 ms debounce that runs a `ReloadSession`),
     `reload_status.py` (`ReloadStatus`, the status bar's message and icon) and `chrome.py` (`mark_chrome`, which names a widget of

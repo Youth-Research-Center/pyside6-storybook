@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 import yaml
 from PySide6.QtCore import QSize
-from PySide6.QtWidgets import QFrame, QGroupBox, QPlainTextEdit, QPushButton, QWidget
+from PySide6.QtWidgets import QComboBox, QFrame, QGroupBox, QListView, QPlainTextEdit, QPushButton, QWidget
 from story_files import write
 
 import pyside6_storybook
@@ -316,6 +316,40 @@ def test_the_logging_example_logs_actions_and_does_nothing_without_a_sink(qtbot,
     logged.widget.setCheckable(True)
     logged.widget.click()
     assert recorded.entries == [("toggle", (True,)), ("clicked", ()), ("custom", ("any", 1))]
+
+
+def test_the_log_signals_examples_log_the_signals_of_the_widget_and_of_a_selection_model(qtbot, tmp_path: Path, stories: StoryRegistry) -> None:
+    combo_source, list_source = _code_blocks(_section("gallery.md", "Logging every signal"), "python")
+    write(tmp_path, "stories/combo_stories.py", combo_source)
+    write(tmp_path, "stories/list_stories.py", list_source)
+
+    result = load_stories(["stories"], cwd=tmp_path)
+
+    assert result.errors == ()
+    combo_recorded = _RecordingSink()
+    combo = render_story(stories.get("Inputs/Logged Combo Box"), StoryContext(args={}, actions=combo_recorded), registry=stories)
+    qtbot.addWidget(combo.root)
+    assert isinstance(combo.widget, QComboBox)
+    combo.widget.setCurrentIndex(1)
+    combo.widget.highlighted.emit(0)
+    names = [name for name, _args in combo_recorded.entries]
+    assert "currentIndexChanged" in names
+    assert "highlighted" not in names
+
+    list_recorded = _RecordingSink()
+    listing = render_story(stories.get("Views/Logged List View"), StoryContext(args={}, actions=list_recorded), registry=stories)
+    qtbot.addWidget(listing.root)
+    assert isinstance(listing.widget, QListView)
+    model = listing.widget.model()
+    listing.widget.setCurrentIndex(model.index(1, 0))
+    model.setData(model.index(0, 0), "changed")
+    names = [name for name, _args in list_recorded.entries]
+    assert "selectionChanged" in names
+    assert "currentChanged" in names
+    assert "dataChanged" in names
+
+    plain = render_story(stories.get("Views/Logged List View"), StoryContext(args={}), registry=stories)
+    qtbot.addWidget(plain.root)
 
 
 class _RecordingSink:

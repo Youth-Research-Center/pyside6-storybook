@@ -5,7 +5,7 @@ import pytest
 import shiboken6
 from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QAccessible, QAccessibleEvent, QHideEvent
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QSlider, QTabWidget, QWidget
+from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QPushButton, QSlider, QTabWidget, QWidget
 
 from pyside6_storybook import StoryContext, StoryRegistry, load_stories
 from pyside6_storybook.cli import EXAMPLES_MODULE
@@ -225,6 +225,27 @@ def test_moving_the_example_slider_logs_the_new_value(qtbot, stories: StoryRegis
     slider.setValue(7)
 
     assert [(name, arguments) for _time, name, arguments in panel.rows()] == [("valueChanged", "7")]
+
+
+def test_the_example_combo_box_logs_every_signal_except_the_excluded_highlight_ones(
+    qtbot, stories: StoryRegistry, themes: BuiltinThemeProvider
+) -> None:
+    window, panel = _window(qtbot, load_stories([EXAMPLES_MODULE]).registry, themes)
+    window.select_story("Inputs/Combo Box")
+    box = window.current_preview_widget()
+    assert isinstance(box, QComboBox)
+    other = 0 if box.currentIndex() != 0 else 1
+
+    box.setCurrentIndex(other)
+    box.hidePopup()
+    box.highlighted.emit(other)
+    box.textHighlighted.emit("x")
+
+    names = [name for _time, name, _arguments in panel.rows()]
+    assert "currentIndexChanged" in names
+    assert "currentTextChanged" in names
+    assert "highlighted" not in names
+    assert "textHighlighted" not in names
 
 
 def test_the_side_pane_has_controls_and_actions_tabs(qtbot, themes: BuiltinThemeProvider) -> None:
