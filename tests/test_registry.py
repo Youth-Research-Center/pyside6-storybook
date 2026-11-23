@@ -1,11 +1,31 @@
 import dataclasses
 import functools
+import gc
 import importlib
+import logging
+import subprocess
 import sys
+import textwrap
+import typing
+import weakref
+from pathlib import Path
 
 import pytest
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QPushButton, QSpinBox, QWidget
+from PySide6.QtCore import QEvent, QItemSelectionModel, QMetaMethod, QModelIndex, QObject, QStringListModel, Qt, Signal
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QPlainTextEdit,
+    QPushButton,
+    QSlider,
+    QSpinBox,
+    QTabWidget,
+    QWidget,
+)
 from story_files import write
 
 from pyside6_storybook import (
@@ -23,6 +43,7 @@ from pyside6_storybook import (
 )
 from pyside6_storybook import registry as registry_module
 from pyside6_storybook.registry import StoryOrigin
+from pyside6_storybook.registry import story_context as story_context_module
 
 
 def _widget(ctx: StoryContext) -> QWidget:
@@ -635,6 +656,344 @@ def test_log_signal_asks_for_a_name_when_the_signals_repr_has_none() -> None:
 
     with pytest.raises(TypeError, match=r"name="):
         ctx.log_signal(_Signal())  # ty: ignore[invalid-argument-type]
+
+
+_STORY_CONTEXT_LOGGER = "pyside6_storybook.registry.story_context"
+
+
+def _signal_entries(obj: QObject) -> dict[str, list[QMetaMethod]]:
+    """Every signal entry of an object by name, including the ones QObject and QWidget declare."""
+    meta = obj.metaObject()
+    entries: dict[str, list[QMetaMethod]] = {}
+    for index in range(meta.methodCount()):
+        method = meta.method(index)
+        if method.methodType() == QMetaMethod.MethodType.Signal:
+            entries.setdefault(bytes(method.name().data()).decode(), []).append(method)
+    return entries
+
+
+def _connected_names(obj: QObject) -> list[str]:
+    """The names of the signals that have a receiver, except ``destroyed``, with every entry of a name connected or none of them."""
+    names: list[str] = []
+    for name, methods in _signal_entries(obj).items():
+        if name == "destroyed":
+            continue  # PySide6 connects it itself to track the object's lifetime
+        connected = [obj.isSignalConnected(method) for method in methods]
+        assert all(connected) or not any(connected), name
+        if any(connected):
+            names.append(name)
+    return names
+
+
+def _logged(obj: QObject, **kwargs: object) -> tuple[_Sink, StoryContext]:
+    sink = _Sink()
+    ctx = StoryContext(args={}, actions=sink)
+    ctx.log_signals(obj, **kwargs)  # ty: ignore[invalid-argument-type]
+    return sink, ctx
+
+
+def test_log_signals_connects_the_signals_of_a_push_button_below_qwidget(qtbot) -> None:
+    button = QPushButton()
+    qtbot.addWidget(button)
+
+    _logged(button)
+
+    assert _connected_names(button) == ["pressed", "released", "clicked", "toggled"]
+
+
+def test_log_signals_records_a_click_and_ignores_object_name_changes(qtbot) -> None:
+    button = QPushButton()
+    qtbot.addWidget(button)
+    sink, _ = _logged(button)
+
+    button.setObjectName("renamed")
+    button.setWindowTitle("title")
+    assert sink.entries == []
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+    assert sink.entries == [("pressed", ()), ("released", ()), ("clicked", ())]
+
+
+class _Emitter(QObject):
+    picked = Signal(str, int)
+
+
+def test_log_signals_logs_a_python_signal_with_both_arguments() -> None:
+    emitter = _Emitter()
+    sink, _ = _logged(emitter)
+
+    emitter.picked.emit("a", 2)
+
+    assert _connected_names(emitter) == ["picked"]
+    assert sink.entries == [("picked", ("a", 2))]
+
+
+def test_log_signals_on_a_widget_subclass_includes_its_own_signal_and_the_base_signals(qtbot) -> None:
+    class Pick(QPushButton):
+        picked = Signal(str, int)
+
+    widget = Pick()
+    qtbot.addWidget(widget)
+    sink, _ = _logged(widget)
+
+    widget.picked.emit("b", 3)
+
+    assert _connected_names(widget) == ["pressed", "released", "clicked", "toggled", "picked"]
+    assert sink.entries == [("picked", ("b", 3))]
+
+
+def test_log_signals_leaves_out_update_request_of_a_text_edit_and_keeps_text_changed(qtbot) -> None:
+    edit = QPlainTextEdit()
+    qtbot.addWidget(edit)
+    sink, _ = _logged(edit)
+
+    names = _connected_names(edit)
+    edit.setPlainText("abc")
+
+    assert "updateRequest" not in names
+    assert "textChanged" in names
+    assert ("textChanged", ()) in sink.entries
+
+
+def test_log_signals_exclude_removes_the_named_signals(qtbot) -> None:
+    button = QPushButton()
+    qtbot.addWidget(button)
+    sink, _ = _logged(button, exclude=("pressed", "released"))
+
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+    assert sink.entries == [("clicked", ())]
+
+
+def test_log_signals_warns_about_an_unknown_excluded_name_and_logs_everything_else(qtbot, caplog: pytest.LogCaptureFixture) -> None:
+    button = QPushButton()
+    qtbot.addWidget(button)
+    caplog.set_level(logging.WARNING, logger=_STORY_CONTEXT_LOGGER)
+
+    sink, _ = _logged(button, exclude=("presed",))
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+    warnings = [record for record in caplog.records if record.name == _STORY_CONTEXT_LOGGER]
+    assert len(warnings) == 1
+    message = warnings[0].getMessage()
+    assert warnings[0].levelno == logging.WARNING
+    assert "presed" in message
+    assert "QPushButton" in message
+    assert "clicked" in message
+    assert sink.entries == [("pressed", ()), ("released", ()), ("clicked", ())]
+
+
+def test_log_signals_rejects_a_string_for_exclude(qtbot) -> None:
+    button = QPushButton()
+    qtbot.addWidget(button)
+    ctx = StoryContext(args={}, actions=_Sink())
+
+    with pytest.raises(TypeError, match="tuple of names"):
+        ctx.log_signals(button, exclude="clicked")
+
+    assert _connected_names(button) == []
+
+
+def test_log_signals_points_a_signal_to_log_signal_and_rejects_other_objects(qtbot) -> None:
+    button = QPushButton()
+    qtbot.addWidget(button)
+    ctx = StoryContext(args={}, actions=_Sink())
+
+    with pytest.raises(TypeError, match="log_signal"):
+        ctx.log_signals(button.clicked)  # ty: ignore[invalid-argument-type]
+    with pytest.raises(TypeError, match="QObject"):
+        ctx.log_signals("button")  # ty: ignore[invalid-argument-type]
+
+    assert _connected_names(button) == []
+
+
+def test_log_signals_does_nothing_without_a_sink_and_does_not_warn(qtbot, caplog: pytest.LogCaptureFixture) -> None:
+    ctx = StoryContext(args={})
+    button = QPushButton()
+    qtbot.addWidget(button)
+    caplog.set_level(logging.WARNING, logger=_STORY_CONTEXT_LOGGER)
+
+    ctx.log_signals(button, exclude=("presed",))
+    ctx.log_signals(object(), exclude="clicked")  # ty: ignore[invalid-argument-type]
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+    assert _connected_names(button) == []
+    assert caplog.records == []
+
+
+def test_log_signals_works_on_a_selection_model(qtbot) -> None:
+    model = QStringListModel(["a", "b", "c"])
+    selection = QItemSelectionModel(model)
+    sink, _ = _logged(selection)
+
+    selection.setCurrentIndex(model.index(1), QItemSelectionModel.SelectionFlag.ClearAndSelect)
+
+    names = [name for name, _args in sink.entries]
+    assert "selectionChanged" in names
+    assert "currentChanged" in names
+    current, previous = typing.cast("tuple[QModelIndex, QModelIndex]", dict(sink.entries)["currentChanged"])
+    assert (current.row(), previous.row()) == (1, -1)
+
+
+def test_log_signals_connects_data_changed_of_a_model_without_a_warning(caplog: pytest.LogCaptureFixture) -> None:
+    model = QStringListModel(["a", "b"])
+    caplog.set_level(logging.WARNING, logger=_STORY_CONTEXT_LOGGER)
+    sink, _ = _logged(model)
+
+    model.setData(model.index(1), "z")
+
+    assert caplog.records == []
+    assert "dataChanged" in _connected_names(model)
+    arguments = next(args for name, args in sink.entries if name == "dataChanged")
+    top_left, bottom_right = typing.cast("tuple[QModelIndex, QModelIndex]", arguments[:2])
+    assert (top_left.row(), bottom_right.row()) == (1, 1)
+
+
+def test_log_signals_does_not_connect_a_signal_whose_types_cannot_be_resolved(
+    qtbot, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    button = QPushButton()
+    qtbot.addWidget(button)
+    caplog.set_level(logging.WARNING, logger=_STORY_CONTEXT_LOGGER)
+    monkeypatch.setattr(story_context_module, "_resolve_parameter_types", lambda method, modules: bytes(method.name().data()) != b"clicked")
+
+    sink, _ = _logged(button)
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+    assert _connected_names(button) == ["pressed", "released", "toggled"]
+    assert sink.entries == [("pressed", ()), ("released", ())]
+    warnings = [record.getMessage() for record in caplog.records if record.name == _STORY_CONTEXT_LOGGER]
+    assert len(warnings) == 1
+    assert "clicked" in warnings[0]
+
+
+_QMOVIE_SCRIPT = """
+import sys
+from pathlib import Path
+
+from PySide6.QtCore import QCoreApplication
+from PySide6.QtWidgets import QApplication
+
+from pyside6_storybook import StoryContext
+
+app = QApplication([])
+
+
+class Sink:
+    def __init__(self):
+        self.entries = []
+
+    def record(self, name, args):
+        self.entries.append((name, args))
+
+
+from PySide6.QtGui import QMovie
+
+sink = Sink()
+movie = QMovie(sys.argv[1])
+StoryContext(args={}, actions=sink).log_signals(movie)
+movie.start()
+QCoreApplication.processEvents()
+
+from PySide6.QtGui import QImageReader
+
+errors = [args for name, args in sink.entries if name == "error"]
+print("errors", len(errors))
+print("member", all(isinstance(args[0], QImageReader.ImageReaderError) for args in errors))
+"""
+
+
+@pytest.mark.full
+def test_log_signals_converts_an_enum_owned_by_another_class_in_a_fresh_process(tmp_path: Path) -> None:
+    script = tmp_path / "movie_script.py"
+    script.write_text(textwrap.dedent(_QMOVIE_SCRIPT), encoding="utf-8")
+    environment = {**__import__("os").environ, "QT_QPA_PLATFORM": "offscreen"}
+
+    completed = subprocess.run(
+        [sys.executable, str(script), str(tmp_path / "missing.gif")],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env=environment,
+        check=False,
+    )
+
+    assert "cannot be converted" not in completed.stderr
+    assert completed.returncode == 0, completed.stderr
+    lines = completed.stdout.splitlines()
+    assert "errors 1" in lines
+    assert "member True" in lines
+
+
+@pytest.mark.parametrize("factory", [QListWidget, QComboBox], ids=["list widget", "combo box"])
+def test_the_sink_is_freed_with_a_widget_whose_signals_are_all_logged(qtbot, qapp: QApplication, factory: type[QWidget]) -> None:
+    class Sink:
+        def record(self, name: str, args: tuple[object, ...]) -> None:
+            pass
+
+    sink = Sink()
+    ref = weakref.ref(sink)
+    widget = factory()
+    StoryContext(args={}, actions=sink).log_signals(widget)
+    del sink
+    gc.collect()
+    assert ref() is not None
+
+    widget.deleteLater()
+    del widget
+    qapp.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    gc.collect()
+
+    assert ref() is None
+
+
+def _list_widget() -> QListWidget:
+    widget = QListWidget()
+    widget.addItems(["a", "b"])
+    return widget
+
+
+def _combo_box() -> QComboBox:
+    widget = QComboBox()
+    widget.addItems(["a", "b"])
+    return widget
+
+
+def _tab_widget() -> QTabWidget:
+    widget = QTabWidget()
+    widget.addTab(QWidget(), "one")
+    widget.addTab(QWidget(), "two")
+    return widget
+
+
+@pytest.mark.parametrize(
+    ("factory", "interact", "expected"),
+    [
+        (QCheckBox, lambda widget: widget.click(), ("checkStateChanged", (Qt.CheckState.Checked,))),
+        (QSlider, lambda widget: widget.setValue(5), ("valueChanged", (5,))),
+        (_combo_box, lambda widget: widget.setCurrentIndex(1), ("currentIndexChanged", (1,))),
+        (QLineEdit, lambda widget: widget.setText("hi"), ("textChanged", ("hi",))),
+        (QSpinBox, lambda widget: widget.setValue(3), ("valueChanged", (3,))),
+        (_tab_widget, lambda widget: widget.setCurrentIndex(1), ("currentChanged", (1,))),
+        (_list_widget, lambda widget: widget.setCurrentRow(0), ("currentRowChanged", (0,))),
+    ],
+    ids=["check box", "slider", "combo box", "line edit", "spin box", "tab widget", "list widget"],
+)
+def test_log_signals_connects_a_stock_widget_without_a_warning_and_records_a_real_argument(
+    qtbot, caplog: pytest.LogCaptureFixture, factory, interact, expected: tuple[str, tuple[object, ...]]
+) -> None:
+    widget = factory()
+    qtbot.addWidget(widget)
+    caplog.set_level(logging.WARNING)
+    sink, _ = _logged(widget)
+
+    interact(widget)
+
+    names = _connected_names(widget)
+    declared_below_qwidget = {name for name in _signal_entries(widget) if name not in _signal_entries(QWidget())}
+    assert set(names) == declared_below_qwidget - {"updateRequest"}
+    assert caplog.records == []
+    assert expected in sink.entries
 
 
 def test_the_actions_field_is_keyword_only_and_not_part_of_equality_or_repr() -> None:

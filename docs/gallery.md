@@ -92,7 +92,8 @@ The tab updates when you select another story, not when you change a control.
 ## Logging actions
 
 The Actions tab lists what a story reports, newest first, with the time, the action and its arguments. A story opts in signal by
-signal with `ctx.log_signal`, or logs anything with `ctx.log`:
+signal with `ctx.log_signal`, logs every signal of a widget with `ctx.log_signals` (see [Logging every signal](#logging-every-signal)),
+or logs anything with `ctx.log`:
 
 ```python
 from PySide6.QtWidgets import QPushButton, QWidget
@@ -113,8 +114,57 @@ def counter(ctx: StoryContext) -> QWidget:
 `log_signal` shows the arguments the signal delivers to a slot, so `QPushButton.clicked` reads `clicked()` and a slider's
 `valueChanged` reads `valueChanged(5)`. The signal's own name is used unless you pass `name=`. Arguments are shortened to 200
 characters, and the panel keeps the last 500 actions. Clear empties it, and so does selecting another story; changing a control or the
-theme builds the story again and keeps the log. Under a plain `StoryContext`, such as a test builds, `log_signal` and `log` do nothing,
-so the story needs no check. `StoryContext.actions` is the `ActionSink` that receives the actions.
+theme builds the story again and keeps the log. Under a plain `StoryContext`, such as a test builds, `log_signal`, `log_signals` and `log`
+do nothing, so the story needs no check. `StoryContext.actions` is the `ActionSink` that receives the actions.
+
+## Logging every signal
+
+`ctx.log_signals(obj)` does what `log_signal` does for every signal that the classes of `obj` declare. For a widget those are the
+signals below `QWidget`: a `QPushButton` logs `pressed`, `released`, `clicked` and `toggled`. It leaves out what every widget has
+(`objectNameChanged`, `windowTitleChanged`, `customContextMenuRequested` and the like) and `updateRequest`, which fires on every repaint;
+use `log_signal` to log one of those. `exclude=` takes the names of signals to skip, and a name the object has no signal of is logged
+as a warning, because the signals differ between Qt versions. Call it after you configure the widget, or the emissions of the setup
+(`addItems` emits `currentIndexChanged`) are logged on every render.
+
+An item view has no selection signal of its own, so log its `selectionModel()` (`selectionChanged`, `currentChanged`) and its model
+(`dataChanged`). Call `log_signals` after `setModel`, because a view's selection model belongs to the model:
+
+```python
+from PySide6.QtWidgets import QComboBox, QWidget
+
+from pyside6_storybook import StoryContext, story
+
+
+@story("Inputs/Logged Combo Box")
+def logged_combo_box(ctx: StoryContext) -> QWidget:
+    """A combo box that logs every signal except the ones that fire while the pointer moves over the list."""
+    box = QComboBox()
+    box.addItems(["Apple", "Banana", "Cherry"])
+    ctx.log_signals(box, exclude=("highlighted", "textHighlighted"))
+    return box
+```
+
+```python
+from PySide6.QtCore import QStringListModel
+from PySide6.QtWidgets import QListView, QWidget
+
+from pyside6_storybook import StoryContext, story
+
+
+@story("Views/Logged List View")
+def logged_list_view(ctx: StoryContext) -> QWidget:
+    """A list view that logs its selection and its model's data."""
+    model = QStringListModel(["Apple", "Banana", "Cherry"])
+    view = QListView()
+    view.setModel(model)
+    ctx.log_signals(view.selectionModel())
+    ctx.log_signals(model)
+    return view
+```
+
+Each connection ends when its object is deleted. A model or selection model that outlives the story's widget gets one more
+connection on every render, so give it to `log_signals` only when the story creates it. A signal whose argument type PySide6 cannot
+convert is not connected, and a warning names it.
 
 ## Hot reload
 

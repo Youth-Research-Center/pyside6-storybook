@@ -68,12 +68,17 @@ def double_spin_box(ctx: StoryContext) -> QWidget:
 
 @story("Inputs/Combo Box", controls=[ChoiceControl("selected", "Banana", _FRUITS), BoolControl("editable", default=False)])
 def combo_box(ctx: StoryContext) -> QWidget:
-    """A ``QComboBox``. An editable combo box also accepts typed text that is not in the list."""
+    """A ``QComboBox``. An editable combo box also accepts typed text that is not in the list.
+
+    Changing the item logs every signal of the combo box in the Actions tab, except the two that fire while the pointer moves over the
+    open list.
+    """
     box = QComboBox()
     box.setAccessibleName("Fruit")
     box.addItems(_FRUITS)
     box.setCurrentText(ctx.args["selected"])
     box.setEditable(ctx.args["editable"])
+    ctx.log_signals(box, exclude=("highlighted", "textHighlighted"))
     return box
 
 
