@@ -16,11 +16,11 @@ of their own.
 - Version policy: the documentation page Versions and compatibility says what the public API is, what a minor and a patch release before
   1.0 may change, and which Python and PySide6 versions are supported. `RELEASING.md` describes how a release is made. The changelog header
   states the format, and `### Breaking` is the first heading of a release that breaks the public API.
-- Documentation site (MkDocs with Material and mkdocstrings) at https://youth-research-center.github.io/pyside6-storybook/: a home page, a page
-  for each part of the guide (writing stories, controls, finding stories, the command line, the gallery, themes, testing stories and
+- Documentation site (Zensical, with Material's classic look, and mkdocstrings) at https://youth-research-center.github.io/pyside6-storybook/: a home
+  page, a page for each part of the guide (writing stories, controls, finding stories, the command line, the gallery, themes, testing stories and
   troubleshooting), the API reference generated from the docstrings, the changelog and the roadmap. The README is now a short front page that
   links to them. The `docs` dependency group installs the generator;
-  `docs.yml` builds it with `mkdocs build --strict` and deploys it to GitHub Pages from `main`.
+  `docs.yml` builds it with `zensical build --strict` and deploys it to GitHub Pages from `main`.
 - PyPI metadata: the licence files (`LICENSE`, `THIRD_PARTY_NOTICES.md`), authors, keywords, classifiers (Python 3.11 to 3.14, Pytest,
   Typed) and the project URLs (homepage, documentation, repository, issues, changelog). The sdist has an explicit include list: the package,
   the tests with the workflows they read, the docs and the scripts, without `docs/specs/` and `.github/dependabot.yml`.

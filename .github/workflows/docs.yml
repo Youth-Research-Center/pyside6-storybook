@@ -1,7 +1,7 @@
 name: Docs
 
-# Build the documentation site with `mkdocs build --strict` on every pull request and push to main that touches it, and deploy it to
-# GitHub Pages on main. Settings > Pages > Source must be "GitHub Actions".
+# Build the documentation site with `zensical build --strict` on every pull request and push to main that touches it, failing on
+# mkdocstrings docstring warnings too, and deploy it to GitHub Pages on main. Settings > Pages > Source must be "GitHub Actions".
 
 on:
   push:
@@ -38,9 +38,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  NO_MKDOCS_2_WARNING: "1"
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -52,7 +49,14 @@ jobs:
           python-version: "3.13"
           enable-cache: true
       - run: uv sync --group docs --locked
-      - run: uv run --no-sync mkdocs build --strict
+      - name: Build the site (strict, and failing on docstring warnings)
+        run: |
+          set -o pipefail
+          uv run --no-sync zensical build --strict --clean 2>&1 | tee build.log
+          if grep -E '^(griffe|mkdocstrings|mkdocs_autorefs):' build.log; then
+            echo "::error::mkdocstrings reported a docstring problem; see the lines above"
+            exit 1
+          fi
       - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v5
         with:

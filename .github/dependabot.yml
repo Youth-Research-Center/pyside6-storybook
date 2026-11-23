@@ -15,5 +15,6 @@ updates:
     cooldown:
       default-days: 7
     ignore:
+      # MkDocs comes in through mkdocstrings, which does not support MkDocs 2.
       - dependency-name: "mkdocs"
         versions: [">=2"]
