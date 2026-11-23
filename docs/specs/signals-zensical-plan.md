@@ -1,6 +1,6 @@
 # Implementation plan: log every signal (#66) and Zensical (#100)
 
-Status: draft. Implements `docs/specs/log-signals.md` and `docs/specs/zensical.md`. Section numbers (§1) refer to those specs.
+Status: reviewed (findings applied in the last section). Implements `docs/specs/log-signals.md` and `docs/specs/zensical.md`. Section numbers (§1) refer to those specs.
 
 ## Order, branches and merging
 
@@ -122,3 +122,51 @@ Status: draft. Implements `docs/specs/log-signals.md` and `docs/specs/zensical.m
 - the spec and plan paths point at `/tmp/claude-0/specs8/`;
 - the docs check is the one in zensical spec §2. PR C runs it with today's MkDocs, because C does not change the docs toolchain: `uv sync
   --group docs && NO_MKDOCS_2_WARNING=1 uv run mkdocs build --strict && uv sync`.
+
+## Corrections from the plan review (these override the text above)
+
+**PR C**
+1. **Docs blocks.**
+   - `tests/test_docs.py` (`test_the_logging_example_logs_actions_and_does_nothing_without_a_sink`) unpacks exactly one Python block from
+     "Logging actions", and `_section` includes deeper headings. So the `log_signals` examples go in a new sibling section,
+     `## Logging every signal`, right after "Logging actions" in `docs/gallery.md`. Its text is the spec §1.3 paragraph.
+   - **Its blocks are story functions**, not module-level widgets: one for a combo box with `exclude=`, and one for a `QListView` that
+     logs `view.selectionModel()` and the model after `view.setModel(...)`.
+   - **A new test** in `tests/test_docs.py`, like the existing logging test, loads that section's blocks, renders each story with a
+     recording sink, drives it once, and asserts the recorded names. `tests/test_docs.py` is therefore a file this PR changes.
+2. **Type rules, in this order** (spec §1.2 is read this way):
+   1. a name without `::` needs nothing, even if it contains `<` (`QList<int>`, `QList<QPersistentModelIndex>`);
+   2. a name with both `::` and `<` is unresolvable;
+   3. otherwise, resolve `Owner::...`.
+
+   Add a test: `log_signals(QStringListModel(...))` connects `dataChanged` with no warning, and `setData` records `dataChanged` with its
+   arguments.
+3. **Owner lookup.** Search, in this order:
+   - `QtCore`, `QtGui` and `QtWidgets`;
+   - then `sys.modules[cls.__module__]` for each `cls` in `type(obj).__mro__` that has a `__module__` in `sys.modules`.
+
+   `_resolve_parameter_types(method, modules)` takes the module list.
+4. **Connected-name assertions** use `obj.isSignalConnected(method)` for every `QMetaMethod` of the name. It works on 6.8 and 6.12. Use it
+   in the connected-names test, the "without a sink nothing is connected" test and the "unresolvable `clicked` is not connected" test,
+   not `_signal_methods` keys.
+5. **The `QMovie` fresh-process test** also asserts `returncode == 0`. On 6.8, without the fix, the `TypeError` escapes `start()`.
+6. **Details:**
+   - keep the existing `Qt` import;
+   - reflow the `ActionSink` docstring line;
+   - the Combo Box story's variable is `box`;
+   - `caplog.set_level(logging.WARNING, logger="pyside6_storybook.registry.story_context")`.
+
+**PR D**
+7. **Every Zensical build uses `--clean`:** CI's step, the AGENTS.md command, the subagent check and the spec §4 negative checks.
+   Zensical's cache hides a docstring warning on a second build of the same tree.
+8. **The shell check runs with `set -o pipefail`**, so the status of `zensical build` is not masked by `tee`. That applies to the CI step
+   (spec §2) and to the subagent check.
+9. **`tests/test_docs.py`.** `exclude_docs` and `not_in_nav` are YAML block strings, so split them into non-empty, stripped lines.
+10. **The grep for leftover mentions** also covers `.github/`, `pyproject.toml` and `tests/`. Mentions of the `mkdocs.yml` file name are
+    expected.
+
+**Merging (both PRs)**
+11. After merging `main` into a branch, inspect `git diff origin/main...HEAD -- CHANGELOG.md`. Git can put a new entry under the wrong
+    version heading without a conflict. Move entries under `## [Unreleased]`, adding its `### Added` or `### Changed` heading if needed.
+    If 0.1.0 is already on PyPI, revert D's edit of the released entry and add a `### Changed` entry instead. Run `uv lock` after any
+    merge that touches `pyproject.toml` or `uv.lock`.

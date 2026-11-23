@@ -76,7 +76,7 @@ Status: reviewed (findings applied). One pull request. Section numbers (§1) are
     - name: Build the site (strict, and failing on docstring warnings)
       run: |
         set -o pipefail
-        uv run --no-sync zensical build --strict 2>&1 | tee build.log
+        uv run --no-sync zensical build --strict --clean 2>&1 | tee build.log
         if grep -E '^(griffe|mkdocstrings|mkdocs_autorefs):' build.log; then
           echo "::error::mkdocstrings reported a docstring problem; see the lines above"
           exit 1
@@ -93,7 +93,7 @@ Status: reviewed (findings applied). One pull request. Section numbers (§1) are
   support MkDocs 2.
 - **`AGENTS.md`:**
   - **"Docs site":** the commands become `uv run zensical serve` (preview at `http://localhost:8000`) and
-    `uv run zensical build --strict`. A note says that `serve` does not support `--strict`, and that CI also fails on `griffe:`
+    `uv run zensical build --strict --clean`; `--clean` because Zensical's cache hides a docstring warning on a second build. A note says that `serve` does not support `--strict`, and that CI also fails on `griffe:`
     warnings, so a build that prints one is not clean. The `NO_MKDOCS_2_WARNING` sentence goes.
   - **"Project structure":** the docs entry says Zensical (classic look) with mkdocstrings. The `mkdocs build --strict` mention becomes
     `zensical build --strict`, followed by the tests of §3. A sentence says the config stays in `mkdocs.yml`.
