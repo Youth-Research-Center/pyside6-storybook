@@ -131,8 +131,31 @@ def check_version(version: str, package_dir: Path) -> None:
     _ok(f"`{PROGRAM_NAME} --version` prints {expected!r}")
 
 
+def check_debug_info(version: str, package_dir: Path) -> None:
+    """Step 3: the console script's ``--debug-info`` starts with ``version`` and names the PySide6 version.
+
+    Args:
+        version: The expected version.
+        package_dir: The folder of the package under test.
+
+    Raises:
+        SmokeFailure: If the output is not as expected, or the console script is missing or fails.
+    """
+    script = _console_script()
+    if not script.is_file():
+        raise SmokeFailure(f"the console script {script} does not exist")
+    completed = _run([script, "--debug-info"], package_dir=package_dir)
+    lines = completed.stdout.splitlines()
+    expected = f"{PROGRAM_NAME}: {version}"
+    if completed.returncode != 0 or not lines or lines[0] != expected or not any(line.startswith("PySide6: ") for line in lines):
+        raise SmokeFailure(
+            f"`{PROGRAM_NAME} --debug-info` exited {completed.returncode} and printed {completed.stdout!r}, expected {expected!r} first"
+        )
+    _ok(f"`{PROGRAM_NAME} --debug-info` reports {version}")
+
+
 def check_package_data(package_dir: Path) -> None:
-    """Step 3: ``py.typed``, every bundled icon and the Phosphor licence are in the package.
+    """Step 4: ``py.typed``, every bundled icon and the Phosphor licence are in the package.
 
     Args:
         package_dir: The folder of the package under test.
@@ -174,7 +197,7 @@ def _story_ids(command: Sequence[str | os.PathLike[str]], *, package_dir: Path) 
 
 
 def check_examples(expected_ids: Collection[str], package_dir: Path) -> None:
-    """Step 4: both command lines list the same story ids for ``--examples``, and they are exactly ``expected_ids``.
+    """Step 5: both command lines list the same story ids for ``--examples``, and they are exactly ``expected_ids``.
 
     Args:
         expected_ids: The ids the examples must have.
@@ -202,7 +225,7 @@ def _forget_examples() -> None:
 
 
 def check_gallery(expected_ids: Collection[str]) -> None:
-    """Step 5: the gallery window shows every example, in every built-in theme, without the error panel.
+    """Step 6: the gallery window shows every example, in every built-in theme, without the error panel.
 
     Loads the examples into a fresh registry, builds a ``GalleryWindow`` with the built-in provider, selects each story in Light
     and Dark and checks that it built its widget. The window is closed and deleted and the provider deactivated afterwards.
@@ -266,7 +289,7 @@ def check_gallery(expected_ids: Collection[str]) -> None:
 
 
 def check_pytest_plugin() -> None:
-    """Step 6: the pytest plugin loads through its entry point and passes every example in both themes.
+    """Step 7: the pytest plugin loads through its entry point and passes every example in both themes.
 
     Raises:
         SmokeFailure: If pytest fails, times out or does not report the expected summary.
@@ -311,6 +334,7 @@ def run_checks(version: str, *, skip_installed_check: bool = False) -> None:
         steps.append(lambda: check_installed(package_dir))
     steps += [
         lambda: check_version(version, package_dir),
+        lambda: check_debug_info(version, package_dir),
         lambda: check_package_data(package_dir),
         lambda: check_examples(EXPECTED_STORY_IDS, package_dir),
         lambda: check_gallery(EXPECTED_STORY_IDS),

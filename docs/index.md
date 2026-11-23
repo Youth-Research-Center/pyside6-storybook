@@ -92,3 +92,5 @@ pyside6-storybook stories
 - [API reference](reference.md): every public name.
 - [Changelog](changelog.md): what changed in each release.
 - [Roadmap](roadmap.md): the plan and the design decisions.
+- [Contributing](https://github.com/Youth-Research-Center/pyside6-storybook/blob/main/CONTRIBUTING.md): set up, run the checks, and open
+  issues and pull requests.

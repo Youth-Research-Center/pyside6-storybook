@@ -54,7 +54,7 @@ CI runs in two workflows:
 - **Full test suite** (`.github/workflows/full-tests.yml`), started by hand (Actions > Full test suite > Run workflow, on any
   branch): every test on Windows, macOS and Linux with Python 3.11 and 3.14, plus the lowest allowed dependency versions. Run it
   before a release, after a dependency or Python bump, and for changes to platform-dependent code (paths, themes, the command line).
-- **Package** (`.github/workflows/package.yml`), on every push to `main` and every pull request that touches `src/`, `pyproject.toml`,
+- **Package** (`.github/workflows/package.yml`), on every pull request (not on pushes to `main`) that touches `src/`, `pyproject.toml`,
   `uv.lock`, the README, the licence files, `scripts/smoke/` or the workflow itself, and callable from other workflows: builds the wheel
   and the sdist, runs `twine check --strict`, checks that `dist/` holds one of each named with the version from `pyproject.toml`, then
   installs the wheel with pip on Linux, Windows and macOS (Python 3.11 and 3.14) and the sdist on Linux, and runs
@@ -198,9 +198,9 @@ in the same pull request as the bump.
   `uv run python scripts/docs/render_docs_images.py` (and the other script) and commit them, whenever the gallery's look or an
   example story changes; `tests/test_docs_images.py` runs the script into a temporary folder
 - `scripts/smoke/` - development only, not in the wheel: `smoke_check.py`, the installed-package checks `package.yml` runs (installed location,
-  version, package data, the command lines, the gallery over every example in both themes, the pytest plugin). A plain script that imports
-  nothing from the repository and runs with `python -I`; each step is a function that `tests/test_smoke_check.py` calls with a copy of the
-  package. Update `EXPECTED_STORY_IDS` when an example is added or removed (a test compares it with the examples)
+  version, the debug information, package data, the command lines, the gallery over every example in both themes, the pytest plugin). A
+  plain script that imports nothing from the repository and runs with `python -I`; each step is a function that `tests/test_smoke_check.py`
+  calls with a copy of the package. Update `EXPECTED_STORY_IDS` when an example is added or removed (a test compares it with the examples)
 - `scripts/release/` - development only, not in the wheel: `release_target.py` (which index a run publishes to, and the tag
   checks: the tag is `v` plus the version, the commit is on `main` or `release/*`; it writes the
   `target` job's outputs) and `changelog_section.py` (the notes of one version
@@ -231,12 +231,20 @@ in the same pull request as the bump.
   that cannot run alone is preceded by `<!-- docs-test: skip — <reason> -->`, and the test lists every skip, so a new one is a visible
   change. A docs page links another page relatively and a file outside `docs/` by its absolute GitHub URL; `tests/test_docs.py` checks
   it and `mkdocs build --strict` enforces both.
+- `CONTRIBUTING.md` - the guide for contributors: set up, the checks, the code layout, and checklists for adding a control type and a
+  built-in decorator. `SECURITY.md` is the security policy (private reporting, and that running project code is the design) and
+  `CODE_OF_CONDUCT.md` the Contributor Covenant 2.1, copied verbatim apart from the contact address. None of the three is in the sdist.
+  `tests/test_community_files.py` checks them with the files below
+- `.github/ISSUE_TEMPLATE/` - the issue forms (`bug_report.yml`, `feature_request.yml`) and `config.yml`, which turns blank issues off and
+  links Discussions and the docs; `.github/pull_request_template.md` is the pull request template
 - `RELEASING.md` - the maintainer's guide to a release (one-time setup, release candidate, release, patch release, a broken release, a failed
   run); `tests/test_releasing.py` checks the files and environment names it gives against `release.yml` and `scripts/release/`.
   **Releasing: see `RELEASING.md`; every version change is followed by `uv lock`** (CI's `uv sync --locked` fails otherwise)
-- `.github/` - CI workflows and Dependabot configuration. A workflow that another one calls (`workflow_call`) runs under the caller's name,
-  so its concurrency group adds a literal (`${{ github.workflow }}-tests-${{ github.ref }}`), or two called workflows of one release would
-  share a group and cancel each other; `tests/test_workflows.py` checks that every workflow parses, never puts
+- `.github/` - CI workflows and Dependabot configuration (weekly, with a cooldown of at least 7 days for every ecosystem, so a release is
+  proposed only after it has been out for a week; `tests/test_dependabot.py` checks it). A workflow that another one calls
+  (`workflow_call`) runs under the caller's name, so its concurrency group adds a literal
+  (`${{ github.workflow }}-tests-${{ github.ref }}`), or two called workflows of one release would share a group and cancel each other;
+  `tests/test_workflows.py` checks that every workflow parses, never puts
   `${{ github.event.* }}` or `${{ inputs.* }}` into shell source, bounds every job with `timeout-minutes` (a job with `uses:` has none) and
   runs every `run:` step with bash
 
@@ -259,6 +267,8 @@ in the same pull request as the bump.
 - No commented-out code, no `TODO` comments that express uncertainty (link an issue instead), no bare `except`; do not swallow an exception
   without logging it. Keep imports sorted (stdlib, third party, local) and free of duplicates.
 - Keep changes small and focused; do not add abstractions a task does not need.
+- `CONTRIBUTING.md`'s two checklists (a control type, a built-in decorator) change with the code they list: when you rename or add a place
+  that lists every control or decorator, update them. `tests/test_community_files.py` checks their paths and names.
 
 ## Library rules
 - The library is generic: it must not import, name or depend on any application. Applications keep their stories in their own repository.
@@ -367,7 +377,8 @@ Icons are bundled Phosphor SVGs, never downloaded at runtime, and the gallery im
 - Restore global state: `monkeypatch` or `caplog.set_level`, never set a shared logger's level directly.
 
 ## Pull requests
-- Keep a pull request to one concern and make its description match what it does; update it when scope changes.
+- Keep a pull request to one concern and make its description match what it does; update it when scope changes. The checklist of
+  `.github/pull_request_template.md` is the one to fill in.
 - Use `Closes #N` only when the pull request fully satisfies the issue; use `Refs #N` for a partial step.
 - File each known gap or follow-up as an issue and link it.
 - Before pushing: `uv run ruff check .`, `uv run ty check` and `QT_QPA_PLATFORM=offscreen uv run pytest`.

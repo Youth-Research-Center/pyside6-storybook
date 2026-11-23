@@ -41,7 +41,7 @@ def _label(qtbot, foreground: str, background: str, *, points: float = 10.0, bol
     label.setFont(font)
     label.setMargin(8)
     label.setStyleSheet(f"background-color: {background}; color: {foreground};")
-    return _shown(qtbot, label)  # ty: ignore[invalid-return-type]
+    return _shown(qtbot, label)  # ty: ignore[invalid-explicit-return]
 
 
 def _messages(widget: QWidget, **kwargs: object) -> list[str]:
