@@ -90,6 +90,75 @@ def test_every_image_a_page_shows_exists_under_docs() -> None:
     assert not missing
 
 
+def _config_patterns(key: str) -> list[str]:
+    """Return the non-empty lines of a `mkdocs.yml` key that holds gitignore-style patterns as a YAML block string."""
+    value = yaml.safe_load(_MKDOCS.read_text(encoding="utf-8")).get(key) or ""
+    return [line.strip() for line in value.splitlines() if line.strip()]
+
+
+def _matches_pattern(page: str, pattern: str) -> bool:
+    """Match a docs-relative page path against a directory prefix (`specs/`) or an exact file name (`theming.md`).
+
+    Raises:
+        AssertionError: If the pattern uses gitignore syntax this helper does not implement.
+    """
+    assert not any(char in pattern for char in "*?[]!#\\") and not pattern.startswith("/"), (
+        f"Unsupported pattern {pattern!r} in mkdocs.yml: extend tests/test_docs.py to understand it"
+    )
+    return page.startswith(pattern) if pattern.endswith("/") else page == pattern
+
+
+def _built_pages() -> list[str]:
+    """Return every docs-relative page path that `exclude_docs` does not exclude."""
+    excluded = _config_patterns("exclude_docs")
+    pages = (path.relative_to(_DOCS).as_posix() for path in sorted(_DOCS.rglob("*.md")))
+    return [page for page in pages if not any(_matches_pattern(page, pattern) for pattern in excluded)]
+
+
+def _prose_lines(text: str) -> list[str]:
+    """Return the lines of a Markdown page outside fenced code blocks."""
+    lines: list[str] = []
+    fence = ""
+    for line in text.splitlines():
+        stripped = line.strip()
+        if fence:
+            if stripped.startswith(fence):
+                fence = ""
+        elif stripped.startswith(("```", "~~~")):
+            fence = stripped[:3]
+        else:
+            lines.append(line)
+    return lines
+
+
+def test_every_page_is_in_the_nav_or_listed_as_not_in_the_nav() -> None:
+    config = yaml.safe_load(_MKDOCS.read_text(encoding="utf-8"))
+    in_nav = set(_nav_pages(config["nav"]))
+    not_in_nav = _config_patterns("not_in_nav")
+
+    orphans = [
+        page for page in _built_pages() if page not in in_nav and not any(_matches_pattern(page, pattern) for pattern in not_in_nav)
+    ]
+
+    assert not orphans, f"Add these pages to the nav or to not_in_nav in mkdocs.yml: {orphans}"
+
+
+def test_every_relative_link_on_a_site_page_resolves_to_a_file_under_docs() -> None:
+    problems: list[str] = []
+    for page in _built_pages():
+        for target in _LINK.findall("\n".join(_prose_lines(_page_text(page)))):
+            if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", target) or target.startswith("#"):
+                continue
+            if target.startswith("/"):
+                problems.append(f"{page}: {target} (root-relative)")
+                continue
+            path = ((_DOCS / page).parent / target.split("#", 1)[0]).resolve()
+            if not path.is_relative_to(_DOCS.resolve()) or not path.is_file():
+                problems.append(f"{page}: {target} (not a file under docs/)")
+
+    assert not problems
+
+
 # Reading the pages
 
 

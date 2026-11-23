@@ -66,19 +66,22 @@ CI runs in two workflows:
   `verify` installs the published files on three systems and runs the smoke script, and `github-release` (tag pushes only, the only job with
   `contents: write`) creates the release from the changelog.
 - **Docs** (`.github/workflows/docs.yml`), on every push to `main` and every pull request that touches `docs/`, `mkdocs.yml`, `src/`, the
-  README, the changelog, `pyproject.toml`, `uv.lock` or the workflow itself: `build` runs `mkdocs build --strict`, and on `main` `deploy`
-  (the only job with `pages: write` and `id-token: write`) publishes the site to GitHub Pages.
+  README, the changelog, `pyproject.toml`, `uv.lock` or the workflow itself: `build` runs `zensical build --strict --clean` and fails
+  on mkdocstrings docstring warnings (`griffe:` lines), and on `main` `deploy` (the only job with `pages: write` and `id-token: write`)
+  publishes the site to GitHub Pages.
 
 ## Docs site
 The site is built from `mkdocs.yml` and `docs/`. Its dependencies are in the `docs` group, which is not part of `dev`:
 
 ```bash
 uv sync --group docs                  # install the docs group
-uv run mkdocs serve                   # preview at http://127.0.0.1:8000
-uv run mkdocs build --strict          # what CI runs; any warning fails the build
+uv run zensical serve                 # preview at http://localhost:8000 (serve does not support --strict)
+uv run zensical build --strict --clean  # the first half of what CI runs; --clean because the cache hides a docstring warning on a rebuild
 uv sync                               # afterwards, so the environment matches the tests' (without the docs group)
 ```
-Set `NO_MKDOCS_2_WARNING=1` to silence Material's MkDocs 2 banner. The site's own pages are listed under "Project structure".
+CI also fails when the build prints a `griffe:`, `mkdocstrings:` or `mkdocs_autorefs:` line (a docstring problem such as an `Args:` entry for a
+parameter that does not exist), which Zensical reports without failing, so a build that prints one is not clean. The site's own pages are
+listed under "Project structure".
 
 ## Code quality
 Three gates run in CI: `ruff check` (ruff's default rules `E4`, `E7`, `E9` and `F`, plus `E501` for 150-character lines, `B`, `Q`, `I` and
@@ -223,14 +226,17 @@ in the same pull request as the bump.
   from the repository, so every link and image is an absolute URL (`https://github.com/Youth-Research-Center/pyside6-storybook/blob/main/...`
   for a file, `/tree/main/...` for a folder, `https://youth-research-center.github.io/pyside6-storybook/<page>/` for a docs page, which must
   be in the nav) and GitHub-only syntax (alerts such as `> [!NOTE]`, Mermaid) is not used; tests check all three
-- `mkdocs.yml` and `docs/*.md` - the documentation site (MkDocs with Material and mkdocstrings). `docs/reference.md` holds one
-  `::: pyside6_storybook.<name>` line for every name in `pyside6_storybook.__all__` and `pyside6_storybook.checks.__all__`, so **a new name in
+- `mkdocs.yml` and `docs/*.md` - the documentation site (Zensical with Material's classic look, and mkdocstrings; the configuration stays in
+  `mkdocs.yml`). `docs/reference.md` holds one `::: pyside6_storybook.<name>` line for every name in `pyside6_storybook.__all__` and
+  `pyside6_storybook.checks.__all__`, so **a new name in
   `__all__` needs a `:::` line in `docs/reference.md`** (`tests/test_docs.py` compares them). **A new CLI option needs a row in
   `docs/command-line.md`**, and a new exit code a row in its table (`tests/test_docs.py` compares the table with `cli._parser()`).
   Every Python block on a page in the nav is executed by `tests/test_docs.py` in a fresh namespace, so it carries its imports; a block
   that cannot run alone is preceded by `<!-- docs-test: skip — <reason> -->`, and the test lists every skip, so a new one is a visible
   change. A docs page links another page relatively and a file outside `docs/` by its absolute GitHub URL; `tests/test_docs.py` checks
-  it and `mkdocs build --strict` enforces both.
+  it and `zensical build --strict` enforces both. Zensical does not check that a page is in the nav or that a relative link is well formed, so
+  `tests/test_docs.py` does (`test_every_page_is_in_the_nav_or_listed_as_not_in_the_nav` and
+  `test_every_relative_link_on_a_site_page_resolves_to_a_file_under_docs`).
 - `CONTRIBUTING.md` - the guide for contributors: set up, the checks, the code layout, and checklists for adding a control type and a
   built-in decorator. `SECURITY.md` is the security policy (private reporting, and that running project code is the design) and
   `CODE_OF_CONDUCT.md` the Contributor Covenant 2.1, copied verbatim apart from the contact address. None of the three is in the sdist.

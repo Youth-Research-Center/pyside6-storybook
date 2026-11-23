@@ -7,6 +7,8 @@ strict: true
 exclude_docs: |
   specs/
 
+# Zensical maps links.not_found, links.anchors and links.absolute_links into its own checks, so this block still matters. It ignores
+# nav.omitted_files and links.unrecognized_links; tests/test_docs.py checks those two instead.
 validation:
   nav:
     omitted_files: warn
@@ -36,6 +38,7 @@ nav:
 
 theme:
   name: material
+  variant: classic
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default

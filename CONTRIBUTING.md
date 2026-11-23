@@ -71,7 +71,7 @@ Three more checks apply only to some changes:
 
 - If you change a workflow, run `actionlint`, as [AGENTS.md](AGENTS.md) describes.
 - If you change an icon, run `uv run python scripts/icons/build_icon_bundle.py --check`.
-- If you change `docs/`, preview the site with `uv sync --group docs` and `uv run mkdocs serve`. Run `uv sync` afterwards, so the
+- If you change `docs/`, preview the site with `uv sync --group docs` and `uv run zensical serve`. Run `uv sync` afterwards, so the
   environment matches the tests'.
 
 ## How the code is laid out
